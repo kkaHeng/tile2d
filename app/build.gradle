@@ -1,0 +1,28 @@
+plugins {
+    alias(libs.plugins.android.application)
+}
+
+android {
+    namespace 'com.ahheng.tile2d.app'
+    compileSdk 34
+
+    defaultConfig {
+        applicationId 'com.ahheng.tile2d.app'
+        minSdk 21
+        targetSdk 34
+        versionName "26.4.1"
+        versionCode 26041001
+    }
+
+    compileOptions {
+        sourceCompatibility JavaVersion.VERSION_17
+        targetCompatibility JavaVersion.VERSION_17
+    }
+}
+
+dependencies {
+    implementation libs.androidx.appcompat
+    implementation libs.material
+    
+    implementation project(":tile2d")
+}
