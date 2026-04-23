@@ -5,7 +5,7 @@ import android.view.ViewGroup;
 
 import androidx.appcompat.app.AppCompatActivity;
 
-import com.ahheng.tile2d.widget.TileView;
+import com.ahheng.tile2d.widget.canvas.TileView;
 
 public class MainActivity extends AppCompatActivity {
     
