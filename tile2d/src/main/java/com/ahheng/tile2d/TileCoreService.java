@@ -14,7 +14,7 @@ import it.unimi.dsi.fastutil.longs.LongArrayFIFOQueue;
 import java.util.ArrayDeque;
 import java.util.Deque;
 
-public class TileCoreService <T> {
+public class TileCoreService <T extends TileCoreService.BaseTileHolder> {
 
     private TileAdapter<T> adapter;
     private TileDimenProvider dimenProvider;
@@ -69,7 +69,7 @@ public class TileCoreService <T> {
 
         @Override
         public int getBottomBound() {
-            return class.getBottomBound();
+            return adapter.getBottomBound();
         }
 
         @Override
@@ -84,17 +84,25 @@ public class TileCoreService <T> {
 
         @Override
         public void in(int column, int row) {
-
+            TileCoreService.this.in(column, row);
         }
 
         @Override
         public void out(int column, int row) {
-
+            TileCoreService.this.out(column, row);
         }
     }
 
     public boolean handleTouchEvent(MotionEvent event) {
     	return false;
+    }
+
+    public void seek(int column, int row, float offsetX, float offsetY) {
+        for (T tile : activeTiles.values()) {
+            recycle(((BaseTileHolder) tile).type, tile);
+        }
+        activeTiles.clear();
+        layoutService.seek(column, row, offsetX, offsetY);
     }
 
     public void in(int column, int row) {
@@ -133,11 +141,11 @@ public class TileCoreService <T> {
     }
 
     public int getTileWidth(int column) {
-    	return widths.getOrDefault(column, dimenProvider == null ? defaultTileWidth : dimenPrivider.getTileWidth(column));
+    	return widths.getOrDefault(column, dimenProvider == null ? defaultTileWidth : dimenProvider.getTileWidth(column));
     }
 
     public int getTileHeight(int row) {
-    	return heights.getOrDefault(row, dimenProvider == null ? defaultTileHeight : dimenPrivider.getTileHeight(row));
+    	return heights.getOrDefault(row, dimenProvider == null ? defaultTileHeight : dimenProvider.getTileHeight(row));
     }
 
     public TileAdapter<T> getAdapter() {

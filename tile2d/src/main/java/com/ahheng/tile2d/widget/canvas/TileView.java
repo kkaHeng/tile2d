@@ -2,14 +2,11 @@ package com.ahheng.tile2d.widget.canvas;
 
 import android.content.Context;
 import android.graphics.Canvas;
-import android.graphics.Rect;
 import android.util.AttributeSet;
 import android.view.View;
 
 import com.ahheng.tile2d.TileCoreService;
-import com.ahheng.tile2d.TileLayoutService;
 import com.ahheng.tile2d.widget.TileAdapter;
-import com.ahheng.tile2d.widget.TileDimenProvider;
 
 public class TileView extends View {
 
@@ -65,7 +62,7 @@ public class TileView extends View {
     
         private TileView view;
         
-        public void draw(Canvas canvas, float scaleFactor) {}
+        public void draw(Canvas canvas) {}
         
     }
 

@@ -30,14 +30,14 @@ public class TileLayoutService {
         float offsetY = this.offsetY + dy;
         int totalWidth = this.totalWidth;
         int totalHeight = this.totalHeight;
-        
+
         int windowWidth = platform.getWindowWidth();
         int windowHeight = platform.getWindowHeight();
         int leftBound = platform.getLeftBound();
         int topBound = platform.getTopBound();
         int rightBound = platform.getRightBound();
         int bottomBound = platform.getBottomBound();
-        
+
         // 水平同步到 [-tileWidth, 0]
         if (platform.isHorizontalScrollEnabled()) {
             // 起始锚点
@@ -124,8 +124,8 @@ public class TileLayoutService {
         this.offsetY = offsetY;
         this.totalWidth = totalWidth;
         this.totalHeight = totalHeight;
-        
-    	return getLayoutModel();
+
+        return getLayoutModel();
     }
 
     public TileLayoutModel seek(int column, int row, float offsetX, float offsetY) {
@@ -138,13 +138,13 @@ public class TileLayoutService {
         int totalHeight = (int) offsetY;
         int colEnd = column;
         int rowEnd = row;
-        
+
         int c = column;
         while (c <= rightBound) {
             int r = row;
             while (r <= bottomBound) {
                 platform.in(c, r);
-                
+
                 if (c == column) {
                     totalHeight += platform.getTileHeight(r);
                     if (totalHeight > windowHeight) {
@@ -157,7 +157,7 @@ public class TileLayoutService {
                 if (r == bottomBound) break;
                 r++;
             }
-            
+
             totalWidth += platform.getTileWidth(c);
             if (totalWidth > windowWidth) {
                 colEnd = c;
@@ -175,7 +175,7 @@ public class TileLayoutService {
         this.totalHeight = totalHeight;
         this.colEnd = colEnd;
         this.rowEnd = rowEnd;
-    	return sync(offsetX, offsetY);
+        return sync(offsetX, offsetY);
     }
 
     private void diff(int oldColStart, int oldRowStart, int oldColEnd, int oldRowEnd, int newColStart, int newRowStart, int newColEnd, int newRowEnd) {
@@ -223,12 +223,12 @@ public class TileLayoutService {
         layoutModel.offsetY = offsetY;
         layoutModel.totalWidth = totalWidth;
         layoutModel.totalHeight = totalHeight;
-    	return this.layoutModel;
+        return this.layoutModel;
     }
 
     public boolean contains(int column, int row) {
-    	return column >= platform.getLeftBound() && column <= platform.getRightBound()
-        && row >= platform.getTopBound() && row <= platform.getBottomBound();
+        return column >= platform.getLeftBound() && column <= platform.getRightBound()
+                && row >= platform.getTopBound() && row <= platform.getBottomBound();
     }
 
     public void checkLocationInBounds(int column, int row) {
@@ -242,29 +242,29 @@ public class TileLayoutService {
     }
 
     public interface PlatformService {
-        
+
         int getWindowWidth();
-        
+
         int getWindowHeight();
-        
+
         int getTileWidth(int column);
-        
+
         int getTileHeight(int row);
-        
+
         int getLeftBound();
-        
+
         int getTopBound();
-        
+
         int getRightBound();
-        
+
         int getBottomBound();
-        
+
         boolean isHorizontalScrollEnabled();
-        
+
         boolean isVerticalScrollEnabled();
-        
+
         void in(int column, int row);
-        
+
         void out(int column, int row);
     }
 
