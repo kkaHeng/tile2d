@@ -134,13 +134,30 @@ public class TileLayoutService {
         int bottomBound = platform.getBottomBound();
         int windowWidth = platform.getWindowWidth();
         int windowHeight = platform.getWindowHeight();
-        int totalWidth = 0;
-        int totalHeight = 0;
+        int totalWidth = (int) offsetX;
+        int totalHeight = (int) offsetY;
         int colEnd = column;
         int rowEnd = row;
         
         int c = column;
         while (c <= rightBound) {
+            int r = row;
+            while (r <= bottomBound) {
+                platform.in(c, r);
+                
+                if (c == column) {
+                    totalHeight += platform.getTileHeight(r);
+                    if (totalHeight > windowHeight) {
+                        rowEnd = r;
+                        break;
+                    }
+                } else {
+                    if (r == rowEnd) break;
+                }
+                if (r == bottomBound) break;
+                r++;
+            }
+            
             totalWidth += platform.getTileWidth(c);
             if (totalWidth > windowWidth) {
                 colEnd = c;
@@ -148,17 +165,6 @@ public class TileLayoutService {
             }
             if (c == rightBound) break;
             c++;
-        }
-
-        int r = row;
-        while (r <= bottomBound) {
-            totalHeight += platform.getTileHeight(r);
-            if (totalHeight > windowHeight) {
-                rowEnd = r;
-                break;
-            }
-            if (r == bottomBound) break;
-            r++;
         }
 
         this.colStart = column;
@@ -198,7 +204,6 @@ public class TileLayoutService {
                     } else if (!inBefore && inAfter) {
                         platform.in(x, y);
                     }
-                    continue;
                 }
                 if (x == boundRight) break;
                 x++;
@@ -219,10 +224,6 @@ public class TileLayoutService {
         layoutModel.totalWidth = totalWidth;
         layoutModel.totalHeight = totalHeight;
     	return this.layoutModel;
-    }
-
-    public static long getTileId(int column, int row) {
-    	return ((long) column << 32) | (row & 0xFFFFFFFFL);
     }
 
     public boolean contains(int column, int row) {
