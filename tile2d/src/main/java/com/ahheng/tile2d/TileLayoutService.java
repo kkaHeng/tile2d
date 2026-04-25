@@ -51,11 +51,13 @@ public class TileLayoutService {
                 colStart--;
                 int width = platform.getTileWidth(colStart);
                 offsetX -= width;
+                totalWidth += width;
             }
             while (offsetX < -platform.getTileWidth(colStart) && colStart < rightBound) {
                 // 内容向左边滚动，锚点右移
                 int width = platform.getTileWidth(colStart);
                 offsetX += width;
+                totalWidth -= width;
                 colStart++;
             }
             if (offsetX > 0 && colEnd == leftBound) {
@@ -64,12 +66,12 @@ public class TileLayoutService {
             }
 
             // 结尾锚点
-            while (totalWidth < windowWidth && colEnd < rightBound) {
+            while (totalWidth + offsetX < windowWidth && colEnd < rightBound) {
                 // 内容填不满窗口
                 colEnd++;
                 totalWidth += platform.getTileWidth(colEnd);
             }
-            while (totalWidth - platform.getTileWidth(colEnd) > windowWidth && colEnd > colStart) {
+            while (totalWidth + offsetX - platform.getTileWidth(colEnd) > windowWidth && colEnd > colStart) {
                 // 内容过度超出窗口
                 totalWidth -= platform.getTileWidth(colEnd);
                 colEnd--;
@@ -89,11 +91,13 @@ public class TileLayoutService {
                 rowStart--;
                 int height = platform.getTileHeight(rowStart);
                 offsetY -= height;
+                totalHeight += height;
             }
             while (offsetY < -platform.getTileHeight(rowStart) && rowStart < bottomBound) {
                 // 内容向上边滚动，锚点下移
                 int height = platform.getTileHeight(rowStart);
                 offsetY += height;
+                totalHeight -= height;
                 rowStart++;
             }
             if (offsetY > 0 && rowEnd == topBound) {
@@ -102,12 +106,12 @@ public class TileLayoutService {
             }
 
             // 结尾锚点
-            while (totalHeight < windowHeight && rowEnd < bottomBound) {
+            while (totalHeight + offsetY < windowHeight && rowEnd < bottomBound) {
                 // 内容填不满窗口
                 rowEnd++;
                 totalHeight += platform.getTileHeight(rowEnd);
             }
-            while (totalHeight - platform.getTileHeight(rowEnd) > windowHeight && rowEnd > rowStart) {
+            while (totalHeight + offsetY - platform.getTileHeight(rowEnd) > windowHeight && rowEnd > rowStart) {
                 // 内容过度超出窗口
                 totalHeight -= platform.getTileHeight(rowEnd);
                 rowEnd--;
@@ -171,14 +175,18 @@ public class TileLayoutService {
         this.rowStart = row;
         this.offsetX = 0;
         this.offsetY = 0;
-        this.totalWidth = totalWidth;
-        this.totalHeight = totalHeight;
+        this.totalWidth = totalWidth - (int) offsetX;
+        this.totalHeight = totalHeight - (int) offsetY;
         this.colEnd = colEnd;
         this.rowEnd = rowEnd;
         return sync(offsetX, offsetY);
     }
 
     private void diff(int oldColStart, int oldRowStart, int oldColEnd, int oldRowEnd, int newColStart, int newRowStart, int newColEnd, int newRowEnd) {
+        if (oldColStart == newColStart && oldRowStart == newRowStart
+                && oldColEnd == newColEnd && oldRowEnd == newRowEnd) {
+            return; // 提前退出
+        }
         // 计算最大边界
         int boundLeft = Math.min(oldColStart, newColStart);
         int boundRight = Math.max(oldColEnd, newColEnd);

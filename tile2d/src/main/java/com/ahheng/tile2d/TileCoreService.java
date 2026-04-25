@@ -1,7 +1,11 @@
 package com.ahheng.tile2d;
 
+import android.content.Context;
 import android.graphics.Rect;
+import android.view.GestureDetector;
 import android.view.MotionEvent;
+import android.view.ViewConfiguration;
+import android.widget.Scroller;
 
 import com.ahheng.tile2d.widget.TileAdapter;
 import com.ahheng.tile2d.widget.TileDimenProvider;
@@ -22,13 +26,43 @@ public class TileCoreService <T extends TileCoreService.BaseTileHolder> {
     private int defaultTileHeight;
 
     private final Rect bounds = new Rect();
+    private final CoreInterface coreInterface;
     private final TileLayoutService layoutService = new TileLayoutService(new PlatformService());
+
     private final Long2ObjectOpenHashMap<T> activeTiles = new Long2ObjectOpenHashMap<>();
     private final Int2ObjectOpenHashMap<Deque<T>> recycledTiles = new Int2ObjectOpenHashMap<>();
     private final Long2ObjectOpenHashMap<T> dyingTiles = new Long2ObjectOpenHashMap<>();
     private final LongArrayFIFOQueue prefetchTiles = new LongArrayFIFOQueue();
     private final Int2IntOpenHashMap widths = new Int2IntOpenHashMap();
     private final Int2IntOpenHashMap heights = new Int2IntOpenHashMap();
+
+    private final Scroller scroller;
+    private final GestureDetector gestureDetector;
+    private final int minVelocity;
+    private final int maxVelocity;
+
+    private T touchTarget;
+    private final int[] touchTargetPos = new int[2];
+    private final float[] touchTargetLoc = new float[2];
+    private boolean disallowIntercept;
+    private boolean isInteractingWithView;
+    private int lastScrollerX;
+    private int lastScrollerY;
+
+    private boolean horizontalScrollEnabled = true;
+    private boolean verticalScrollEnabled = true;
+
+    private boolean debugMode;
+    private long syncTime;
+
+    public TileCoreService(Context context, CoreInterface coreInterface) {
+        this.coreInterface = coreInterface;
+        this.scroller = new Scroller(context);
+        ViewConfiguration vc = ViewConfiguration.get(context);
+        this.minVelocity = vc.getScaledMinimumFlingVelocity();
+        this.maxVelocity = (int) (vc.getScaledMaximumFlingVelocity() * 0.8f);
+        this.gestureDetector = new GestureDetector(context, new GestureListener());
+    }
 
     private class PlatformService implements TileLayoutService.PlatformService {
 
@@ -74,12 +108,12 @@ public class TileCoreService <T extends TileCoreService.BaseTileHolder> {
 
         @Override
         public boolean isHorizontalScrollEnabled() {
-            return true;
+            return horizontalScrollEnabled;
         }
 
         @Override
         public boolean isVerticalScrollEnabled() {
-            return false;
+            return verticalScrollEnabled;
         }
 
         @Override
@@ -93,59 +127,292 @@ public class TileCoreService <T extends TileCoreService.BaseTileHolder> {
         }
     }
 
+    public boolean isHorizontalScrollEnabled() {
+        return horizontalScrollEnabled;
+    }
+
+    public void setHorizontalScrollEnabled(boolean enabled) {
+        this.horizontalScrollEnabled = enabled;
+    }
+
+    public boolean isVerticalScrollEnabled() {
+        return verticalScrollEnabled;
+    }
+
+    public void setVerticalScrollEnabled(boolean enabled) {
+        this.verticalScrollEnabled = enabled;
+    }
+
     public boolean handleTouchEvent(MotionEvent event) {
-    	return false;
+        int action = event.getActionMasked();
+
+        if (action == MotionEvent.ACTION_DOWN) {
+            disallowIntercept = false;
+            isInteractingWithView = false;
+
+            if (scroller.computeScrollOffset()) {
+                scroller.abortAnimation();
+            }
+
+            float contentX = event.getX() - bounds.left;
+            float contentY = event.getY() - bounds.top;
+            touchTarget = findTileAt(contentX, contentY, touchTargetPos, touchTargetLoc);
+            if (touchTarget != null) {
+                MotionEvent tileEvent = toTileEvent(event);
+                touchTarget.onTouchEvent(tileEvent);
+                tileEvent.recycle();
+            }
+
+            gestureDetector.onTouchEvent(event);
+            return true;
+        }
+
+        if (touchTarget != null) {
+            boolean intercepted = !disallowIntercept && isInteractingWithView;
+            MotionEvent tileEvent = toTileEvent(event);
+            if (intercepted) {
+                tileEvent.setAction(MotionEvent.ACTION_CANCEL);
+                touchTarget.onTouchEvent(tileEvent);
+                tileEvent.recycle();
+                resetTouchTarget();
+                gestureDetector.onTouchEvent(event);
+            } else {
+                touchTarget.onTouchEvent(tileEvent);
+                tileEvent.recycle();
+                if (!disallowIntercept) {
+                    gestureDetector.onTouchEvent(event);
+                }
+            }
+            return true;
+        }
+
+        gestureDetector.onTouchEvent(event);
+        return true;
+    }
+
+    public void computeScroll() {
+        if (scroller.computeScrollOffset()) {
+            int currX = scroller.getCurrX();
+            int currY = scroller.getCurrY();
+            float dx = currX - lastScrollerX;
+            float dy = currY - lastScrollerY;
+            lastScrollerX = currX;
+            lastScrollerY = currY;
+
+            boolean scrolled = false;
+            if (dx != 0 && horizontalScrollEnabled) scrolled = true;
+            if (dy != 0 && verticalScrollEnabled) scrolled = true;
+
+            if (scrolled) {
+                long t0 = System.nanoTime();
+                layoutService.sync(dx, dy);
+                syncTime = System.nanoTime() - t0;
+            }
+            
+            coreInterface.updateUI();
+        }
+    }
+
+    private T findTileAt(float contentX, float contentY, int[] outPos, float[] outLoc) {
+        TileLayoutModel model = layoutService.getLayoutModel();
+        float x = model.offsetX;
+        int col = model.colStart;
+        while (col <= model.colEnd) {
+            int width = getTileWidth(col);
+            if (contentX >= x && contentX < x + width) {
+                float y = model.offsetY;
+                int row = model.rowStart;
+                while (row <= model.rowEnd) {
+                    int height = getTileHeight(row);
+                    if (contentY >= y && contentY < y + height) {
+                        if (outPos != null) {
+                            outPos[0] = col;
+                            outPos[1] = row;
+                        }
+                        if (outLoc != null) {
+                            outLoc[0] = x;
+                            outLoc[1] = y;
+                        }
+                        return activeTiles.get(getTileId(col, row));
+                    }
+                    y += height;
+                    if (row == model.rowEnd) break;
+                    row++;
+                }
+            }
+            x += width;
+            if (col == model.colEnd) break;
+            col++;
+        }
+        return null;
+    }
+
+    private MotionEvent toTileEvent(MotionEvent viewEvent) {
+        MotionEvent tileEvent = MotionEvent.obtain(viewEvent);
+        float offsetX = bounds.left + touchTargetLoc[0];
+        float offsetY = bounds.top + touchTargetLoc[1];
+        tileEvent.offsetLocation(-offsetX, -offsetY);
+        return tileEvent;
+    }
+
+    private void resetTouchTarget() {
+        touchTarget = null;
+        touchTargetPos[0] = 0;
+        touchTargetPos[1] = 0;
+        touchTargetLoc[0] = 0;
+        touchTargetLoc[1] = 0;
+    }
+
+    private class GestureListener extends GestureDetector.SimpleOnGestureListener {
+
+        @Override
+        public boolean onScroll(MotionEvent e1, MotionEvent e2, float distanceX, float distanceY) {
+            boolean scrolled = false;
+            float dx = 0, dy = 0;
+            if (horizontalScrollEnabled) {
+                dx = -distanceX;
+                scrolled = true;
+            }
+            if (verticalScrollEnabled) {
+                dy = -distanceY;
+                scrolled = true;
+            }
+            isInteractingWithView = scrolled;
+            if (scrolled) {
+                long t0 = System.nanoTime();
+                layoutService.sync(dx, dy);
+                syncTime = System.nanoTime() - t0;
+                coreInterface.updateUI();
+                return true;
+            }
+            return false;
+        }
+
+        @Override
+        public boolean onFling(MotionEvent e1, MotionEvent e2, float velocityX, float velocityY) {
+            boolean flingX = false, flingY = false;
+
+            if (horizontalScrollEnabled && Math.abs(velocityX) >= minVelocity) {
+                velocityX = velocityX < 0 ? Math.max(velocityX, -maxVelocity) : Math.min(velocityX, maxVelocity);
+                flingX = true;
+            } else {
+                velocityX = 0;
+            }
+
+            if (verticalScrollEnabled && Math.abs(velocityY) >= minVelocity) {
+                velocityY = velocityY < 0 ? Math.max(velocityY, -maxVelocity) : Math.min(velocityY, maxVelocity);
+                flingY = true;
+            } else {
+                velocityY = 0;
+            }
+
+            if (!flingX && !flingY) {
+                return false;
+            }
+
+            lastScrollerX = 0;
+            lastScrollerY = 0;
+            scroller.fling(0, 0, (int) velocityX, (int) velocityY,
+                    horizontalScrollEnabled ? Integer.MIN_VALUE : 0,
+                    horizontalScrollEnabled ? Integer.MAX_VALUE : 0,
+                    verticalScrollEnabled ? Integer.MIN_VALUE : 0,
+                    verticalScrollEnabled ? Integer.MAX_VALUE : 0);
+            coreInterface.updateUI();
+            return true;
+        }
+
+        @Override
+        public boolean onSingleTapUp(MotionEvent e) {
+            if (touchTarget != null && !isInteractingWithView) {
+                return touchTarget.onClick();
+            }
+            return false;
+        }
+
+        @Override
+        public void onLongPress(MotionEvent e) {
+            if (touchTarget != null && !isInteractingWithView) {
+                touchTarget.onLongClick();
+            }
+        }
     }
 
     public void seek(int column, int row, float offsetX, float offsetY) {
-        for (T tile : activeTiles.values()) {
-            recycle(((BaseTileHolder) tile).type, tile);
+        // 回收所有活跃瓦片，并通知外部
+        Long2ObjectOpenHashMap.FastEntrySet<T> entrySet = activeTiles.long2ObjectEntrySet();
+        for (Long2ObjectOpenHashMap.Entry<T> entry : entrySet) {
+            T tile = entry.getValue();
+            long id = entry.getLongKey();
+            int c = (int) (id >> 32);
+            int r = (int) id;
+            tile.onOutWindow();
+            coreInterface.onTileOut(tile, c, r);
+            recycle(tile);
+            tile.onRecycled();
         }
         activeTiles.clear();
+
         layoutService.seek(column, row, offsetX, offsetY);
+        coreInterface.updateUI();
     }
 
     public void in(int column, int row) {
-    	// 瓦片进入视窗
         long id = getTileId(column, row);
         T tile = dyingTiles.remove(id);
-        if (tile != null) {
-            activeTiles.put(id, tile);
-        } else {
-            // 不在濒死区，入队等待帧回调空隙通过适配器加载
-            prefetchTiles.enqueue(id);
+        if (tile == null) {
+            int type = adapter.getTileType(column, row);
+            tile = obtain(type);
+            ((BaseTileHolder) tile).column = column;
+            ((BaseTileHolder) tile).row = row;
+            ((BaseTileHolder) tile).width = getTileWidth(column);
+            ((BaseTileHolder) tile).height = getTileHeight(row);
+            adapter.onBindTileHolder(tile, column, row);
+            tile.onInWindow();
         }
+        activeTiles.put(id, tile);
+        coreInterface.onTileIn(tile, column, row);
     }
 
     public void out(int column, int row) {
-    	// 瓦片离开视窗
         long id = getTileId(column, row);
         T tile = activeTiles.remove(id);
         if (tile != null) {
-            // 存入濒死区避免立即回收
-            dyingTiles.put(id, tile);
+            tile.onOutWindow();
+            coreInterface.onTileOut(tile, column, row);
+            recycle(tile);
+            tile.onRecycled();
         }
     }
 
     public T obtain(int type) {
         Deque<T> tiles = recycledTiles.get(type);
-        if (tiles != null) {
+        if (tiles != null && !tiles.isEmpty()) {
             return tiles.poll();
         }
-        return adapter.onCreateTileHolder(type);
+        T tile = adapter.onCreateTileHolder(type);
+        ((BaseTileHolder) tile).type = type;
+        return tile;
     }
 
-    public void recycle(int type, T tile) {
-        Deque<T> tiles = recycledTiles.computeIfAbsent(type, k -> new ArrayDeque<>());
+    public void recycle(T tile) {
+        if (tile == touchTarget) {
+            resetTouchTarget();
+        }
+        Deque<T> tiles = recycledTiles.computeIfAbsent(((BaseTileHolder) tile).type, k -> new ArrayDeque<>());
         tiles.offer(tile);
     }
 
+    public T getActiveTile(int column, int row) {
+        long id = getTileId(column, row);
+        return activeTiles.get(id);
+    }
+
     public int getTileWidth(int column) {
-    	return widths.getOrDefault(column, dimenProvider == null ? defaultTileWidth : dimenProvider.getTileWidth(column));
+        return widths.getOrDefault(column, dimenProvider == null ? defaultTileWidth : dimenProvider.getTileWidth(column));
     }
 
     public int getTileHeight(int row) {
-    	return heights.getOrDefault(row, dimenProvider == null ? defaultTileHeight : dimenProvider.getTileHeight(row));
+        return heights.getOrDefault(row, dimenProvider == null ? defaultTileHeight : dimenProvider.getTileHeight(row));
     }
 
     public TileAdapter<T> getAdapter() {
@@ -157,52 +424,117 @@ public class TileCoreService <T extends TileCoreService.BaseTileHolder> {
     }
 
     public TileDimenProvider getDimenProvider() {
-    	return dimenProvider;
+        return dimenProvider;
     }
 
     public void setDimenProvider(TileDimenProvider dimenProvider) {
-    	this.dimenProvider = dimenProvider;
+        this.dimenProvider = dimenProvider;
     }
 
     public Rect getBounds() {
-    	return bounds;
+        return bounds;
     }
 
     public void setBounds(int left, int top, int right, int bottom) {
-    	bounds.set(left, top, right, bottom);
+        bounds.set(left, top, right, bottom);
     }
 
     public int getDefaultTileWidth() {
-    	return defaultTileWidth;
+        return defaultTileWidth;
     }
 
     public int getDefaultTileHeight() {
-    	return defaultTileHeight;
+        return defaultTileHeight;
     }
 
     public void setDefaultTileWidth(int width) {
-    	this.defaultTileWidth = width;
+        this.defaultTileWidth = width;
     }
 
     public void setDefaultTileHeight(int height) {
-    	this.defaultTileHeight = height;
+        this.defaultTileHeight = height;
+    }
+
+    public TileLayoutModel getLayoutModel() {
+        return layoutService.getLayoutModel();
+    }
+
+    public TileLayoutService getLayoutService() {
+        return layoutService;
+    }
+
+    public boolean isDebugMode() {
+    	return debugMode;
+    }
+
+    public void setDebugMode(boolean enabled) {
+    	this.debugMode = enabled;
+    }
+
+    public long getSyncTime() {
+    	return syncTime;
+    }
+
+    public int getActiveTileCount() {
+        return activeTiles.size();
     }
 
     public static long getTileId(int column, int row) {
-    	return ((long) column << 32) | (row & 0xFFFFFFFFL);
+        return ((long) column << 32) | (row & 0xFFFFFFFFL);
     }
 
     public static class BaseTileHolder {
-        
+
         private int type;
         private int column;
         private int row;
-        
+        private int width;
+        private int height;
+
         public void onRecycled() {}
-        
+
         public void onInWindow() {}
-        
+
         public void onOutWindow() {}
+
+        public boolean onTouchEvent(MotionEvent event) {
+            return false;
+        }
+
+        public boolean onClick() {
+            return false;
+        }
+
+        public void onLongClick() {}
+
+        public int getWidth() {
+            return width;
+        }
+
+        public int getHeight() {
+            return height;
+        }
+        
+        public int getColumn() {
+        	return column;
+        }
+        
+        public int getRow() {
+        	return row;
+        }
+        
+        public int getType() {
+        	return type;
+        }
+    }
+
+    public interface CoreInterface {
+
+        void updateUI();
+
+        void onTileIn(BaseTileHolder holder, int column, int row);
+
+        void onTileOut(BaseTileHolder holder, int column, int row);
     }
 
 }
