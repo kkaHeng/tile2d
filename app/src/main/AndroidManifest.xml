@@ -10,6 +10,10 @@
                 <category android:name="android.intent.category.LAUNCHER" />
             </intent-filter>
         </activity>
+        <activity
+            android:name=".TileViewActivity"
+            android:exported="true"
+            android:label="TileView Demo"/>
     </application>
     
 </manifest>

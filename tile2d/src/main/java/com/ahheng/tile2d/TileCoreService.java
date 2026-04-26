@@ -31,7 +31,7 @@ public class TileCoreService <T extends TileCoreService.BaseTileHolder> {
 
     private final Long2ObjectOpenHashMap<T> activeTiles = new Long2ObjectOpenHashMap<>();
     private final Int2ObjectOpenHashMap<Deque<T>> recycledTiles = new Int2ObjectOpenHashMap<>();
-    private final Long2ObjectOpenHashMap<T> dyingTiles = new Long2ObjectOpenHashMap<>();
+    // private final Long2ObjectOpenHashMap<T> dyingTiles = new Long2ObjectOpenHashMap<>();
     private final LongArrayFIFOQueue prefetchTiles = new LongArrayFIFOQueue();
     private final Int2IntOpenHashMap widths = new Int2IntOpenHashMap();
     private final Int2IntOpenHashMap heights = new Int2IntOpenHashMap();
@@ -54,6 +54,7 @@ public class TileCoreService <T extends TileCoreService.BaseTileHolder> {
 
     private boolean debugMode;
     private long syncTime;
+    private int recycledCount;
 
     public TileCoreService(Context context, CoreInterface coreInterface) {
         this.coreInterface = coreInterface;
@@ -88,22 +89,22 @@ public class TileCoreService <T extends TileCoreService.BaseTileHolder> {
 
         @Override
         public int getLeftBound() {
-            return adapter.getLeftBound();
+            return adapter == null ? 0 : adapter.getLeftBound();
         }
 
         @Override
         public int getTopBound() {
-            return adapter.getTopBound();
+            return adapter == null ? 0 : adapter.getTopBound();
         }
 
         @Override
         public int getRightBound() {
-            return adapter.getRightBound();
+            return adapter == null ? -1 : adapter.getRightBound();
         }
 
         @Override
         public int getBottomBound() {
-            return adapter.getBottomBound();
+            return adapter == null ? -1 : adapter.getBottomBound();
         }
 
         @Override
@@ -171,6 +172,7 @@ public class TileCoreService <T extends TileCoreService.BaseTileHolder> {
             boolean intercepted = !disallowIntercept && isInteractingWithView;
             MotionEvent tileEvent = toTileEvent(event);
             if (intercepted) {
+                // 取消瓦片的触摸事件
                 tileEvent.setAction(MotionEvent.ACTION_CANCEL);
                 touchTarget.onTouchEvent(tileEvent);
                 tileEvent.recycle();
@@ -180,6 +182,7 @@ public class TileCoreService <T extends TileCoreService.BaseTileHolder> {
                 touchTarget.onTouchEvent(tileEvent);
                 tileEvent.recycle();
                 if (!disallowIntercept) {
+                    // 继续处理手势
                     gestureDetector.onTouchEvent(event);
                 }
             }
@@ -199,8 +202,7 @@ public class TileCoreService <T extends TileCoreService.BaseTileHolder> {
             lastScrollerX = currX;
             lastScrollerY = currY;
 
-            boolean scrolled = false;
-            if (dx != 0 && horizontalScrollEnabled) scrolled = true;
+            boolean scrolled = dx != 0 && horizontalScrollEnabled;
             if (dy != 0 && verticalScrollEnabled) scrolled = true;
 
             if (scrolled) {
@@ -338,6 +340,7 @@ public class TileCoreService <T extends TileCoreService.BaseTileHolder> {
     }
 
     public void seek(int column, int row, float offsetX, float offsetY) {
+        if (isEmpty()) return;
         // 回收所有活跃瓦片，并通知外部
         Long2ObjectOpenHashMap.FastEntrySet<T> entrySet = activeTiles.long2ObjectEntrySet();
         for (Long2ObjectOpenHashMap.Entry<T> entry : entrySet) {
@@ -358,17 +361,17 @@ public class TileCoreService <T extends TileCoreService.BaseTileHolder> {
 
     public void in(int column, int row) {
         long id = getTileId(column, row);
-        T tile = dyingTiles.remove(id);
-        if (tile == null) {
-            int type = adapter.getTileType(column, row);
-            tile = obtain(type);
-            ((BaseTileHolder) tile).column = column;
-            ((BaseTileHolder) tile).row = row;
-            ((BaseTileHolder) tile).width = getTileWidth(column);
-            ((BaseTileHolder) tile).height = getTileHeight(row);
-            adapter.onBindTileHolder(tile, column, row);
-            tile.onInWindow();
-        }
+        T tile = null; // dyingTiles.remove(id);
+        // if (tile == null) {
+        int type = adapter.getTileType(column, row);
+        tile = obtain(type);
+        ((BaseTileHolder) tile).column = column;
+        ((BaseTileHolder) tile).row = row;
+        ((BaseTileHolder) tile).width = getTileWidth(column);
+        ((BaseTileHolder) tile).height = getTileHeight(row);
+        adapter.onBindTileHolder(tile, column, row);
+        tile.onInWindow();
+        // }
         activeTiles.put(id, tile);
         coreInterface.onTileIn(tile, column, row);
     }
@@ -387,6 +390,7 @@ public class TileCoreService <T extends TileCoreService.BaseTileHolder> {
     public T obtain(int type) {
         Deque<T> tiles = recycledTiles.get(type);
         if (tiles != null && !tiles.isEmpty()) {
+            if (debugMode) recycledCount--;
             return tiles.poll();
         }
         T tile = adapter.onCreateTileHolder(type);
@@ -400,6 +404,7 @@ public class TileCoreService <T extends TileCoreService.BaseTileHolder> {
         }
         Deque<T> tiles = recycledTiles.computeIfAbsent(((BaseTileHolder) tile).type, k -> new ArrayDeque<>());
         tiles.offer(tile);
+        if (debugMode) recycledCount++;
     }
 
     public T getActiveTile(int column, int row) {
@@ -415,11 +420,60 @@ public class TileCoreService <T extends TileCoreService.BaseTileHolder> {
         return heights.getOrDefault(row, dimenProvider == null ? defaultTileHeight : dimenProvider.getTileHeight(row));
     }
 
+    public void setTileWidth(int column, int width) {
+        if (width < 0) throw new IllegalArgumentException("宽度必须大于 0");
+        int old = getTileWidth(column);
+        widths.put(column, width);
+
+        TileLayoutModel model = layoutService.getLayoutModel();
+        if (column >= model.colStart && column <= model.colEnd) {
+            float newOffsetX = model.offsetX;
+
+            if (column == model.colStart) {
+                newOffsetX = model.offsetX + old - width;
+                newOffsetX = Math.min(0, Math.max(-width, newOffsetX));
+            }
+            seek(model.colStart, model.rowStart, newOffsetX, model.offsetY);
+        }
+        coreInterface.updateUI();
+    }
+
+    public void setTileHeight(int row, int height) {
+        if (height < 0) throw new IllegalArgumentException("高度必须大于 0");
+
+        int old = getTileHeight(row);  // 同理
+        heights.put(row, height);
+
+        TileLayoutModel model = layoutService.getLayoutModel();
+        if (row >= model.rowStart && row <= model.rowEnd) {
+            float newOffsetY = model.offsetY;
+
+            if (row == model.rowStart) {
+                newOffsetY = model.offsetY + old - height;
+                newOffsetY = Math.min(0, Math.max(-height, newOffsetY));
+            }
+
+            seek(model.colStart, model.rowStart, model.offsetX, newOffsetY);
+        }
+        coreInterface.updateUI();
+    }
+
+
+
     public TileAdapter<T> getAdapter() {
         return adapter;
     }
 
     public void setAdapter(TileAdapter<T> adapter) {
+        if (this.adapter != null) {
+            this.adapter = null;
+            // 丢弃全部旧数据
+            activeTiles.clear();
+            recycledTiles.clear();
+            layoutService.seek(0, 0, 0, 0);
+            widths.clear();
+            heights.clear();
+        }
         this.adapter = adapter;
     }
 
@@ -477,6 +531,30 @@ public class TileCoreService <T extends TileCoreService.BaseTileHolder> {
 
     public int getActiveTileCount() {
         return activeTiles.size();
+    }
+
+    public int getRecycledTileCount() {
+        return recycledCount;
+    }
+
+    public boolean isEmpty() {
+        return adapter == null || adapter.isEmpty();
+    }
+
+    public boolean isAtLeftBound() {
+        return !isEmpty() && layoutService.isAtLeftBound();
+    }
+
+    public boolean isAtTopBound() {
+        return !isEmpty() && layoutService.isAtTopBound();
+    }
+
+    public boolean isAtRightBound() {
+        return !isEmpty() && layoutService.isAtRightBound();
+    }
+
+    public boolean isAtBottomBound() {
+        return !isEmpty() && layoutService.isAtBottomBound();
     }
 
     public static long getTileId(int column, int row) {

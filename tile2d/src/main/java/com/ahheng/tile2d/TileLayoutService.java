@@ -7,8 +7,8 @@ public class TileLayoutService {
 
     private int colStart;
     private int rowStart;
-    private int colEnd;
-    private int rowEnd;
+    private int colEnd = -1;
+    private int rowEnd = -1;
 
     // 视窗(左 <-(< 0) offset (> 0)-> 右)
     private float offsetX;
@@ -22,6 +22,10 @@ public class TileLayoutService {
     }
 
     public TileLayoutModel sync(float dx, float dy) {
+        if (checkBoundNotEmpty()) {
+            return getLayoutModel();
+        }
+
         int colStart = this.colStart;
         int rowStart = this.rowStart;
         int colEnd = this.colEnd;
@@ -60,7 +64,7 @@ public class TileLayoutService {
                 totalWidth -= width;
                 colStart++;
             }
-            if (offsetX > 0 && colEnd == leftBound) {
+            if (offsetX > 0 && colStart == leftBound) {
                 // 左边存在空白，内容无法填满窗口，强制对齐左边缘
                 offsetX = 0;
             }
@@ -100,7 +104,7 @@ public class TileLayoutService {
                 totalHeight -= height;
                 rowStart++;
             }
-            if (offsetY > 0 && rowEnd == topBound) {
+            if (offsetY > 0 && rowStart == topBound) {
                 // 顶部存在空白，内容无法填满窗口，强制对齐上边缘
                 offsetY = 0;
             }
@@ -133,6 +137,9 @@ public class TileLayoutService {
     }
 
     public TileLayoutModel seek(int column, int row, float offsetX, float offsetY) {
+        if (checkBoundNotEmpty()) {
+            return getLayoutModel();
+        }
         checkLocationInBounds(column, row);
         int rightBound = platform.getRightBound();
         int bottomBound = platform.getBottomBound();
@@ -222,6 +229,20 @@ public class TileLayoutService {
         }
     }
 
+    private boolean checkBoundNotEmpty() {
+        boolean result = isEmpty();
+        if (result) {
+            this.colStart = 0;
+            this.rowStart = 0;
+            this.colEnd = -1;
+            this.rowEnd = -1;
+            this.offsetX = 0;
+            this.totalHeight = 0;
+            this.totalWidth = 0;
+        }
+        return result;
+    }
+
     public TileLayoutModel getLayoutModel() {
         layoutModel.colStart = colStart;
         layoutModel.rowStart = rowStart;
@@ -247,6 +268,26 @@ public class TileLayoutService {
         if (column < left || column > right || row < top || row > bottom) {
             throw new IllegalArgumentException("(" + column + "," + row + ") 不在边界 (" + left + "," + top + "," + right + "," + bottom + ") 范围内");
         }
+    }
+
+    public boolean isEmpty() {
+        return platform.getLeftBound() > platform.getRightBound() || platform.getTopBound() > platform.getBottomBound();
+    }
+
+    public boolean isAtLeftBound() {
+        return colStart == platform.getLeftBound() && offsetX == 0;
+    }
+
+    public boolean isAtTopBound() {
+        return rowStart == platform.getTopBound() && offsetY == 0;
+    }
+
+    public boolean isAtRightBound() {
+        return colEnd == platform.getRightBound() && (int) (totalWidth + offsetX) == platform.getWindowWidth();
+    }
+
+    public boolean isAtBottomBound() {
+        return rowEnd == platform.getBottomBound() && (int) (totalHeight + offsetY) == platform.getWindowHeight();
     }
 
     public interface PlatformService {

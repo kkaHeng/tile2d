@@ -24,10 +24,15 @@ public class TileView extends View implements TileCoreService.CoreInterface {
     private long frameCount = 0;
     private long lastFpsUpdateTime = 0;
     private int actualFps = 0;
-    private long drawStart;
     private Paint infoPaint;
     private float infoMargin;
     private Paint boundPaint;
+
+    private boolean overrideInitLocation = false;
+    private int initLocationColumn;
+    private int initLocationRow;
+    private float initOffsetX;
+    private float initOffsetY;
 
     public TileView(Context context) {
         super(context);
@@ -61,6 +66,11 @@ public class TileView extends View implements TileCoreService.CoreInterface {
     }
 
     public void seek(int column, int row, float offsetX, float offsetY) {
+        overrideInitLocation = true;
+        initLocationColumn = column;
+        initLocationRow = row;
+        initOffsetX = offsetX;
+        initOffsetY = offsetY;
         post(() -> coreService.seek(column, row, offsetX, offsetY));
     }
 
@@ -68,41 +78,53 @@ public class TileView extends View implements TileCoreService.CoreInterface {
     protected void onLayout(boolean changed, int left, int top, int right, int bottom) {
         super.onLayout(changed, left, top, right, bottom);
         coreService.setBounds(getPaddingLeft(), getPaddingTop(), getWidth() - getPaddingRight(), getHeight() - getPaddingBottom());
+        if (coreService.getAdapter() != null && coreService.getActiveTileCount() == 0) {
+            // 首次加载
+            if (overrideInitLocation) {
+                coreService.seek(initLocationColumn, initLocationRow, initOffsetX, initOffsetY);
+            } else {
+                seek(coreService.getAdapter().getLeftBound(), coreService.getAdapter().getTopBound(), 0, 0);
+            }
+        }
+        overrideInitLocation = false;
     }
 
     @Override
     protected void onDraw(Canvas canvas) {
         super.onDraw(canvas);
-        drawStart = System.nanoTime();
+        long drawStart = System.nanoTime();
         TileLayoutModel model = coreService.getLayoutModel();
-        canvas.save();
-        canvas.translate(getPaddingLeft(), getPaddingTop());
-        canvas.translate(model.offsetX, model.offsetY);
-        float x = 0;
-        int column = model.colStart;
-        while (column <= model.colEnd) {
-            int width = coreService.getTileWidth(column);
-            float y = 0;
-            int row = model.rowStart;
-            while (row <= model.rowEnd) {
-                int height = coreService.getTileHeight(row);
-                TileHolder tile = coreService.getActiveTile(column, row);
-                if (tile != null) {
-                    canvas.save();
-                    canvas.translate(x, y);
-                    tile.draw(canvas);
-                    canvas.restore();
-                }
+        if (model.colStart <= model.colEnd && model.rowStart <= model.rowEnd) {
+            canvas.save();
+            if (!coreService.isDebugMode()) canvas.clipRect(coreService.getBounds());
+            canvas.translate(getPaddingLeft(), getPaddingTop());
+            canvas.translate(model.offsetX, model.offsetY);
+            float x = 0;
+            int column = model.colStart;
+            while (column <= model.colEnd) {
+                int width = coreService.getTileWidth(column);
+                float y = 0;
+                int row = model.rowStart;
+                while (row <= model.rowEnd) {
+                    int height = coreService.getTileHeight(row);
+                    TileHolder tile = coreService.getActiveTile(column, row);
+                    if (tile != null) {
+                        canvas.save();
+                        canvas.translate(x, y);
+                        tile.draw(canvas);
+                        canvas.restore();
+                    }
 
-                if (row == model.rowEnd) break;
-                row++;
-                y += height;
+                    if (row == model.rowEnd) break;
+                    row++;
+                    y += height;
+                }
+                if (column == model.colEnd) break;
+                column++;
+                x += width;
             }
-            if (column == model.colEnd) break;
-            column++;
-            x += width;
+            canvas.restore();
         }
-        canvas.restore();
         if (coreService.isDebugMode()) {
             canvas.drawRect(coreService.getBounds(), boundPaint);
             long drawTime = System.nanoTime() - drawStart;
@@ -119,11 +141,16 @@ public class TileView extends View implements TileCoreService.CoreInterface {
             canvas.drawText("同步耗时：" + coreService.getSyncTime() + "ns", ix, iy, infoPaint);
             iy += lineHeight;
             canvas.drawText("活跃瓦片：" + coreService.getActiveTileCount(), ix, iy, infoPaint);
+            iy += lineHeight;
+            canvas.drawText("回收瓦片：" + coreService.getRecycledTileCount(), ix, iy, infoPaint);
         }
     }
 
     @Override
     public boolean onTouchEvent(MotionEvent event) {
+        if (coreService.isEmpty()) {
+            return super.onTouchEvent(event);
+        }
         return coreService.handleTouchEvent(event);
     }
 
@@ -152,21 +179,34 @@ public class TileView extends View implements TileCoreService.CoreInterface {
     }
 
     @Override
-    public void onTileIn(TileCoreService.BaseTileHolder holder, int column, int row) {
-        // TileView 自绘制，无需 addView
-    }
+    public void onTileIn(TileCoreService.BaseTileHolder holder, int column, int row) {}
 
     @Override
-    public void onTileOut(TileCoreService.BaseTileHolder holder, int column, int row) {
-        // TileView 自绘制，无需 removeView
+    public void onTileOut(TileCoreService.BaseTileHolder holder, int column, int row) {}
+
+    public int getTileWidth(int column) {
+        return coreService.getTileWidth(column);
     }
 
-    public Adapter getAdapter() {
-        return (Adapter) coreService.getAdapter();
+    public int getTileHeight(int row) {
+        return coreService.getTileHeight(row);
+    }
+
+    public void setTileWidth(int column, int width) {
+        coreService.setTileWidth(column, width);
+    }
+
+    public void setTileHeight(int row, int height) {
+        coreService.setTileHeight(row, height);
+    }
+
+    public Adapter<?> getAdapter() {
+        return (Adapter<?>) coreService.getAdapter();
     }
 
     public void setAdapter(Adapter adapter) {
         coreService.setAdapter(adapter);
+        requestLayout();
     }
 
     public int getDefaultTileWidth() {
@@ -205,7 +245,7 @@ public class TileView extends View implements TileCoreService.CoreInterface {
         }
     }
 
-    public static abstract class Adapter extends TileAdapter<TileHolder> {
+    public static abstract class Adapter <T extends TileHolder> extends TileAdapter<T> {
     }
 
     public static class TileHolder extends TileCoreService.BaseTileHolder {
