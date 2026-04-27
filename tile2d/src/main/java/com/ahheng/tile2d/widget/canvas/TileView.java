@@ -60,6 +60,7 @@ public class TileView extends View implements TileCoreService.CoreInterface {
                     lastFpsUpdateTime = now;
                     postInvalidateOnAnimation(); // 每秒刷新一次数字
                 }
+                coreService.doFrame(frameTimeNanos);
                 choreographer.postFrameCallback(this);
             }
         };

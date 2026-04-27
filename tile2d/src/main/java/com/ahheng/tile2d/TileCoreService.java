@@ -13,7 +13,6 @@ import com.ahheng.tile2d.widget.TileDimenProvider;
 import it.unimi.dsi.fastutil.ints.Int2IntOpenHashMap;
 import it.unimi.dsi.fastutil.ints.Int2ObjectOpenHashMap;
 import it.unimi.dsi.fastutil.longs.Long2ObjectOpenHashMap;
-import it.unimi.dsi.fastutil.longs.LongArrayFIFOQueue;
 
 import java.util.ArrayDeque;
 import java.util.Deque;
@@ -31,10 +30,15 @@ public class TileCoreService <T extends TileCoreService.BaseTileHolder> {
 
     private final Long2ObjectOpenHashMap<T> activeTiles = new Long2ObjectOpenHashMap<>();
     private final Int2ObjectOpenHashMap<Deque<T>> recycledTiles = new Int2ObjectOpenHashMap<>();
-    // private final Long2ObjectOpenHashMap<T> dyingTiles = new Long2ObjectOpenHashMap<>();
-    private final LongArrayFIFOQueue prefetchTiles = new LongArrayFIFOQueue();
+    private final Long2ObjectOpenHashMap<T> dyingTiles = new Long2ObjectOpenHashMap<>();
     private final Int2IntOpenHashMap widths = new Int2IntOpenHashMap();
     private final Int2IntOpenHashMap heights = new Int2IntOpenHashMap();
+
+    // 0：无。1：在右边。-1：在左边。
+    private int dyingHorizontal;
+    private int dyingVertical;
+    private int dyingColumn;
+    private int dyingRow;
 
     private final Scroller scroller;
     private final GestureDetector gestureDetector;
@@ -206,9 +210,7 @@ public class TileCoreService <T extends TileCoreService.BaseTileHolder> {
             if (dy != 0 && verticalScrollEnabled) scrolled = true;
 
             if (scrolled) {
-                long t0 = System.nanoTime();
-                layoutService.sync(dx, dy);
-                syncTime = System.nanoTime() - t0;
+                sync(dx, dy);
             }
             
             coreInterface.updateUI();
@@ -281,10 +283,7 @@ public class TileCoreService <T extends TileCoreService.BaseTileHolder> {
             }
             isInteractingWithView = scrolled;
             if (scrolled) {
-                long t0 = System.nanoTime();
-                layoutService.sync(dx, dy);
-                syncTime = System.nanoTime() - t0;
-                coreInterface.updateUI();
+                sync(dx, dy);
                 return true;
             }
             return false;
@@ -339,6 +338,37 @@ public class TileCoreService <T extends TileCoreService.BaseTileHolder> {
         }
     }
 
+    public void reset() {
+        // 丢弃全部旧数据
+        dyingColumn = 0;
+        dyingRow = 0;
+        dyingHorizontal = false;
+        dyingVertical = false;
+        lastScrollerX = 0;
+        lastScrollerY = 0;
+        disallowIntercept = false;
+        isInteractingWithView = false;
+        syncTime = 0;
+        recycledCount = 0;
+        activeTiles.clear();
+        recycledTiles.clear();
+        widths.clear();
+        heights.clear();
+        layoutService.seek(0, 0, 0, 0);
+    }
+
+    public void sync(float dx, float dy) {
+        long t0 = System.nanoTime();
+        TileLayoutModel model = layoutService.getLayoutModel();
+        int colStart = model.colStart;
+        int colEnd = model.colEnd;
+        int rowStart = model.rowStart;
+        int rowEnd = model.rowEnd;
+        layoutService.sync(dx, dy);
+        syncTime = System.nanoTime() - t0;
+        coreInterface.updateUI();
+    }
+
     public void seek(int column, int row, float offsetX, float offsetY) {
         if (isEmpty()) return;
         // 回收所有活跃瓦片，并通知外部
@@ -361,17 +391,17 @@ public class TileCoreService <T extends TileCoreService.BaseTileHolder> {
 
     public void in(int column, int row) {
         long id = getTileId(column, row);
-        T tile = null; // dyingTiles.remove(id);
-        // if (tile == null) {
-        int type = adapter.getTileType(column, row);
-        tile = obtain(type);
-        ((BaseTileHolder) tile).column = column;
-        ((BaseTileHolder) tile).row = row;
-        ((BaseTileHolder) tile).width = getTileWidth(column);
-        ((BaseTileHolder) tile).height = getTileHeight(row);
-        adapter.onBindTileHolder(tile, column, row);
-        tile.onInWindow();
-        // }
+        T tile = dyingTiles.remove(id);
+        if (tile == null) {
+            int type = adapter.getTileType(column, row);
+            tile = obtain(type);
+            ((BaseTileHolder) tile).column = column;
+            ((BaseTileHolder) tile).row = row;
+            ((BaseTileHolder) tile).width = getTileWidth(column);
+            ((BaseTileHolder) tile).height = getTileHeight(row);
+            adapter.onBindTileHolder(tile, column, row);
+            tile.onInWindow();
+        }
         activeTiles.put(id, tile);
         coreInterface.onTileIn(tile, column, row);
     }
@@ -382,8 +412,7 @@ public class TileCoreService <T extends TileCoreService.BaseTileHolder> {
         if (tile != null) {
             tile.onOutWindow();
             coreInterface.onTileOut(tile, column, row);
-            recycle(tile);
-            tile.onRecycled();
+            dyingTiles.put(id, tile);
         }
     }
 
@@ -467,12 +496,7 @@ public class TileCoreService <T extends TileCoreService.BaseTileHolder> {
     public void setAdapter(TileAdapter<T> adapter) {
         if (this.adapter != null) {
             this.adapter = null;
-            // 丢弃全部旧数据
-            activeTiles.clear();
-            recycledTiles.clear();
-            layoutService.seek(0, 0, 0, 0);
-            widths.clear();
-            heights.clear();
+            reset();
         }
         this.adapter = adapter;
     }
@@ -559,6 +583,14 @@ public class TileCoreService <T extends TileCoreService.BaseTileHolder> {
 
     public static long getTileId(int column, int row) {
         return ((long) column << 32) | (row & 0xFFFFFFFFL);
+    }
+
+    public static int getColumn(long id) {
+        return (int) (id >> 32);
+    }
+
+    public static int getRow(long id) {
+        return (int) (id & 0xFFFFFFFFL);
     }
 
     public static class BaseTileHolder {

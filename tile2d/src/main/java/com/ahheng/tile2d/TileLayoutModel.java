@@ -10,5 +10,7 @@ public class TileLayoutModel {
     public float offsetY;
     public int totalWidth;
     public int totalHeight;
+    public int vectorHorizontal;
+    public int vectorVertical;
 
 }

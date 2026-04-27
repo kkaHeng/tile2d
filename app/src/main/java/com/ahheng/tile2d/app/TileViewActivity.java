@@ -28,7 +28,7 @@ public class TileViewActivity extends BaseActivity {
         // view.setDefaultTileHeight(size);
         int padding = dp2px(40);
         view.setPadding(padding, padding, padding, padding);
-        //view.setDebugMode(true);
+        view.setDebugMode(true);
         view.setAdapter((adapter = new RandomAdapter()));
         view.seek(0, 0, 0, 0);
 
