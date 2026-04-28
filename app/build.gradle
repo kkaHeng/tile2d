@@ -17,6 +17,7 @@ android {
     buildTypes {
         release {
             // 正式版保持干净，不加后缀
+            minifyEnabled true
         }
         debug {
             applicationIdSuffix '.debug'
