@@ -191,6 +191,7 @@ public class TileCoreService <T extends TileCoreService.BaseTileHolder> {
                 sync(dx, dy);
             }
             
+            coreInterface.updateUI();
         }
     }
 
