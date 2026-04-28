@@ -10,25 +10,28 @@ android {
         applicationId 'com.ahheng.tile2d.app'
         minSdk 21
         targetSdk 34
-        versionName "26.4.1"
-        versionCode 26041001
+        versionName "26.4.2"
+        versionCode 26042801
+    }
+
+    buildTypes {
+        release {
+            // 正式版保持干净，不加后缀
+        }
+        debug {
+            applicationIdSuffix '.debug'
+            versionNameSuffix '-debug'
+        }
     }
 
     compileOptions {
         sourceCompatibility JavaVersion.VERSION_17
         targetCompatibility JavaVersion.VERSION_17
     }
-    
-    buildTypes {
-        debug {
-            applicationIdSuffix '.debug'
-        }
-    }
 }
 
 dependencies {
     implementation libs.androidx.appcompat
     implementation libs.material
-    
     implementation project(":tile2d")
 }
