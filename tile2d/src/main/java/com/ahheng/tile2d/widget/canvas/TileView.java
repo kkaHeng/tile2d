@@ -48,7 +48,7 @@ public class TileView extends View implements TileCoreService.CoreInterface<Tile
     private float touchDownY;
     private boolean isClickCandidate;
     private Runnable longPressRunnable;
-    private long longPressTimeout = 600L;
+    private long longPressTimeout = 400L;
     private final int touchSlop;
 
     public TileView(Context context) {
@@ -550,6 +550,10 @@ public class TileView extends View implements TileCoreService.CoreInterface<Tile
 
         public void postInvalidateOnAnimation() {
         	if (view != null) view.postInvalidateOnAnimation();
+        }
+        
+        public void requestDisallowInterceptTouchEvent(boolean disallowIntercept) {
+        	if (view != null) view.requestDisallowInterceptTouchEvent(disallowIntercept);
         }
 
     }

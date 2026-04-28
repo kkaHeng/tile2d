@@ -67,6 +67,7 @@ public class TileCoreService <T extends TileCoreService.BaseTileHolder> {
         this.minVelocity = vc.getScaledMinimumFlingVelocity();
         this.maxVelocity = (int) (vc.getScaledMaximumFlingVelocity() * 0.8f);
         this.gestureDetector = new GestureDetector(context, new GestureListener());
+        gestureDetector.setIsLongpressEnabled(false);
     }
 
     private class PlatformService implements TileLayoutService.PlatformService {
@@ -190,7 +191,6 @@ public class TileCoreService <T extends TileCoreService.BaseTileHolder> {
                 sync(dx, dy);
             }
             
-            coreInterface.updateUI();
         }
     }
 
@@ -376,10 +376,10 @@ public class TileCoreService <T extends TileCoreService.BaseTileHolder> {
             ((BaseTileHolder) tile).width = getTileWidth(column);
             ((BaseTileHolder) tile).height = getTileHeight(row);
             adapter.onBindTileHolder(tile, column, row);
-            tile.onInWindow();
         }
         activeTiles.put(id, tile);
         coreInterface.onTileIn(tile, column, row);
+        tile.onInWindow();
     }
 
     public void out(int column, int row) {
@@ -618,6 +618,7 @@ public class TileCoreService <T extends TileCoreService.BaseTileHolder> {
         public int getType() {
         	return type;
         }
+        
     }
 
     public interface CoreInterface<T extends BaseTileHolder> {

@@ -110,6 +110,7 @@ public class TileViewActivity extends BaseActivity {
         public void onLongClick() {
             showToast("长按了 " + getColumn() + "," + getRow());
             // view.setAdapter(null);
+            requestDisallowInterceptTouchEvent(true);
         }
     }
 
