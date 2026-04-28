@@ -14,6 +14,7 @@ import android.view.View;
 import com.ahheng.tile2d.TileCoreService;
 import com.ahheng.tile2d.TileLayoutModel;
 import com.ahheng.tile2d.widget.TileAdapter;
+import it.unimi.dsi.fastutil.longs.Long2ObjectOpenHashMap;
 
 public class TileView extends View implements TileCoreService.CoreInterface {
 
@@ -27,6 +28,7 @@ public class TileView extends View implements TileCoreService.CoreInterface {
     private Paint infoPaint;
     private float infoMargin;
     private Paint boundPaint;
+    private Paint dyingOverlayPaint;
 
     private boolean overrideInitLocation = false;
     private int initLocationColumn;
@@ -60,7 +62,6 @@ public class TileView extends View implements TileCoreService.CoreInterface {
                     lastFpsUpdateTime = now;
                     postInvalidateOnAnimation(); // 每秒刷新一次数字
                 }
-                coreService.doFrame(frameTimeNanos);
                 choreographer.postFrameCallback(this);
             }
         };
@@ -127,6 +128,47 @@ public class TileView extends View implements TileCoreService.CoreInterface {
             canvas.restore();
         }
         if (coreService.isDebugMode()) {
+            // 遍历濒死区
+            for (Long2ObjectOpenHashMap.Entry<TileHolder> entry : coreService.getDyingTiles().long2ObjectEntrySet()) {
+                long id = entry.getLongKey();
+                int c = TileCoreService.getColumn(id);
+                int r = TileCoreService.getRow(id);
+    
+                // 对称计算偏移
+                float x = 0;
+                int col = model.colStart;
+                while (col > c) {
+                    col--;
+                    x -= coreService.getTileWidth(col);
+                }
+                while (col < c) {
+                    x += coreService.getTileWidth(col);
+                    col++;
+                }
+    
+                float y = 0;
+                int row = model.rowStart;
+                while (row > r) {
+                    row--;
+                    y -= coreService.getTileHeight(row);
+                }
+                while (row < r) {
+                    y += coreService.getTileHeight(row);
+                    row++;
+                }
+    
+                TileHolder tile = entry.getValue();
+                canvas.save();
+                canvas.translate(getPaddingLeft(), getPaddingTop());
+                canvas.translate(model.offsetX, model.offsetY);
+                canvas.translate(x, y);
+    
+                tile.draw(canvas); // 先画瓦片本体
+                canvas.drawRect(0, 0, tile.getWidth(), tile.getHeight(), dyingOverlayPaint); // 再盖半透红
+    
+                canvas.restore();
+            }
+            
             canvas.drawRect(coreService.getBounds(), boundPaint);
             long drawTime = System.nanoTime() - drawStart;
             long theoreticalFps = drawTime > 0 ? 1_000_000_000L / drawTime : 0;
@@ -144,6 +186,8 @@ public class TileView extends View implements TileCoreService.CoreInterface {
             canvas.drawText("活跃瓦片：" + coreService.getActiveTileCount(), ix, iy, infoPaint);
             iy += lineHeight;
             canvas.drawText("回收瓦片：" + coreService.getRecycledTileCount(), ix, iy, infoPaint);
+            iy += lineHeight;
+            canvas.drawText("濒死瓦片：" + coreService.getDyingTileCount(), ix, iy, infoPaint);
         }
     }
 
@@ -240,9 +284,12 @@ public class TileView extends View implements TileCoreService.CoreInterface {
                 TypedValue.COMPLEX_UNIT_DIP, 12, getResources().getDisplayMetrics()));
             infoMargin = TypedValue.applyDimension(
                 TypedValue.COMPLEX_UNIT_DIP, 4, getResources().getDisplayMetrics());
+            dyingOverlayPaint = new Paint(Paint.ANTI_ALIAS_FLAG);
+            dyingOverlayPaint.setColor(0x60FF0000);
         } else {
             boundPaint = null;
             infoPaint = null;
+            dyingOverlayPaint = null;
         }
     }
 

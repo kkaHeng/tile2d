@@ -31,12 +31,12 @@ public class TileViewActivity extends BaseActivity {
         view.setDebugMode(true);
         view.setAdapter((adapter = new RandomAdapter()));
         view.seek(0, 0, 0, 0);
-
+        /*
         Handler handler = new Handler(getMainLooper());
         handler.postDelayed(() -> {
             view.setTileWidth(0, dp2px(40));
             view.setTileHeight(0, dp2px(80));
-        }, 2000);
+        }, 2000);*/
     }
 
     public class ColorTileHolder extends TileView.TileHolder {

@@ -15,8 +15,6 @@ public class TileLayoutService {
     private float offsetY;
     private int totalWidth;
     private int totalHeight;
-    private int vectorHorizontal;
-    private int vectorVertical;
 
     public TileLayoutService(PlatformService service) {
         this.layoutModel = new TileLayoutModel();
@@ -125,8 +123,6 @@ public class TileLayoutService {
         }
 
         diff(this.colStart, this.rowStart, this.colEnd, this.rowEnd, colStart, rowStart, colEnd, rowEnd);
-        this.vectorHorizontal = colStart - this.colStart;
-        this.vectorVertical = rowStart - this.rowStart;
         this.colStart = colStart;
         this.rowStart = rowStart;
         this.colEnd = colEnd;
@@ -242,8 +238,6 @@ public class TileLayoutService {
             this.offsetX = 0;
             this.totalHeight = 0;
             this.totalWidth = 0;
-            this.vectorHorizontal = 0;
-            this.vectorVertical = 0;
         }
         return result;
     }
@@ -257,8 +251,6 @@ public class TileLayoutService {
         layoutModel.offsetY = offsetY;
         layoutModel.totalWidth = totalWidth;
         layoutModel.totalHeight = totalHeight;
-        layoutModel.vectorHorizontal = vectorHorizontal;
-        layoutModel.vectorVertical = vectorVertical;
         return this.layoutModel;
     }
 

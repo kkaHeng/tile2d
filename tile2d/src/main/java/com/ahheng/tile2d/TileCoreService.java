@@ -13,6 +13,8 @@ import com.ahheng.tile2d.widget.TileDimenProvider;
 import it.unimi.dsi.fastutil.ints.Int2IntOpenHashMap;
 import it.unimi.dsi.fastutil.ints.Int2ObjectOpenHashMap;
 import it.unimi.dsi.fastutil.longs.Long2ObjectOpenHashMap;
+import it.unimi.dsi.fastutil.longs.LongArrayFIFOQueue;
+import it.unimi.dsi.fastutil.objects.ObjectIterator;
 
 import java.util.ArrayDeque;
 import java.util.Deque;
@@ -34,11 +36,13 @@ public class TileCoreService <T extends TileCoreService.BaseTileHolder> {
     private final Int2IntOpenHashMap widths = new Int2IntOpenHashMap();
     private final Int2IntOpenHashMap heights = new Int2IntOpenHashMap();
 
-    // 0：无。1：在右边。-1：在左边。
-    private int dyingHorizontal;
-    private int dyingVertical;
-    private int dyingColumn;
-    private int dyingRow;
+    // 0：无。1：在左边。-1：在右边。
+    private int dyingVectorHorizontal;
+    private int dyingVectorVertical;
+    private int dyingColStart;
+    private int dyingColEnd;
+    private int dyingRowStart;
+    private int dyingRowEnd;
 
     private final Scroller scroller;
     private final GestureDetector gestureDetector;
@@ -338,12 +342,36 @@ public class TileCoreService <T extends TileCoreService.BaseTileHolder> {
         }
     }
 
+    private void diffDying(int newColStart, int newColEnd, int newRowStart, int newRowEnd) {
+        // 快速退出：新旧范围完全重合，说明本次滚动未产生新的出屏区域
+        if (dyingColStart == newColStart && dyingColEnd == newColEnd
+                && dyingRowStart == newRowStart && dyingRowEnd == newRowEnd) {
+            return;
+        }
+    
+        ObjectIterator<Long2ObjectOpenHashMap.Entry<T>> it = dyingTiles.long2ObjectEntrySet().iterator();
+        while (it.hasNext()) {
+            Long2ObjectOpenHashMap.Entry<T> entry = it.next();
+            long id = entry.getLongKey();
+            int c = getColumn(id);
+            int r = getRow(id);
+            if (c < newColStart || c > newColEnd || r < newRowStart || r > newRowEnd) {
+                T tile = entry.getValue();
+                it.remove();
+                recycle(tile);
+                tile.onRecycled();
+            }
+        }
+    }
+
     public void reset() {
         // 丢弃全部旧数据
-        dyingColumn = 0;
-        dyingRow = 0;
-        dyingHorizontal = false;
-        dyingVertical = false;
+        dyingVectorHorizontal = 0;
+        dyingVectorVertical = 0;
+        dyingColStart = 0;
+        dyingColEnd = 0;
+        dyingRowStart = 0;
+        dyingRowEnd = 0;
         lastScrollerX = 0;
         lastScrollerY = 0;
         disallowIntercept = false;
@@ -352,6 +380,7 @@ public class TileCoreService <T extends TileCoreService.BaseTileHolder> {
         recycledCount = 0;
         activeTiles.clear();
         recycledTiles.clear();
+        dyingTiles.clear();
         widths.clear();
         heights.clear();
         layoutService.seek(0, 0, 0, 0);
@@ -359,14 +388,39 @@ public class TileCoreService <T extends TileCoreService.BaseTileHolder> {
 
     public void sync(float dx, float dy) {
         long t0 = System.nanoTime();
+        int vectorHorizontal = dx == 0 ? 0 : (dx > 0 ? 1 : -1);
+        int vectorVertical = dy == 0 ? 0 : (dy > 0 ? 1 : -1);
+        
         TileLayoutModel model = layoutService.getLayoutModel();
+        int lastColStart = model.colStart;
+        int lastColEnd = model.colEnd;
+        int lastRowStart = model.rowStart;
+        int lastRowEnd = model.rowEnd;
+        
+        layoutService.sync(dx, dy);
+        syncTime = System.nanoTime() - t0;
+        coreInterface.updateUI();
+        
         int colStart = model.colStart;
         int colEnd = model.colEnd;
         int rowStart = model.rowStart;
         int rowEnd = model.rowEnd;
-        layoutService.sync(dx, dy);
-        syncTime = System.nanoTime() - t0;
-        coreInterface.updateUI();
+        
+        // 处理濒死区
+        if (vectorHorizontal != 0 || vectorVertical != 0) {
+            if (vectorHorizontal == dyingVectorHorizontal || vectorVertical == dyingVectorVertical) {
+                // 顺方向滚动，回收当前濒死区不在新濒死区范围内的瓦片
+                if (lastColStart != colStart || lastColEnd != colEnd || lastRowStart != rowStart || lastRowEnd != rowEnd) {
+                    diffDying(lastColStart, lastColEnd, lastRowStart, lastRowEnd);
+                    dyingColStart = lastColStart;
+                    dyingColEnd = lastColEnd;
+                    dyingRowStart = lastRowStart;
+                    dyingRowEnd = lastRowEnd;
+                }
+            }
+        }
+        dyingVectorHorizontal = vectorHorizontal;
+        dyingVectorVertical = vectorVertical;
     }
 
     public void seek(int column, int row, float offsetX, float offsetY) {
@@ -559,6 +613,14 @@ public class TileCoreService <T extends TileCoreService.BaseTileHolder> {
 
     public int getRecycledTileCount() {
         return recycledCount;
+    }
+
+    public int getDyingTileCount() {
+    	return dyingTiles.size();
+    }
+
+    public Long2ObjectOpenHashMap<T> getDyingTiles() {
+    	return dyingTiles;
     }
 
     public boolean isEmpty() {
