@@ -11,4 +11,15 @@ public class TileLayoutModel {
     public int totalWidth;
     public int totalHeight;
 
+    public void reset() {
+    	colStart = 
+        colEnd =
+        rowStart =
+        rowEnd = 0;
+        
+        offsetX = offsetY = 0;
+        
+        totalWidth = totalHeight = 0;
+    }
+
 }

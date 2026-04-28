@@ -1,22 +1,25 @@
 package com.ahheng.tile2d.widget.canvas;
 
 import android.content.Context;
-import android.content.res.Resources;
 import android.graphics.Canvas;
 import android.graphics.Paint;
+import android.graphics.Typeface;
 import android.util.AttributeSet;
 import android.util.DisplayMetrics;
 import android.util.TypedValue;
 import android.view.Choreographer;
 import android.view.MotionEvent;
 import android.view.View;
+import android.view.ViewConfiguration;
 
 import com.ahheng.tile2d.TileCoreService;
 import com.ahheng.tile2d.TileLayoutModel;
 import com.ahheng.tile2d.widget.TileAdapter;
+import com.ahheng.tile2d.widget.TileDimenProvider;
+
 import it.unimi.dsi.fastutil.longs.Long2ObjectOpenHashMap;
 
-public class TileView extends View implements TileCoreService.CoreInterface {
+public class TileView extends View implements TileCoreService.CoreInterface<TileView.TileHolder> {
 
     private TileCoreService<TileHolder> coreService;
 
@@ -36,12 +39,27 @@ public class TileView extends View implements TileCoreService.CoreInterface {
     private float initOffsetX;
     private float initOffsetY;
 
+    private TileHolder touchTarget;
+    private final int[] touchTargetPos = new int[2];
+    private final float[] touchTargetLoc = new float[2];
+    private boolean disallowIntercept;
+
+    private long touchDownTime;
+    private float touchDownX;
+    private float touchDownY;
+    private boolean isClickCandidate;
+    private Runnable longPressRunnable;
+    private static final long LONG_PRESS_TIMEOUT = 600L;
+    private final int touchSlop;
+
     public TileView(Context context) {
         super(context);
+        touchSlop = ViewConfiguration.get(context).getScaledTouchSlop();
         init();
     }
     public TileView(Context context, AttributeSet attrs) {
         super(context, attrs);
+        touchSlop = ViewConfiguration.get(context).getScaledTouchSlop();
         init();
     }
     private void init() {
@@ -49,46 +67,32 @@ public class TileView extends View implements TileCoreService.CoreInterface {
         DisplayMetrics displayMetrics = getResources().getDisplayMetrics();
         coreService.setDefaultTileWidth((int) TypedValue.applyDimension(TypedValue.COMPLEX_UNIT_DIP, 80, displayMetrics));
         coreService.setDefaultTileHeight((int) TypedValue.applyDimension(TypedValue.COMPLEX_UNIT_DIP, 45, displayMetrics));
-        
-        this.choreographer = Choreographer.getInstance();
-        this.frameCallback = new Choreographer.FrameCallback() {
-            @Override
-            public void doFrame(long frameTimeNanos) {
-                frameCount++;
-                long now = System.nanoTime();
-                if (now - lastFpsUpdateTime >= 1_000_000_000L) {
-                    actualFps = (int) frameCount;
-                    frameCount = 0;
-                    lastFpsUpdateTime = now;
-                    postInvalidateOnAnimation(); // 每秒刷新一次数字
-                }
-                choreographer.postFrameCallback(this);
-            }
-        };
+    }
+
+    public void seek(int column, int row) {
+    	seek(column, row, 0, 0);
     }
 
     public void seek(int column, int row, float offsetX, float offsetY) {
+        if (isEmpty()) return;
         overrideInitLocation = true;
         initLocationColumn = column;
         initLocationRow = row;
         initOffsetX = offsetX;
         initOffsetY = offsetY;
-        post(() -> coreService.seek(column, row, offsetX, offsetY));
+        requestLayout();
     }
 
     @Override
     protected void onLayout(boolean changed, int left, int top, int right, int bottom) {
         super.onLayout(changed, left, top, right, bottom);
         coreService.setBounds(getPaddingLeft(), getPaddingTop(), getWidth() - getPaddingRight(), getHeight() - getPaddingBottom());
-        if (coreService.getAdapter() != null && coreService.getActiveTileCount() == 0) {
-            // 首次加载
-            if (overrideInitLocation) {
-                coreService.seek(initLocationColumn, initLocationRow, initOffsetX, initOffsetY);
-            } else {
-                seek(coreService.getAdapter().getLeftBound(), coreService.getAdapter().getTopBound(), 0, 0);
-            }
+        if (overrideInitLocation) {
+            overrideInitLocation = false;
+            coreService.seek(initLocationColumn, initLocationRow, initOffsetX, initOffsetY);
+        } else if (coreService.getAdapter() != null && coreService.getActiveTileCount() == 0) {
+            seek(coreService.getAdapter().getLeftBound(), coreService.getAdapter().getTopBound(), 0, 0);
         }
-        overrideInitLocation = false;
     }
 
     @Override
@@ -128,13 +132,11 @@ public class TileView extends View implements TileCoreService.CoreInterface {
             canvas.restore();
         }
         if (coreService.isDebugMode()) {
-            // 遍历濒死区
             for (Long2ObjectOpenHashMap.Entry<TileHolder> entry : coreService.getDyingTiles().long2ObjectEntrySet()) {
                 long id = entry.getLongKey();
                 int c = TileCoreService.getColumn(id);
                 int r = TileCoreService.getRow(id);
     
-                // 对称计算偏移
                 float x = 0;
                 int col = model.colStart;
                 while (col > c) {
@@ -163,8 +165,8 @@ public class TileView extends View implements TileCoreService.CoreInterface {
                 canvas.translate(model.offsetX, model.offsetY);
                 canvas.translate(x, y);
     
-                tile.draw(canvas); // 先画瓦片本体
-                canvas.drawRect(0, 0, tile.getWidth(), tile.getHeight(), dyingOverlayPaint); // 再盖半透红
+                tile.draw(canvas);
+                canvas.drawRect(0, 0, tile.getWidth(), tile.getHeight(), dyingOverlayPaint);
     
                 canvas.restore();
             }
@@ -175,7 +177,7 @@ public class TileView extends View implements TileCoreService.CoreInterface {
     
             float lineHeight = infoPaint.getTextSize() * 1.25f;
             float ix = infoMargin;
-            float iy = infoMargin + infoPaint.getTextSize(); // 第一行 baseline
+            float iy = infoMargin + infoPaint.getTextSize();
     
             canvas.drawText("实际帧率：" + actualFps + "Hz", ix, iy, infoPaint);
             iy += lineHeight;
@@ -196,7 +198,82 @@ public class TileView extends View implements TileCoreService.CoreInterface {
         if (coreService.isEmpty()) {
             return super.onTouchEvent(event);
         }
-        return coreService.handleTouchEvent(event);
+
+        int action = event.getActionMasked();
+        coreService.handleTouchEvent(event);
+
+        if (action == MotionEvent.ACTION_DOWN) {
+            disallowIntercept = false;
+            coreService.requestDisallowInterceptTouchEvent(false);
+
+            float contentX = event.getX() - getPaddingLeft();
+            float contentY = event.getY() - getPaddingTop();
+            touchTarget = findTileAt(contentX, contentY, touchTargetPos, touchTargetLoc);
+
+            if (touchTarget != null) {
+                MotionEvent tileEvent = toTileEvent(event);
+                touchTarget.onTouchEvent(tileEvent);
+                tileEvent.recycle();
+            }
+
+            touchDownTime = event.getEventTime();
+            touchDownX = event.getX();
+            touchDownY = event.getY();
+            isClickCandidate = true;
+
+            removeLongPress();
+            longPressRunnable = () -> {
+                if (touchTarget != null && !coreService.isInteractingWithView()) {
+                    touchTarget.onLongClick();
+                    isClickCandidate = false;
+                }
+            };
+            postDelayed(longPressRunnable, LONG_PRESS_TIMEOUT);
+
+            return true;
+        }
+
+        if (touchTarget != null) {
+            boolean isScrolling = coreService.isInteractingWithView();
+            boolean intercepted = !disallowIntercept && isScrolling;
+
+            if (intercepted || action == MotionEvent.ACTION_CANCEL) {
+                MotionEvent tileEvent = toTileEvent(event);
+                tileEvent.setAction(MotionEvent.ACTION_CANCEL);
+                touchTarget.onTouchEvent(tileEvent);
+                tileEvent.recycle();
+                resetTouchTarget();
+                removeLongPress();
+                isClickCandidate = false;
+            } else {
+                MotionEvent tileEvent = toTileEvent(event);
+                touchTarget.onTouchEvent(tileEvent);
+                tileEvent.recycle();
+
+                if (action == MotionEvent.ACTION_MOVE) {
+                    if (Math.abs(event.getX() - touchDownX) > touchSlop
+                            || Math.abs(event.getY() - touchDownY) > touchSlop) {
+                        isClickCandidate = false;
+                        removeLongPress();
+                    }
+                }
+            }
+        }
+
+        if (action == MotionEvent.ACTION_UP) {
+            removeLongPress();
+            if (touchTarget != null && isClickCandidate && !coreService.isInteractingWithView()) {
+                touchTarget.onClick();
+            }
+            resetTouchTarget();
+        }
+
+        return true;
+    }
+
+    public void requestDisallowInterceptTouchEvent(boolean disallowIntercept) {
+        this.disallowIntercept = disallowIntercept;
+        coreService.requestDisallowInterceptTouchEvent(disallowIntercept);
     }
 
     @Override
@@ -208,14 +285,16 @@ public class TileView extends View implements TileCoreService.CoreInterface {
     @Override
     protected void onAttachedToWindow() {
         super.onAttachedToWindow();
-        lastFpsUpdateTime = System.nanoTime();
-        choreographer.postFrameCallback(frameCallback);
+        if (choreographer != null && frameCallback != null) {
+            lastFpsUpdateTime = System.nanoTime();
+            choreographer.postFrameCallback(frameCallback);
+        }
     }
     
     @Override
     protected void onDetachedFromWindow() {
         super.onDetachedFromWindow();
-        choreographer.removeFrameCallback(frameCallback);
+        if (choreographer != null && frameCallback != null) choreographer.removeFrameCallback(frameCallback);
     }
 
     @Override
@@ -224,10 +303,30 @@ public class TileView extends View implements TileCoreService.CoreInterface {
     }
 
     @Override
-    public void onTileIn(TileCoreService.BaseTileHolder holder, int column, int row) {}
+    public void onTileIn(TileHolder holder, int column, int row) {
+        holder.view = this;
+    }
 
     @Override
-    public void onTileOut(TileCoreService.BaseTileHolder holder, int column, int row) {}
+    public void onTileOut(TileHolder holder, int column, int row) {
+        holder.view = null;
+    }
+
+    public boolean isHorizontalScrollEnabled() {
+    	return coreService.isHorizontalScrollEnabled();
+    }
+
+    public void setHorizontalScrollEnabled(boolean horizontalScrollEnabled) {
+    	coreService.setHorizontalScrollEnabled(horizontalScrollEnabled);
+    }
+
+    public boolean isVerticalScrollEnabled() {
+    	return coreService.isVerticalScrollEnabled();
+    }
+
+    public void setVerticalScrollEnabled(boolean verticalScrollEnabled) {
+    	coreService.setVerticalScrollEnabled(verticalScrollEnabled);
+    }
 
     public int getTileWidth(int column) {
         return coreService.getTileWidth(column);
@@ -250,6 +349,10 @@ public class TileView extends View implements TileCoreService.CoreInterface {
     }
 
     public void setAdapter(Adapter adapter) {
+        if (coreService.getAdapter() != adapter) {
+            resetTouchTarget();
+            removeLongPress();
+        }
         coreService.setAdapter(adapter);
         requestLayout();
     }
@@ -270,6 +373,42 @@ public class TileView extends View implements TileCoreService.CoreInterface {
         coreService.setDefaultTileHeight(height);
     }
 
+    public TileDimenProvider getDimenProvider() {
+    	return coreService.getDimenProvider();
+    }
+
+    public void setDimenProvider(TileDimenProvider dimenProvider) {
+    	coreService.setDimenProvider(dimenProvider);
+    }
+
+    public TileHolder getActiveTile(int column, int row) {
+        return coreService.getActiveTile(column, row);
+    }
+
+    public boolean isEmpty() {
+    	return coreService.isEmpty();
+    }
+
+    public boolean isAtLeftBound() {
+    	return coreService.isAtLeftBound();
+    }
+
+    public boolean isAtTopBound() {
+    	return coreService.isAtTopBound();
+    }
+
+    public boolean isAtRightBound() {
+    	return coreService.isAtRightBound();
+    }
+
+    public boolean isAtBottomBound() {
+    	return coreService.isAtBottomBound();
+    }
+
+    public boolean isInteractingWithView() {
+    	return coreService.isInteractingWithView();
+    }
+
     public void setDebugMode(boolean enabled) {
     	coreService.setDebugMode(enabled);
         if (coreService.isDebugMode()) {
@@ -279,17 +418,99 @@ public class TileView extends View implements TileCoreService.CoreInterface {
             boundPaint.setStrokeWidth(2);
             
             infoPaint = new Paint(Paint.ANTI_ALIAS_FLAG);
-            infoPaint.setColor(0xff000000);
+            infoPaint.setColor(0xff333333);
+            infoPaint.setTypeface(Typeface.create((Typeface) null, Typeface.BOLD));
+            infoPaint.setShadowLayer(4, 0, 0, 0xffcdcdcd);
             infoPaint.setTextSize(TypedValue.applyDimension(
                 TypedValue.COMPLEX_UNIT_DIP, 12, getResources().getDisplayMetrics()));
             infoMargin = TypedValue.applyDimension(
                 TypedValue.COMPLEX_UNIT_DIP, 4, getResources().getDisplayMetrics());
             dyingOverlayPaint = new Paint(Paint.ANTI_ALIAS_FLAG);
             dyingOverlayPaint.setColor(0x60FF0000);
+            
+            this.choreographer = Choreographer.getInstance();
+            this.frameCallback = new Choreographer.FrameCallback() {
+                @Override
+                public void doFrame(long frameTimeNanos) {
+                    frameCount++;
+                    long now = System.nanoTime();
+                    if (now - lastFpsUpdateTime >= 1_000_000_000L) {
+                        actualFps = (int) frameCount;
+                        frameCount = 0;
+                        lastFpsUpdateTime = now;
+                        postInvalidateOnAnimation();
+                    }
+                    choreographer.postFrameCallback(this);
+                }
+            };
+            if (isAttachedToWindow()) {
+                choreographer.postFrameCallback(frameCallback);
+            }
         } else {
             boundPaint = null;
             infoPaint = null;
             dyingOverlayPaint = null;
+            choreographer.removeFrameCallback(frameCallback);
+            choreographer = null;
+            frameCallback = null;
+        }
+        postInvalidateOnAnimation();
+    }
+
+    public TileHolder findTileAt(float contentX, float contentY, int[] outPos, float[] outLoc) {
+        TileLayoutModel model = coreService.getLayoutModel();
+        float x = model.offsetX;
+        int col = model.colStart;
+        while (col <= model.colEnd) {
+            int width = coreService.getTileWidth(col);
+            if (contentX >= x && contentX < x + width) {
+                float y = model.offsetY;
+                int row = model.rowStart;
+                while (row <= model.rowEnd) {
+                    int height = coreService.getTileHeight(row);
+                    if (contentY >= y && contentY < y + height) {
+                        if (outPos != null) {
+                            outPos[0] = col;
+                            outPos[1] = row;
+                        }
+                        if (outLoc != null) {
+                            outLoc[0] = x;
+                            outLoc[1] = y;
+                        }
+                        return coreService.getActiveTile(col, row);
+                    }
+                    y += height;
+                    if (row == model.rowEnd) break;
+                    row++;
+                }
+            }
+            x += width;
+            if (col == model.colEnd) break;
+            col++;
+        }
+        return null;
+    }
+
+    private MotionEvent toTileEvent(MotionEvent viewEvent) {
+        MotionEvent tileEvent = MotionEvent.obtain(viewEvent);
+        float offsetX = getPaddingLeft() + touchTargetLoc[0];
+        float offsetY = getPaddingTop() + touchTargetLoc[1];
+        tileEvent.offsetLocation(-offsetX, -offsetY);
+        return tileEvent;
+    }
+
+    private void resetTouchTarget() {
+        touchTarget = null;
+        touchTargetPos[0] = 0;
+        touchTargetPos[1] = 0;
+        touchTargetLoc[0] = 0;
+        touchTargetLoc[1] = 0;
+    }
+
+    private void removeLongPress() {
+        if (longPressRunnable != null) {
+            removeCallbacks(longPressRunnable);
+            longPressRunnable = null;
         }
     }
 
@@ -301,6 +522,24 @@ public class TileView extends View implements TileCoreService.CoreInterface {
         private TileView view;
 
         public void draw(Canvas canvas) {}
+        
+        public boolean onTouchEvent(MotionEvent event) {
+            return false;
+        }
+
+        public boolean onClick() {
+            return false;
+        }
+
+        public void onLongClick() {}
+        
+        public void postInvalidate() {
+            if (view != null) view.postInvalidate();
+        }
+
+        public void postInvalidateOnAnimation() {
+        	if (view != null) view.postInvalidateOnAnimation();
+        }
 
     }
 

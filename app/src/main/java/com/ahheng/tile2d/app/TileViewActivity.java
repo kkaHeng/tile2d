@@ -28,7 +28,7 @@ public class TileViewActivity extends BaseActivity {
         // view.setDefaultTileHeight(size);
         int padding = dp2px(40);
         view.setPadding(padding, padding, padding, padding);
-        view.setDebugMode(true);
+        view.setDebugMode(isDebugMode());
         view.setAdapter((adapter = new RandomAdapter()));
         view.seek(0, 0, 0, 0);
         /*
@@ -37,6 +37,11 @@ public class TileViewActivity extends BaseActivity {
             view.setTileWidth(0, dp2px(40));
             view.setTileHeight(0, dp2px(80));
         }, 2000);*/
+    }
+
+    @Override
+    protected void onDebugModeChanged(boolean enabled) {
+        view.setDebugMode(enabled);
     }
 
     public class ColorTileHolder extends TileView.TileHolder {

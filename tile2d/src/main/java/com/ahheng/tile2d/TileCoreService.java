@@ -13,7 +13,6 @@ import com.ahheng.tile2d.widget.TileDimenProvider;
 import it.unimi.dsi.fastutil.ints.Int2IntOpenHashMap;
 import it.unimi.dsi.fastutil.ints.Int2ObjectOpenHashMap;
 import it.unimi.dsi.fastutil.longs.Long2ObjectOpenHashMap;
-import it.unimi.dsi.fastutil.longs.LongArrayFIFOQueue;
 import it.unimi.dsi.fastutil.objects.ObjectIterator;
 
 import java.util.ArrayDeque;
@@ -27,7 +26,7 @@ public class TileCoreService <T extends TileCoreService.BaseTileHolder> {
     private int defaultTileHeight;
 
     private final Rect bounds = new Rect();
-    private final CoreInterface coreInterface;
+    private final CoreInterface<T> coreInterface;
     private final TileLayoutService layoutService = new TileLayoutService(new PlatformService());
 
     private final Long2ObjectOpenHashMap<T> activeTiles = new Long2ObjectOpenHashMap<>();
@@ -49,9 +48,6 @@ public class TileCoreService <T extends TileCoreService.BaseTileHolder> {
     private final int minVelocity;
     private final int maxVelocity;
 
-    private T touchTarget;
-    private final int[] touchTargetPos = new int[2];
-    private final float[] touchTargetLoc = new float[2];
     private boolean disallowIntercept;
     private boolean isInteractingWithView;
     private int lastScrollerX;
@@ -64,7 +60,7 @@ public class TileCoreService <T extends TileCoreService.BaseTileHolder> {
     private long syncTime;
     private int recycledCount;
 
-    public TileCoreService(Context context, CoreInterface coreInterface) {
+    public TileCoreService(Context context, CoreInterface<T> coreInterface) {
         this.coreInterface = coreInterface;
         this.scroller = new Scroller(context);
         ViewConfiguration vc = ViewConfiguration.get(context);
@@ -152,6 +148,14 @@ public class TileCoreService <T extends TileCoreService.BaseTileHolder> {
         this.verticalScrollEnabled = enabled;
     }
 
+    public void requestDisallowInterceptTouchEvent(boolean disallowIntercept) {
+        this.disallowIntercept = disallowIntercept;
+    }
+
+    public boolean isInteractingWithView() {
+        return isInteractingWithView;
+    }
+
     public boolean handleTouchEvent(MotionEvent event) {
         int action = event.getActionMasked();
 
@@ -162,42 +166,11 @@ public class TileCoreService <T extends TileCoreService.BaseTileHolder> {
             if (scroller.computeScrollOffset()) {
                 scroller.abortAnimation();
             }
+        }
 
-            float contentX = event.getX() - bounds.left;
-            float contentY = event.getY() - bounds.top;
-            touchTarget = findTileAt(contentX, contentY, touchTargetPos, touchTargetLoc);
-            if (touchTarget != null) {
-                MotionEvent tileEvent = toTileEvent(event);
-                touchTarget.onTouchEvent(tileEvent);
-                tileEvent.recycle();
-            }
-
+        if (!disallowIntercept) {
             gestureDetector.onTouchEvent(event);
-            return true;
         }
-
-        if (touchTarget != null) {
-            boolean intercepted = !disallowIntercept && isInteractingWithView;
-            MotionEvent tileEvent = toTileEvent(event);
-            if (intercepted) {
-                // 取消瓦片的触摸事件
-                tileEvent.setAction(MotionEvent.ACTION_CANCEL);
-                touchTarget.onTouchEvent(tileEvent);
-                tileEvent.recycle();
-                resetTouchTarget();
-                gestureDetector.onTouchEvent(event);
-            } else {
-                touchTarget.onTouchEvent(tileEvent);
-                tileEvent.recycle();
-                if (!disallowIntercept) {
-                    // 继续处理手势
-                    gestureDetector.onTouchEvent(event);
-                }
-            }
-            return true;
-        }
-
-        gestureDetector.onTouchEvent(event);
         return true;
     }
 
@@ -219,56 +192,6 @@ public class TileCoreService <T extends TileCoreService.BaseTileHolder> {
             
             coreInterface.updateUI();
         }
-    }
-
-    private T findTileAt(float contentX, float contentY, int[] outPos, float[] outLoc) {
-        TileLayoutModel model = layoutService.getLayoutModel();
-        float x = model.offsetX;
-        int col = model.colStart;
-        while (col <= model.colEnd) {
-            int width = getTileWidth(col);
-            if (contentX >= x && contentX < x + width) {
-                float y = model.offsetY;
-                int row = model.rowStart;
-                while (row <= model.rowEnd) {
-                    int height = getTileHeight(row);
-                    if (contentY >= y && contentY < y + height) {
-                        if (outPos != null) {
-                            outPos[0] = col;
-                            outPos[1] = row;
-                        }
-                        if (outLoc != null) {
-                            outLoc[0] = x;
-                            outLoc[1] = y;
-                        }
-                        return activeTiles.get(getTileId(col, row));
-                    }
-                    y += height;
-                    if (row == model.rowEnd) break;
-                    row++;
-                }
-            }
-            x += width;
-            if (col == model.colEnd) break;
-            col++;
-        }
-        return null;
-    }
-
-    private MotionEvent toTileEvent(MotionEvent viewEvent) {
-        MotionEvent tileEvent = MotionEvent.obtain(viewEvent);
-        float offsetX = bounds.left + touchTargetLoc[0];
-        float offsetY = bounds.top + touchTargetLoc[1];
-        tileEvent.offsetLocation(-offsetX, -offsetY);
-        return tileEvent;
-    }
-
-    private void resetTouchTarget() {
-        touchTarget = null;
-        touchTargetPos[0] = 0;
-        touchTargetPos[1] = 0;
-        touchTargetLoc[0] = 0;
-        touchTargetLoc[1] = 0;
     }
 
     private class GestureListener extends GestureDetector.SimpleOnGestureListener {
@@ -325,25 +248,9 @@ public class TileCoreService <T extends TileCoreService.BaseTileHolder> {
             coreInterface.updateUI();
             return true;
         }
-
-        @Override
-        public boolean onSingleTapUp(MotionEvent e) {
-            if (touchTarget != null && !isInteractingWithView) {
-                return touchTarget.onClick();
-            }
-            return false;
-        }
-
-        @Override
-        public void onLongPress(MotionEvent e) {
-            if (touchTarget != null && !isInteractingWithView) {
-                touchTarget.onLongClick();
-            }
-        }
     }
 
     private void diffDying(int newColStart, int newColEnd, int newRowStart, int newRowEnd) {
-        // 快速退出：新旧范围完全重合，说明本次滚动未产生新的出屏区域
         if (dyingColStart == newColStart && dyingColEnd == newColEnd
                 && dyingRowStart == newRowStart && dyingRowEnd == newRowEnd) {
             return;
@@ -365,25 +272,44 @@ public class TileCoreService <T extends TileCoreService.BaseTileHolder> {
     }
 
     public void reset() {
-        // 丢弃全部旧数据
-        dyingVectorHorizontal = 0;
-        dyingVectorVertical = 0;
-        dyingColStart = 0;
-        dyingColEnd = 0;
-        dyingRowStart = 0;
-        dyingRowEnd = 0;
-        lastScrollerX = 0;
-        lastScrollerY = 0;
-        disallowIntercept = false;
-        isInteractingWithView = false;
-        syncTime = 0;
-        recycledCount = 0;
+        // 清理活跃瓦片
+        Long2ObjectOpenHashMap.FastEntrySet<T> entrySet = activeTiles.long2ObjectEntrySet();
+        for (Long2ObjectOpenHashMap.Entry<T> entry : entrySet) {
+            long id = entry.getLongKey();
+            T tile = entry.getValue();
+            tile.onOutWindow();
+            coreInterface.onTileOut(tile, getColumn(id), getRow(id));
+            tile.onRecycled();
+        }
         activeTiles.clear();
-        recycledTiles.clear();
+        
+        // 清理濒死瓦片
+        entrySet = dyingTiles.long2ObjectEntrySet();
+        for (Long2ObjectOpenHashMap.Entry<T> entry : entrySet) {
+            entry.getValue().onRecycled();
+        }
         dyingTiles.clear();
+        
+        // 清理缓存
+        recycledTiles.clear();
         widths.clear();
         heights.clear();
-        layoutService.seek(0, 0, 0, 0);
+        
+        // 清理状态
+        dyingVectorHorizontal = dyingVectorVertical = 0;
+        dyingColStart =
+        dyingColEnd =
+        dyingRowStart =
+        dyingRowEnd = 0;
+        
+        if (!scroller.isFinished()) scroller.abortAnimation();
+        disallowIntercept = false;
+        isInteractingWithView = false;
+        lastScrollerX = lastScrollerY = 0;
+        syncTime = 0;
+        recycledCount = 0;
+        
+        layoutService.reset();
     }
 
     public void sync(float dx, float dy) {
@@ -406,10 +332,8 @@ public class TileCoreService <T extends TileCoreService.BaseTileHolder> {
         int rowStart = model.rowStart;
         int rowEnd = model.rowEnd;
         
-        // 处理濒死区
         if (vectorHorizontal != 0 || vectorVertical != 0) {
             if (vectorHorizontal == dyingVectorHorizontal || vectorVertical == dyingVectorVertical) {
-                // 顺方向滚动，回收当前濒死区不在新濒死区范围内的瓦片
                 if (lastColStart != colStart || lastColEnd != colEnd || lastRowStart != rowStart || lastRowEnd != rowEnd) {
                     diffDying(lastColStart, lastColEnd, lastRowStart, lastRowEnd);
                     dyingColStart = lastColStart;
@@ -425,7 +349,7 @@ public class TileCoreService <T extends TileCoreService.BaseTileHolder> {
 
     public void seek(int column, int row, float offsetX, float offsetY) {
         if (isEmpty()) return;
-        // 回收所有活跃瓦片，并通知外部
+        // 清理活跃瓦片
         Long2ObjectOpenHashMap.FastEntrySet<T> entrySet = activeTiles.long2ObjectEntrySet();
         for (Long2ObjectOpenHashMap.Entry<T> entry : entrySet) {
             T tile = entry.getValue();
@@ -438,6 +362,13 @@ public class TileCoreService <T extends TileCoreService.BaseTileHolder> {
             tile.onRecycled();
         }
         activeTiles.clear();
+        
+        // 清理濒死瓦片
+        entrySet = dyingTiles.long2ObjectEntrySet();
+        for (Long2ObjectOpenHashMap.Entry<T> entry : entrySet) {
+            entry.getValue().onRecycled();
+        }
+        dyingTiles.clear();
 
         layoutService.seek(column, row, offsetX, offsetY);
         coreInterface.updateUI();
@@ -482,9 +413,6 @@ public class TileCoreService <T extends TileCoreService.BaseTileHolder> {
     }
 
     public void recycle(T tile) {
-        if (tile == touchTarget) {
-            resetTouchTarget();
-        }
         Deque<T> tiles = recycledTiles.computeIfAbsent(((BaseTileHolder) tile).type, k -> new ArrayDeque<>());
         tiles.offer(tile);
         if (debugMode) recycledCount++;
@@ -504,7 +432,9 @@ public class TileCoreService <T extends TileCoreService.BaseTileHolder> {
     }
 
     public void setTileWidth(int column, int width) {
-        if (width < 0) throw new IllegalArgumentException("宽度必须大于 0");
+        if (width <= 0) throw new IllegalArgumentException("宽度必须大于 0");
+        if (isEmpty()) return;
+        if (column > adapter.getRightBound() || column < adapter.getLeftBound()) throw new IndexOutOfBoundsException("列索引 " + column + " 不在 [" + adapter.getLeftBound() + "," + adapter.getRightBound() + "] 范围内");
         int old = getTileWidth(column);
         widths.put(column, width);
 
@@ -522,9 +452,10 @@ public class TileCoreService <T extends TileCoreService.BaseTileHolder> {
     }
 
     public void setTileHeight(int row, int height) {
-        if (height < 0) throw new IllegalArgumentException("高度必须大于 0");
-
-        int old = getTileHeight(row);  // 同理
+        if (height <= 0) throw new IllegalArgumentException("高度必须大于 0");
+        if (isEmpty()) return;
+        if (row > adapter.getBottomBound() || row < adapter.getTopBound()) throw new IndexOutOfBoundsException("行索引 " + row + " 不在 [" + adapter.getTopBound() + "," + adapter.getBottomBound() + "] 范围内");
+        int old = getTileHeight(row);
         heights.put(row, height);
 
         TileLayoutModel model = layoutService.getLayoutModel();
@@ -541,15 +472,13 @@ public class TileCoreService <T extends TileCoreService.BaseTileHolder> {
         coreInterface.updateUI();
     }
 
-
-
     public TileAdapter<T> getAdapter() {
         return adapter;
     }
 
     public void setAdapter(TileAdapter<T> adapter) {
+        if (this.adapter == adapter) return;
         if (this.adapter != null) {
-            this.adapter = null;
             reset();
         }
         this.adapter = adapter;
@@ -580,10 +509,12 @@ public class TileCoreService <T extends TileCoreService.BaseTileHolder> {
     }
 
     public void setDefaultTileWidth(int width) {
+        if (width <= 0) throw new IllegalArgumentException("宽度必须大于 0");
         this.defaultTileWidth = width;
     }
 
     public void setDefaultTileHeight(int height) {
+        if (height <= 0) throw new IllegalArgumentException("高度必须大于 0");
         this.defaultTileHeight = height;
     }
 
@@ -600,7 +531,16 @@ public class TileCoreService <T extends TileCoreService.BaseTileHolder> {
     }
 
     public void setDebugMode(boolean enabled) {
+        if (this.debugMode == enabled) return;
     	this.debugMode = enabled;
+        
+        recycledCount = 0;
+        if (enabled) {
+            // 重新统计
+            for (Deque<T> deque : recycledTiles.values()) {
+                recycledCount += deque.size();
+            }
+        }
     }
 
     public long getSyncTime() {
@@ -669,16 +609,6 @@ public class TileCoreService <T extends TileCoreService.BaseTileHolder> {
 
         public void onOutWindow() {}
 
-        public boolean onTouchEvent(MotionEvent event) {
-            return false;
-        }
-
-        public boolean onClick() {
-            return false;
-        }
-
-        public void onLongClick() {}
-
         public int getWidth() {
             return width;
         }
@@ -700,13 +630,13 @@ public class TileCoreService <T extends TileCoreService.BaseTileHolder> {
         }
     }
 
-    public interface CoreInterface {
+    public interface CoreInterface<T extends BaseTileHolder> {
 
         void updateUI();
 
-        void onTileIn(BaseTileHolder holder, int column, int row);
+        void onTileIn(T holder, int column, int row);
 
-        void onTileOut(BaseTileHolder holder, int column, int row);
+        void onTileOut(T holder, int column, int row);
     }
 
 }

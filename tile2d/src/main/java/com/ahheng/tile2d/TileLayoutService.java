@@ -22,7 +22,7 @@ public class TileLayoutService {
     }
 
     public TileLayoutModel sync(float dx, float dy) {
-        if (checkBoundNotEmpty()) {
+        if (isEmpty()) {
             return getLayoutModel();
         }
 
@@ -136,7 +136,7 @@ public class TileLayoutService {
     }
 
     public TileLayoutModel seek(int column, int row, float offsetX, float offsetY) {
-        if (checkBoundNotEmpty()) {
+        if (isEmpty()) {
             return getLayoutModel();
         }
         checkLocationInBounds(column, row);
@@ -228,20 +228,6 @@ public class TileLayoutService {
         }
     }
 
-    private boolean checkBoundNotEmpty() {
-        boolean result = isEmpty();
-        if (result) {
-            this.colStart = 0;
-            this.rowStart = 0;
-            this.colEnd = -1;
-            this.rowEnd = -1;
-            this.offsetX = 0;
-            this.totalHeight = 0;
-            this.totalWidth = 0;
-        }
-        return result;
-    }
-
     public TileLayoutModel getLayoutModel() {
         layoutModel.colStart = colStart;
         layoutModel.rowStart = rowStart;
@@ -287,6 +273,19 @@ public class TileLayoutService {
 
     public boolean isAtBottomBound() {
         return rowEnd == platform.getBottomBound() && (int) (totalHeight + offsetY) == platform.getWindowHeight();
+    }
+
+    public void reset() {
+    	colStart =
+        colEnd =
+        rowStart =
+        rowEnd = 0;
+        
+        offsetX = offsetY = 0;
+        
+        totalWidth = totalHeight = 0;
+        
+        layoutModel.reset();
     }
 
     public interface PlatformService {
