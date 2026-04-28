@@ -44,12 +44,11 @@ public class TileView extends View implements TileCoreService.CoreInterface<Tile
     private final float[] touchTargetLoc = new float[2];
     private boolean disallowIntercept;
 
-    private long touchDownTime;
     private float touchDownX;
     private float touchDownY;
     private boolean isClickCandidate;
     private Runnable longPressRunnable;
-    private static final long LONG_PRESS_TIMEOUT = 600L;
+    private long longPressTimeout = 600L;
     private final int touchSlop;
 
     public TileView(Context context) {
@@ -67,6 +66,11 @@ public class TileView extends View implements TileCoreService.CoreInterface<Tile
         DisplayMetrics displayMetrics = getResources().getDisplayMetrics();
         coreService.setDefaultTileWidth((int) TypedValue.applyDimension(TypedValue.COMPLEX_UNIT_DIP, 80, displayMetrics));
         coreService.setDefaultTileHeight((int) TypedValue.applyDimension(TypedValue.COMPLEX_UNIT_DIP, 45, displayMetrics));
+    }
+
+    public void offset(float dx, float dy) {
+    	if (isEmpty() || coreService.getActiveTileCount() == 0) return;
+        coreService.sync(dx, dy);
     }
 
     public void seek(int column, int row) {
@@ -91,7 +95,7 @@ public class TileView extends View implements TileCoreService.CoreInterface<Tile
             overrideInitLocation = false;
             coreService.seek(initLocationColumn, initLocationRow, initOffsetX, initOffsetY);
         } else if (coreService.getAdapter() != null && coreService.getActiveTileCount() == 0) {
-            seek(coreService.getAdapter().getLeftBound(), coreService.getAdapter().getTopBound(), 0, 0);
+            coreService.seek(coreService.getAdapter().getLeftBound(), coreService.getAdapter().getTopBound(), 0, 0);
         }
     }
 
@@ -160,6 +164,7 @@ public class TileView extends View implements TileCoreService.CoreInterface<Tile
                 }
     
                 TileHolder tile = entry.getValue();
+                if (tile == null) continue;
                 canvas.save();
                 canvas.translate(getPaddingLeft(), getPaddingTop());
                 canvas.translate(model.offsetX, model.offsetY);
@@ -215,8 +220,6 @@ public class TileView extends View implements TileCoreService.CoreInterface<Tile
                 touchTarget.onTouchEvent(tileEvent);
                 tileEvent.recycle();
             }
-
-            touchDownTime = event.getEventTime();
             touchDownX = event.getX();
             touchDownY = event.getY();
             isClickCandidate = true;
@@ -228,7 +231,7 @@ public class TileView extends View implements TileCoreService.CoreInterface<Tile
                     isClickCandidate = false;
                 }
             };
-            postDelayed(longPressRunnable, LONG_PRESS_TIMEOUT);
+            postDelayed(longPressRunnable, longPressTimeout);
 
             return true;
         }
@@ -310,6 +313,14 @@ public class TileView extends View implements TileCoreService.CoreInterface<Tile
     @Override
     public void onTileOut(TileHolder holder, int column, int row) {
         holder.view = null;
+    }
+
+    public long getLongPressTimeout() {
+    	return longPressTimeout;
+    }
+
+    public void setLongPressTimeout(long longPressTimeout) {
+    	this.longPressTimeout = longPressTimeout;
     }
 
     public boolean isHorizontalScrollEnabled() {

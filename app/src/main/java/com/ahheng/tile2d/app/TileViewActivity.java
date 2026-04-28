@@ -109,7 +109,7 @@ public class TileViewActivity extends BaseActivity {
         @Override
         public void onLongClick() {
             showToast("长按了 " + getColumn() + "," + getRow());
-            view.setAdapter(null);
+            // view.setAdapter(null);
         }
     }
 

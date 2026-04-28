@@ -39,9 +39,9 @@ public class TileCoreService <T extends TileCoreService.BaseTileHolder> {
     private int dyingVectorHorizontal;
     private int dyingVectorVertical;
     private int dyingColStart;
-    private int dyingColEnd;
+    private int dyingColEnd = -1;
     private int dyingRowStart;
-    private int dyingRowEnd;
+    private int dyingRowEnd = -1;
 
     private final Scroller scroller;
     private final GestureDetector gestureDetector;
@@ -266,7 +266,6 @@ public class TileCoreService <T extends TileCoreService.BaseTileHolder> {
                 T tile = entry.getValue();
                 it.remove();
                 recycle(tile);
-                tile.onRecycled();
             }
         }
     }
@@ -284,10 +283,7 @@ public class TileCoreService <T extends TileCoreService.BaseTileHolder> {
         activeTiles.clear();
         
         // 清理濒死瓦片
-        entrySet = dyingTiles.long2ObjectEntrySet();
-        for (Long2ObjectOpenHashMap.Entry<T> entry : entrySet) {
-            entry.getValue().onRecycled();
-        }
+        for (T tile : dyingTiles.values()) tile.onRecycled();
         dyingTiles.clear();
         
         // 清理缓存
@@ -298,9 +294,9 @@ public class TileCoreService <T extends TileCoreService.BaseTileHolder> {
         // 清理状态
         dyingVectorHorizontal = dyingVectorVertical = 0;
         dyingColStart =
+        dyingRowStart = 0;
         dyingColEnd =
-        dyingRowStart =
-        dyingRowEnd = 0;
+        dyingRowEnd = -1;
         
         if (!scroller.isFinished()) scroller.abortAnimation();
         disallowIntercept = false;
@@ -359,17 +355,12 @@ public class TileCoreService <T extends TileCoreService.BaseTileHolder> {
             tile.onOutWindow();
             coreInterface.onTileOut(tile, c, r);
             recycle(tile);
-            tile.onRecycled();
         }
         activeTiles.clear();
         
         // 清理濒死瓦片
-        entrySet = dyingTiles.long2ObjectEntrySet();
-        for (Long2ObjectOpenHashMap.Entry<T> entry : entrySet) {
-            entry.getValue().onRecycled();
-        }
+        for (T tile : dyingTiles.values()) recycle(tile);
         dyingTiles.clear();
-
         layoutService.seek(column, row, offsetX, offsetY);
         coreInterface.updateUI();
     }
@@ -415,6 +406,7 @@ public class TileCoreService <T extends TileCoreService.BaseTileHolder> {
     public void recycle(T tile) {
         Deque<T> tiles = recycledTiles.computeIfAbsent(((BaseTileHolder) tile).type, k -> new ArrayDeque<>());
         tiles.offer(tile);
+        tile.onRecycled();
         if (debugMode) recycledCount++;
     }
 
@@ -448,7 +440,6 @@ public class TileCoreService <T extends TileCoreService.BaseTileHolder> {
             }
             seek(model.colStart, model.rowStart, newOffsetX, model.offsetY);
         }
-        coreInterface.updateUI();
     }
 
     public void setTileHeight(int row, int height) {
@@ -469,7 +460,6 @@ public class TileCoreService <T extends TileCoreService.BaseTileHolder> {
 
             seek(model.colStart, model.rowStart, model.offsetX, newOffsetY);
         }
-        coreInterface.updateUI();
     }
 
     public TileAdapter<T> getAdapter() {

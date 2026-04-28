@@ -13,9 +13,9 @@ public class TileLayoutModel {
 
     public void reset() {
     	colStart = 
+        rowStart = 0;
         colEnd =
-        rowStart =
-        rowEnd = 0;
+        rowEnd = -1;
         
         offsetX = offsetY = 0;
         
