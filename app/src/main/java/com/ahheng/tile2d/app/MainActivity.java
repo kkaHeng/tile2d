@@ -21,11 +21,17 @@ public class MainActivity extends AppCompatActivity {
         MaterialButton tileViewButton = new MaterialButton(this);
         tileViewButton.setText("TileView Demo");
         layout.addView(tileViewButton, -2, -2);
+
+        MaterialButton tileLayoutButton = new MaterialButton(this);
+        tileLayoutButton.setText("TileLayout Demo");
+        layout.addView(tileLayoutButton, -2, -2);
         setContentView(layout, new ViewGroup.LayoutParams(-1, -1));
 
         tileViewButton.setOnClickListener(v -> startActivity(new Intent(this, TileViewActivity.class)));
+        tileLayoutButton.setOnClickListener(v -> startActivity(new Intent(this, TileLayoutActivity.class)));
 
-        startActivity(new Intent(this, TileViewActivity.class));
+        // startActivity(new Intent(this, TileViewActivity.class));
+        startActivity(new Intent(this, TileLayoutActivity.class));
     }
 
 }

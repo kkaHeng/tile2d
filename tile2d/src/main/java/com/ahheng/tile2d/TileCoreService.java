@@ -377,6 +377,7 @@ public class TileCoreService <T extends TileCoreService.BaseTileHolder> {
             ((BaseTileHolder) tile).width = getTileWidth(column);
             ((BaseTileHolder) tile).height = getTileHeight(row);
             adapter.onBindTileHolder(tile, column, row);
+            coreInterface.onTileBind(tile, column, row);
         }
         activeTiles.put(id, tile);
         coreInterface.onTileIn(tile, column, row);
@@ -629,6 +630,8 @@ public class TileCoreService <T extends TileCoreService.BaseTileHolder> {
         void onTileIn(T holder, int column, int row);
 
         void onTileOut(T holder, int column, int row);
+
+        void onTileBind(T holder, int column, int row);
     }
 
 }

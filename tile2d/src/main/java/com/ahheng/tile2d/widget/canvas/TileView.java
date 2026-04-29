@@ -94,13 +94,19 @@ public class TileView extends View implements TileCoreService.CoreInterface<Tile
     @Override
     protected void onLayout(boolean changed, int left, int top, int right, int bottom) {
         super.onLayout(changed, left, top, right, bottom);
-        coreService.setBounds(getPaddingLeft(), getPaddingTop(), getWidth() - getPaddingRight(), getHeight() - getPaddingBottom());
         if (overrideInitLocation) {
             overrideInitLocation = false;
             coreService.seek(initLocationColumn, initLocationRow, initOffsetX, initOffsetY);
         } else if (coreService.getAdapter() != null && coreService.getActiveTileCount() == 0) {
             coreService.seek(coreService.getAdapter().getLeftBound(), coreService.getAdapter().getTopBound(), 0, 0);
         }
+    }
+
+    @Override
+    protected void onSizeChanged(int w, int h, int oldw, int oldh) {
+        super.onSizeChanged(w, h, oldw, oldh);
+        coreService.setBounds(getPaddingLeft(), getPaddingTop(), getWidth() - getPaddingRight(), getHeight() - getPaddingBottom());
+        coreService.sync(0, 0);
     }
 
     @Override
@@ -320,6 +326,9 @@ public class TileView extends View implements TileCoreService.CoreInterface<Tile
         holder.view = null;
     }
 
+    @Override
+    public void onTileBind(TileHolder holder, int column, int row) {}
+
     public long getLongPressTimeout() {
         return longPressTimeout;
     }
@@ -425,7 +434,12 @@ public class TileView extends View implements TileCoreService.CoreInterface<Tile
         return coreService.isInteractingWithView();
     }
 
+    public boolean isDebugMode() {
+        return coreService.isDebugMode();
+    }
+
     public void setDebugMode(boolean enabled) {
+        if (coreService.isDebugMode() == enabled) return;
         coreService.setDebugMode(enabled);
         if (coreService.isDebugMode()) {
             boundPaint = new Paint(Paint.ANTI_ALIAS_FLAG);
