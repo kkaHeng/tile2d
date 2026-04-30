@@ -23,10 +23,10 @@ public class TileLayoutActivity extends BaseActivity {
         layout = new TileLayout(this);
         setContentView(layout, new ViewGroup.LayoutParams(-1, -1));
 
-        // int size = dp2px(40);
-        // layout.setDefaultTileWidth(size);
-        // layout.setDefaultTileHeight(size);
-        int padding = dp2px(40);
+        int size = dp2px(40);
+        layout.setDefaultTileWidth(size);
+        layout.setDefaultTileHeight(size);
+        int padding = dp2px(80);
         layout.setPadding(padding, padding, padding, padding);
         layout.setDebugMode(isDebugMode());
         layout.setAdapter((adapter = new RandomAdapter()));
@@ -53,8 +53,8 @@ public class TileLayoutActivity extends BaseActivity {
 
         public void bind() {
             textView.setBackgroundColor(backgroundColor);
-            textView.setText(getColumn() + "," + getRow());
-            textView.setTextColor(luminance(backgroundColor) > 0.40 ? Color.BLACK : Color.WHITE);
+            //textView.setText(getColumn() + "," + getRow());
+            //textView.setTextColor(luminance(backgroundColor) > 0.40 ? Color.BLACK : Color.WHITE);
 
             textView.setOnClickListener(v -> {
                 showToast("单击了：" + getColumn() + "," + getRow());

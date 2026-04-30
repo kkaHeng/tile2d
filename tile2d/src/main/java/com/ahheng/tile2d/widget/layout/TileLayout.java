@@ -179,9 +179,9 @@ public class TileLayout extends ViewGroup implements TileCoreService.CoreInterfa
             boundPaint.setStrokeWidth(2);
 
             infoPaint = new Paint(Paint.ANTI_ALIAS_FLAG);
-            infoPaint.setColor(0xff333333);
+            infoPaint.setColor(0xffefefef);
             infoPaint.setTypeface(Typeface.create((Typeface) null, Typeface.BOLD));
-            infoPaint.setShadowLayer(4, 0, 0, 0xffcdcdcd);
+            infoPaint.setShadowLayer(6, 0, 0, 0xff333333);
             infoPaint.setTextSize(TypedValue.applyDimension(
                     TypedValue.COMPLEX_UNIT_DIP, 12, getResources().getDisplayMetrics()));
             infoMargin = TypedValue.applyDimension(
