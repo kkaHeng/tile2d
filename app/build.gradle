@@ -10,8 +10,8 @@ android {
         applicationId 'com.ahheng.tile2d.app'
         minSdk 21
         targetSdk 34
-        versionName "26.4.2"
-        versionCode 26042801
+        versionName "26.5.1"
+        versionCode 26050201
     }
 
     buildTypes {
