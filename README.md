@@ -22,7 +22,7 @@ Tile2D 是一个高性能的 Android 2D 瓦片滚动框架，专为处理大量�
 
 ```gradle
 dependencies {
-    implementation 'com.github.kkaHeng:tile2d:1.0.0'
+    implementation 'com.github.kkaHeng:tile2d:版本'
 }
 ```
 
