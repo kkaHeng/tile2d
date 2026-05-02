@@ -122,6 +122,8 @@ public class TileLayoutService {
             }
         }
 
+        TileLayoutModel model = getLayoutModel();
+        platform.prediff(colStart, rowStart, colEnd, rowEnd);
         diff(this.colStart, this.rowStart, this.colEnd, this.rowEnd, colStart, rowStart, colEnd, rowEnd);
         this.colStart = colStart;
         this.rowStart = rowStart;
@@ -132,7 +134,7 @@ public class TileLayoutService {
         this.totalWidth = totalWidth;
         this.totalHeight = totalHeight;
 
-        return getLayoutModel();
+        return model;
     }
 
     public TileLayoutModel seek(int column, int row, float offsetX, float offsetY) {
@@ -313,6 +315,8 @@ public class TileLayoutService {
         void in(int column, int row);
 
         void out(int column, int row);
+        
+        void prediff(int colStart, int rowStart, int colEnd, int rowEnd);
     }
 
 }

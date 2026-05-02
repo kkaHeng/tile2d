@@ -35,9 +35,6 @@ public class TileCoreService <T extends TileCoreService.BaseTileHolder> {
     private final Int2IntOpenHashMap widths = new Int2IntOpenHashMap();
     private final Int2IntOpenHashMap heights = new Int2IntOpenHashMap();
 
-    // 0：无。1：在左边。-1：在右边。
-    private int dyingVectorHorizontal;
-    private int dyingVectorVertical;
     private int dyingColStart;
     private int dyingColEnd = -1;
     private int dyingRowStart;
@@ -130,6 +127,15 @@ public class TileCoreService <T extends TileCoreService.BaseTileHolder> {
         @Override
         public void out(int column, int row) {
             TileCoreService.this.out(column, row);
+        }
+        
+        @Override
+        public void prediff(int colStart, int rowStart, int colEnd, int rowEnd) {
+            if (dyingColStart != colStart || dyingColEnd != colEnd
+                || dyingRowStart != rowStart || dyingRowEnd != rowEnd) {
+                // 边界变化了
+                diffDying(colStart, rowStart, colEnd, rowEnd);
+            }
         }
     }
 
@@ -251,11 +257,11 @@ public class TileCoreService <T extends TileCoreService.BaseTileHolder> {
         }
     }
 
-    private void diffDying(int newColStart, int newColEnd, int newRowStart, int newRowEnd) {
-        if (dyingColStart == newColStart && dyingColEnd == newColEnd
-                && dyingRowStart == newRowStart && dyingRowEnd == newRowEnd) {
-            return;
-        }
+    private void diffDying(int colStart, int rowStart, int colEnd, int rowEnd) {
+        int left = colStart > Integer.MIN_VALUE ? colStart - 1 : Integer.MIN_VALUE;
+        int top  = rowStart > Integer.MIN_VALUE ? rowStart - 1 : Integer.MIN_VALUE;
+        int right = colEnd < Integer.MAX_VALUE ? colEnd + 1 : Integer.MAX_VALUE;
+        int bottom = rowEnd < Integer.MAX_VALUE ? rowEnd + 1 : Integer.MAX_VALUE;
     
         ObjectIterator<Long2ObjectOpenHashMap.Entry<T>> it = dyingTiles.long2ObjectEntrySet().iterator();
         while (it.hasNext()) {
@@ -263,12 +269,17 @@ public class TileCoreService <T extends TileCoreService.BaseTileHolder> {
             long id = entry.getLongKey();
             int c = getColumn(id);
             int r = getRow(id);
-            if (c < newColStart || c > newColEnd || r < newRowStart || r > newRowEnd) {
+            if (c < left || c > right || r < top || r > bottom) {
                 T tile = entry.getValue();
                 it.remove();
                 recycle(tile);
             }
         }
+        
+        dyingColStart = colStart;
+        dyingColEnd = colEnd;
+        dyingRowStart = rowStart;
+        dyingRowEnd = rowEnd;
     }
 
     public void reset() {
@@ -293,7 +304,6 @@ public class TileCoreService <T extends TileCoreService.BaseTileHolder> {
         heights.clear();
         
         // 清理状态
-        dyingVectorHorizontal = dyingVectorVertical = 0;
         dyingColStart =
         dyingRowStart = 0;
         dyingColEnd =
@@ -314,34 +324,16 @@ public class TileCoreService <T extends TileCoreService.BaseTileHolder> {
         int vectorHorizontal = dx == 0 ? 0 : (dx > 0 ? 1 : -1);
         int vectorVertical = dy == 0 ? 0 : (dy > 0 ? 1 : -1);
         
-        TileLayoutModel model = layoutService.getLayoutModel();
-        int lastColStart = model.colStart;
-        int lastColEnd = model.colEnd;
-        int lastRowStart = model.rowStart;
-        int lastRowEnd = model.rowEnd;
-        
         layoutService.sync(dx, dy);
         syncTime = System.nanoTime() - t0;
         coreInterface.updateUI();
         
+        TileLayoutModel model = layoutService.getLayoutModel();
         int colStart = model.colStart;
         int colEnd = model.colEnd;
         int rowStart = model.rowStart;
         int rowEnd = model.rowEnd;
         
-        if (vectorHorizontal != 0 || vectorVertical != 0) {
-            if (vectorHorizontal == dyingVectorHorizontal || vectorVertical == dyingVectorVertical) {
-                if (lastColStart != colStart || lastColEnd != colEnd || lastRowStart != rowStart || lastRowEnd != rowEnd) {
-                    diffDying(lastColStart, lastColEnd, lastRowStart, lastRowEnd);
-                    dyingColStart = lastColStart;
-                    dyingColEnd = lastColEnd;
-                    dyingRowStart = lastRowStart;
-                    dyingRowEnd = lastRowEnd;
-                }
-            }
-        }
-        dyingVectorHorizontal = vectorHorizontal;
-        dyingVectorVertical = vectorVertical;
     }
 
     public void seek(int column, int row, float offsetX, float offsetY) {
