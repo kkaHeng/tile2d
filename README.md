@@ -4,6 +4,9 @@
 
 ---
 
+[![](https://jitpack.io/v/kkaHeng/tile2d.svg)](https://jitpack.io/#kkaHeng/tile2d)
+
+
 ## 简介
 
 Tile2D 是一个高性能的 Android 2D 瓦片滚动框架，专为处理大量数据可视化场景而设计。无论是游戏地图、数据表格，还是图片墙、日历视图，Tile2D 都能以流畅的滚动体验和卓越的内存管理，让你的应用如丝般顺滑。
@@ -26,6 +29,7 @@ dependencyResolutionManagement {
     repositoriesMode.set(RepositoriesMode.FAIL_ON_PROJECT_REPOS)
     repositories {
         mavenCentral()
+        google()
         maven { url 'https://jitpack.io' }
     }
 }
@@ -34,9 +38,11 @@ dependencyResolutionManagement {
 引入依赖：
 ```gradle
 dependencies {
-    implementation 'com.github.kkaHeng:tile2d:版本'
+    implementation 'com.github.kkaHeng:tile2d:26.5.1'
 }
 ```
+
+查看最新版本：[Jitpack](https://jitpack.io/#kkaHeng/tile2d)，或者点击页面顶部的徽章
 
 ### 基础使用
 
