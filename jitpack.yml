@@ -1,0 +1,5 @@
+jdk:
+  - 17
+
+install:
+  - ./gradlew :tile2d:assembleRelease :tile2d:publishToMavenLocal

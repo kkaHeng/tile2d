@@ -9,8 +9,7 @@ android {
 
     defaultConfig {
         minSdk 21
-        versionName "26.4.1"
-        versionCode 26041001
+        versionName project.findProperty('version.name')
     }
 
     buildTypes {
@@ -38,3 +37,16 @@ dependencies {
 }
 
 group = 'com.github.kkaHeng'
+
+afterEvaluate {
+    publishing {
+        publications {
+            release(MavenPublication) {
+                from components.release
+                groupId = 'com.github.kkaHeng'
+                artifactId = 'tile2d'
+                version = project.findProperty('version.name') ?: '26.5.1'
+            }
+        }
+    }
+}
