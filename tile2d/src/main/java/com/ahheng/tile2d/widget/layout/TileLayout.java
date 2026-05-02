@@ -323,6 +323,7 @@ public class TileLayout extends ViewGroup implements TileCoreService.CoreInterfa
         seek(column, row, 0, 0);
     }
     public void seek(int column, int row, float offsetX, float offsetY) {
+        if (isEmpty()) return;
         overrideInitLocation = true;
         initLocationColumn = column;
         initLocationRow = row;
