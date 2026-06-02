@@ -2,6 +2,7 @@ package com.ahheng.tile2d;
 
 public class TileLayoutModel {
 
+    // 布局数据
     public int colStart;
     public int rowStart;
     public int colEnd;
@@ -10,6 +11,10 @@ public class TileLayoutModel {
     public float offsetY;
     public int totalWidth;
     public int totalHeight;
+    
+    // 调试数据
+    public long syncTime;
+    public long layoutTime;
 
     public void reset() {
     	colStart = 
@@ -20,6 +25,9 @@ public class TileLayoutModel {
         offsetX = offsetY = 0;
         
         totalWidth = totalHeight = 0;
+        
+        syncTime =
+        layoutTime = 0;
     }
 
 }

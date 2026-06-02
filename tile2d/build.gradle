@@ -32,8 +32,6 @@ android {
 
 dependencies {
 
-    implementation libs.fastutil
-
 }
 
 group = 'com.github.kkaHeng'

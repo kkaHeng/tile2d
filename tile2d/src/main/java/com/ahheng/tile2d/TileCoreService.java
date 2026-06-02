@@ -2,6 +2,9 @@ package com.ahheng.tile2d;
 
 import android.content.Context;
 import android.graphics.Rect;
+import android.util.LongSparseArray;
+import android.util.SparseArray;
+import android.util.SparseIntArray;
 import android.view.GestureDetector;
 import android.view.MotionEvent;
 import android.view.ViewConfiguration;
@@ -10,17 +13,11 @@ import android.widget.Scroller;
 import com.ahheng.tile2d.widget.TileAdapter;
 import com.ahheng.tile2d.widget.TileDimenProvider;
 
-import it.unimi.dsi.fastutil.ints.Int2IntOpenHashMap;
-import it.unimi.dsi.fastutil.ints.Int2ObjectOpenHashMap;
-import it.unimi.dsi.fastutil.longs.Long2ObjectOpenHashMap;
-import it.unimi.dsi.fastutil.objects.ObjectIterator;
-
 import java.util.ArrayDeque;
 import java.util.Deque;
 
 public class TileCoreService <T extends TileCoreService.BaseTileHolder> {
 
-    private TileAdapter<T> adapter;
     private TileDimenProvider dimenProvider;
     private int defaultTileWidth;
     private int defaultTileHeight;
@@ -28,12 +25,12 @@ public class TileCoreService <T extends TileCoreService.BaseTileHolder> {
     private final Rect bounds = new Rect();
     private final CoreInterface<T> coreInterface;
     private final TileLayoutService layoutService = new TileLayoutService(new PlatformService());
-
-    private final Long2ObjectOpenHashMap<T> activeTiles = new Long2ObjectOpenHashMap<>();
-    private final Int2ObjectOpenHashMap<Deque<T>> recycledTiles = new Int2ObjectOpenHashMap<>();
-    private final Long2ObjectOpenHashMap<T> dyingTiles = new Long2ObjectOpenHashMap<>();
-    private final Int2IntOpenHashMap widths = new Int2IntOpenHashMap();
-    private final Int2IntOpenHashMap heights = new Int2IntOpenHashMap();
+    
+    private final LongSparseArray<T> activeTiles = new LongSparseArray<>();
+    private final SparseArray<Deque<T>> recycledTiles = new SparseArray<>();
+    private final LongSparseArray<T> dyingTiles = new LongSparseArray<>();
+    private final SparseIntArray widths = new SparseIntArray();
+    private final SparseIntArray heights = new SparseIntArray();
 
     private int dyingColStart;
     private int dyingColEnd = -1;
@@ -54,7 +51,6 @@ public class TileCoreService <T extends TileCoreService.BaseTileHolder> {
     private boolean verticalScrollEnabled = true;
 
     private boolean debugMode;
-    private long syncTime;
     private int recycledCount;
 
     public TileCoreService(Context context, CoreInterface<T> coreInterface) {
@@ -91,22 +87,22 @@ public class TileCoreService <T extends TileCoreService.BaseTileHolder> {
 
         @Override
         public int getLeftBound() {
-            return adapter == null ? 0 : adapter.getLeftBound();
+            return coreInterface.getLeftBound();
         }
 
         @Override
         public int getTopBound() {
-            return adapter == null ? 0 : adapter.getTopBound();
+            return coreInterface.getTopBound();
         }
 
         @Override
         public int getRightBound() {
-            return adapter == null ? -1 : adapter.getRightBound();
+            return coreInterface.getRightBound();
         }
 
         @Override
         public int getBottomBound() {
-            return adapter == null ? -1 : adapter.getBottomBound();
+            return coreInterface.getBottomBound();
         }
 
         @Override
@@ -258,20 +254,19 @@ public class TileCoreService <T extends TileCoreService.BaseTileHolder> {
     }
 
     private void diffDying(int colStart, int rowStart, int colEnd, int rowEnd) {
-        int left = colStart > Integer.MIN_VALUE ? colStart - 1 : Integer.MIN_VALUE;
-        int top  = rowStart > Integer.MIN_VALUE ? rowStart - 1 : Integer.MIN_VALUE;
-        int right = colEnd < Integer.MAX_VALUE ? colEnd + 1 : Integer.MAX_VALUE;
-        int bottom = rowEnd < Integer.MAX_VALUE ? rowEnd + 1 : Integer.MAX_VALUE;
+        int left = colStart > coreInterface.getLeftBound() ? colStart - 1 : coreInterface.getLeftBound();
+        int top  = rowStart > coreInterface.getTopBound() ? rowStart - 1 : coreInterface.getTopBound();
+        int right = colEnd < coreInterface.getRightBound() ? colEnd + 1 : coreInterface.getRightBound();
+        int bottom = rowEnd < coreInterface.getBottomBound() ? rowEnd + 1 : coreInterface.getBottomBound();
     
-        ObjectIterator<Long2ObjectOpenHashMap.Entry<T>> it = dyingTiles.long2ObjectEntrySet().iterator();
-        while (it.hasNext()) {
-            Long2ObjectOpenHashMap.Entry<T> entry = it.next();
-            long id = entry.getLongKey();
+        for (int i = dyingTiles.size() - 1; i >= 0; i--) {
+            long id = dyingTiles.keyAt(i);
             int c = getColumn(id);
             int r = getRow(id);
             if (c < left || c > right || r < top || r > bottom) {
-                T tile = entry.getValue();
-                it.remove();
+                // 离开濒死区了
+                T tile = dyingTiles.valueAt(i);
+                dyingTiles.removeAt(i);
                 recycle(tile);
             }
         }
@@ -284,10 +279,9 @@ public class TileCoreService <T extends TileCoreService.BaseTileHolder> {
 
     public void reset() {
         // 清理活跃瓦片
-        Long2ObjectOpenHashMap.FastEntrySet<T> entrySet = activeTiles.long2ObjectEntrySet();
-        for (Long2ObjectOpenHashMap.Entry<T> entry : entrySet) {
-            long id = entry.getLongKey();
-            T tile = entry.getValue();
+        for (int i = 0; i < activeTiles.size(); i++) {
+            long id = activeTiles.keyAt(i);
+            T tile = activeTiles.valueAt(i);
             tile.onOutWindow();
             coreInterface.onTileOut(tile, getColumn(id), getRow(id));
             tile.onRecycled();
@@ -295,7 +289,9 @@ public class TileCoreService <T extends TileCoreService.BaseTileHolder> {
         activeTiles.clear();
         
         // 清理濒死瓦片
-        for (T tile : dyingTiles.values()) tile.onRecycled();
+        for (int i = 0; i < dyingTiles.size(); i++) {
+            dyingTiles.valueAt(i).onRecycled();
+        }
         dyingTiles.clear();
         
         // 清理缓存
@@ -313,36 +309,23 @@ public class TileCoreService <T extends TileCoreService.BaseTileHolder> {
         disallowIntercept = false;
         isInteractingWithView = false;
         lastScrollerX = lastScrollerY = 0;
-        syncTime = 0;
         recycledCount = 0;
         
         layoutService.reset();
     }
 
     public void sync(float dx, float dy) {
-        long t0 = System.nanoTime();
-        int vectorHorizontal = dx == 0 ? 0 : (dx > 0 ? 1 : -1);
-        int vectorVertical = dy == 0 ? 0 : (dy > 0 ? 1 : -1);
-        
         layoutService.sync(dx, dy);
-        syncTime = System.nanoTime() - t0;
         coreInterface.updateUI();
-        
-        TileLayoutModel model = layoutService.getLayoutModel();
-        int colStart = model.colStart;
-        int colEnd = model.colEnd;
-        int rowStart = model.rowStart;
-        int rowEnd = model.rowEnd;
-        
     }
 
     public void seek(int column, int row, float offsetX, float offsetY) {
         if (isEmpty()) return;
         // 清理活跃瓦片
-        Long2ObjectOpenHashMap.FastEntrySet<T> entrySet = activeTiles.long2ObjectEntrySet();
-        for (Long2ObjectOpenHashMap.Entry<T> entry : entrySet) {
-            T tile = entry.getValue();
-            long id = entry.getLongKey();
+        
+        for (int i = 0; i < activeTiles.size(); i++) {
+            T tile = activeTiles.valueAt(i);
+            long id = activeTiles.keyAt(i);
             int c = (int) (id >> 32);
             int r = (int) id;
             tile.onOutWindow();
@@ -352,7 +335,9 @@ public class TileCoreService <T extends TileCoreService.BaseTileHolder> {
         activeTiles.clear();
         
         // 清理濒死瓦片
-        for (T tile : dyingTiles.values()) recycle(tile);
+        for (int i = 0; i < dyingTiles.size(); i++) {
+            recycle(dyingTiles.valueAt(i));
+        };
         dyingTiles.clear();
         layoutService.seek(column, row, offsetX, offsetY);
         coreInterface.updateUI();
@@ -360,15 +345,16 @@ public class TileCoreService <T extends TileCoreService.BaseTileHolder> {
 
     public void in(int column, int row) {
         long id = getTileId(column, row);
-        T tile = dyingTiles.remove(id);
+        T tile = dyingTiles.get(id);
+        dyingTiles.remove(id);
         if (tile == null) {
-            int type = adapter.getTileType(column, row);
+            int type = coreInterface.getTileType(column, row);
             tile = obtain(type);
             ((BaseTileHolder) tile).column = column;
             ((BaseTileHolder) tile).row = row;
             ((BaseTileHolder) tile).width = getTileWidth(column);
             ((BaseTileHolder) tile).height = getTileHeight(row);
-            adapter.onBindTileHolder(tile, column, row);
+            coreInterface.onBindTileHolder(tile, column, row);
             coreInterface.onTileBind(tile, column, row);
         }
         activeTiles.put(id, tile);
@@ -378,7 +364,8 @@ public class TileCoreService <T extends TileCoreService.BaseTileHolder> {
 
     public void out(int column, int row) {
         long id = getTileId(column, row);
-        T tile = activeTiles.remove(id);
+        T tile = activeTiles.get(id);
+        activeTiles.remove(id);
         if (tile != null) {
             tile.onOutWindow();
             coreInterface.onTileOut(tile, column, row);
@@ -392,13 +379,17 @@ public class TileCoreService <T extends TileCoreService.BaseTileHolder> {
             if (debugMode) recycledCount--;
             return tiles.poll();
         }
-        T tile = adapter.onCreateTileHolder(type);
+        T tile = coreInterface.onCreateTileHolder(type);
         ((BaseTileHolder) tile).type = type;
         return tile;
     }
 
     public void recycle(T tile) {
-        Deque<T> tiles = recycledTiles.computeIfAbsent(((BaseTileHolder) tile).type, k -> new ArrayDeque<>());
+        int type = ((BaseTileHolder) tile).type;
+        Deque<T> tiles = recycledTiles.get(type);
+        if (tiles == null) {
+            recycledTiles.put(type, (tiles = new ArrayDeque<>()));
+        }
         tiles.offer(tile);
         tile.onRecycled();
         if (debugMode) recycledCount++;
@@ -410,17 +401,19 @@ public class TileCoreService <T extends TileCoreService.BaseTileHolder> {
     }
 
     public int getTileWidth(int column) {
-        return widths.getOrDefault(column, dimenProvider == null ? defaultTileWidth : dimenProvider.getTileWidth(column));
+        int i = widths.indexOfKey(column);
+        return i >= 0 ? widths.get(column) : (dimenProvider == null ? defaultTileWidth : dimenProvider.getTileWidth(column));
     }
 
     public int getTileHeight(int row) {
-        return heights.getOrDefault(row, dimenProvider == null ? defaultTileHeight : dimenProvider.getTileHeight(row));
+        int i = heights.indexOfKey(row);
+        return i >= 0 ? heights.get(row) : (dimenProvider == null ? defaultTileHeight : dimenProvider.getTileHeight(row));
     }
 
     public void setTileWidth(int column, int width) {
         if (width <= 0) throw new IllegalArgumentException("宽度必须大于 0");
         if (isEmpty()) return;
-        if (column > adapter.getRightBound() || column < adapter.getLeftBound()) throw new IndexOutOfBoundsException("列索引 " + column + " 不在 [" + adapter.getLeftBound() + "," + adapter.getRightBound() + "] 范围内");
+        if (column > coreInterface.getRightBound() || column < coreInterface.getLeftBound()) throw new IndexOutOfBoundsException("列索引 " + column + " 不在 [" + coreInterface.getLeftBound() + "," + coreInterface.getRightBound() + "] 范围内");
         int old = getTileWidth(column);
         widths.put(column, width);
 
@@ -439,7 +432,7 @@ public class TileCoreService <T extends TileCoreService.BaseTileHolder> {
     public void setTileHeight(int row, int height) {
         if (height <= 0) throw new IllegalArgumentException("高度必须大于 0");
         if (isEmpty()) return;
-        if (row > adapter.getBottomBound() || row < adapter.getTopBound()) throw new IndexOutOfBoundsException("行索引 " + row + " 不在 [" + adapter.getTopBound() + "," + adapter.getBottomBound() + "] 范围内");
+        if (row > coreInterface.getBottomBound() || row < coreInterface.getTopBound()) throw new IndexOutOfBoundsException("行索引 " + row + " 不在 [" + coreInterface.getTopBound() + "," + coreInterface.getBottomBound() + "] 范围内");
         int old = getTileHeight(row);
         heights.put(row, height);
 
@@ -454,18 +447,6 @@ public class TileCoreService <T extends TileCoreService.BaseTileHolder> {
 
             seek(model.colStart, model.rowStart, model.offsetX, newOffsetY);
         }
-    }
-
-    public TileAdapter<T> getAdapter() {
-        return adapter;
-    }
-
-    public void setAdapter(TileAdapter<T> adapter) {
-        if (this.adapter == adapter) return;
-        if (this.adapter != null) {
-            reset();
-        }
-        this.adapter = adapter;
     }
 
     public TileDimenProvider getDimenProvider() {
@@ -521,34 +502,30 @@ public class TileCoreService <T extends TileCoreService.BaseTileHolder> {
         recycledCount = 0;
         if (enabled) {
             // 重新统计
-            for (Deque<T> deque : recycledTiles.values()) {
-                recycledCount += deque.size();
+            for (int i = 0; i < recycledTiles.size(); i++) {
+                recycledCount += recycledTiles.valueAt(i).size();
             }
         }
     }
 
-    public long getSyncTime() {
-    	return syncTime;
+    public LongSparseArray<T> getDyingTiles() {
+    	return dyingTiles;
     }
 
     public int getActiveTileCount() {
-        return activeTiles.size();
-    }
-
-    public int getRecycledTileCount() {
-        return recycledCount;
+    	return activeTiles.size();
     }
 
     public int getDyingTileCount() {
     	return dyingTiles.size();
     }
 
-    public Long2ObjectOpenHashMap<T> getDyingTiles() {
-    	return dyingTiles;
+    public int getRecycledTileCount() {
+    	return recycledCount;
     }
 
     public boolean isEmpty() {
-        return adapter == null || adapter.isEmpty();
+        return coreInterface.getLeftBound() > coreInterface.getRightBound() || coreInterface.getTopBound() > coreInterface.getBottomBound();
     }
 
     public boolean isAtLeftBound() {
@@ -624,6 +601,21 @@ public class TileCoreService <T extends TileCoreService.BaseTileHolder> {
         void onTileOut(T holder, int column, int row);
 
         void onTileBind(T holder, int column, int row);
+        
+        int getLeftBound();
+
+        int getTopBound();
+
+        int getRightBound();
+
+        int getBottomBound();
+
+        T onCreateTileHolder(int type);
+
+        void onBindTileHolder(T holder, int column, int row);
+
+        int getTileType(int column, int row);
+
     }
 
 }

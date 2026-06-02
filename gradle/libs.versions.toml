@@ -2,7 +2,6 @@
 agp = "8.4.0"
 appcompat = "1.6.1"
 material = "1.10.0"
-fastutil = "8.5.12"
 
 [plugins]
 android-application = { id = "com.android.application", version.ref = "agp" }
@@ -11,4 +10,3 @@ android-library = { id = "com.android.library", version.ref = "agp" }
 [libraries]
 androidx-appcompat = { group = "androidx.appcompat", name = "appcompat", version.ref = "appcompat" }
 material = { group = "com.google.android.material", name = "material", version.ref = "material" }
-fastutil = { group = "it.unimi.dsi", name = "fastutil", version.ref = "fastutil" }
