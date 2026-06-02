@@ -126,7 +126,7 @@ public class TileCoreService <T extends TileCoreService.BaseTileHolder> {
         }
         
         @Override
-        public void prediff(int colStart, int rowStart, int colEnd, int rowEnd) {
+        public void beforeDiff(int colStart, int rowStart, int colEnd, int rowEnd) {
             if (dyingColStart != colStart || dyingColEnd != colEnd
                 || dyingRowStart != rowStart || dyingRowEnd != rowEnd) {
                 // 边界变化了
@@ -416,17 +416,17 @@ public class TileCoreService <T extends TileCoreService.BaseTileHolder> {
         if (column > coreInterface.getRightBound() || column < coreInterface.getLeftBound()) throw new IndexOutOfBoundsException("列索引 " + column + " 不在 [" + coreInterface.getLeftBound() + "," + coreInterface.getRightBound() + "] 范围内");
         int old = getTileWidth(column);
         widths.put(column, width);
-
-        TileLayoutModel model = layoutService.getLayoutModel();
+        layoutService.updateWidth(column, old, width);
+        TileLayoutModel model = getLayoutModel();
         if (column >= model.colStart && column <= model.colEnd) {
-            float newOffsetX = model.offsetX;
-
-            if (column == model.colStart) {
-                newOffsetX = model.offsetX + old - width;
-                newOffsetX = Math.min(0, Math.max(-width, newOffsetX));
+            int row = model.rowStart;
+            while (row <= model.rowEnd) {
+                reloadTile(column, row);
+                if (row == model.rowEnd) break;
+                row++;
             }
-            seek(model.colStart, model.rowStart, newOffsetX, model.offsetY);
         }
+        coreInterface.updateUI();
     }
 
     public void setTileHeight(int row, int height) {
@@ -435,18 +435,26 @@ public class TileCoreService <T extends TileCoreService.BaseTileHolder> {
         if (row > coreInterface.getBottomBound() || row < coreInterface.getTopBound()) throw new IndexOutOfBoundsException("行索引 " + row + " 不在 [" + coreInterface.getTopBound() + "," + coreInterface.getBottomBound() + "] 范围内");
         int old = getTileHeight(row);
         heights.put(row, height);
-
-        TileLayoutModel model = layoutService.getLayoutModel();
+        layoutService.updateHeight(row, old, height);
+        TileLayoutModel model = getLayoutModel();
         if (row >= model.rowStart && row <= model.rowEnd) {
-            float newOffsetY = model.offsetY;
-
-            if (row == model.rowStart) {
-                newOffsetY = model.offsetY + old - height;
-                newOffsetY = Math.min(0, Math.max(-height, newOffsetY));
+            int column = model.colStart;
+            while (column <= model.colEnd) {
+                reloadTile(column, row);
+                if (column == model.colEnd) break;
+                column++;
             }
-
-            seek(model.colStart, model.rowStart, model.offsetX, newOffsetY);
         }
+        coreInterface.updateUI();
+    }
+
+    private void reloadTile(int column, int row) {
+        long id = getTileId(column, row);
+        T tile = activeTiles.get(id);
+        tile.onOutWindow();
+        coreInterface.onTileOut(tile, column, row);
+        recycle(tile);
+        in(column, row);
     }
 
     public TileDimenProvider getDimenProvider() {

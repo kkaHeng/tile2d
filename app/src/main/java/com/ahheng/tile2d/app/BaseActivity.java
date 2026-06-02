@@ -11,10 +11,15 @@ import androidx.appcompat.app.AppCompatActivity;
 
 public abstract class BaseActivity extends AppCompatActivity {
 
-    private static final int MENU_ID_DEBUG = 1;  // 纯 Java 常量，零 XML
+    private static final int MENU_ID_DEBUG = 1;
+    private static final int MENU_ID_PLAN = 2;
+
+    public final static int PLAN_COLOR = 0;
+    public final static int PLAN_TEXT = 1;
     
     private Toast toast;
     private boolean debugMode = true;
+    private int plan = PLAN_TEXT;
 
     public boolean isDebugMode() {
         return debugMode;
@@ -38,9 +43,11 @@ public abstract class BaseActivity extends AppCompatActivity {
 
     @Override
     public boolean onCreateOptionsMenu(Menu menu) {
-        MenuItem item = menu.add(Menu.NONE, MENU_ID_DEBUG, Menu.NONE, "Debug模式");
-        item.setCheckable(true);
-        item.setShowAsAction(MenuItem.SHOW_AS_ACTION_NEVER);
+        menu.add(Menu.NONE, MENU_ID_DEBUG, Menu.NONE, "Debug模式")
+                .setCheckable(true)
+                .setShowAsAction(MenuItem.SHOW_AS_ACTION_NEVER);
+        menu.add(Menu.NONE, MENU_ID_PLAN, Menu.NONE, "切换方案")
+                .setShowAsAction(MenuItem.SHOW_AS_ACTION_NEVER);
         return true;
     }
 
@@ -63,6 +70,15 @@ public abstract class BaseActivity extends AppCompatActivity {
             showToast("Debug模式: " + (debugMode ? "开启" : "关闭"));
             return true;
         }
+        if (id == MENU_ID_PLAN) {
+            switch (plan) {
+                case PLAN_COLOR -> plan = PLAN_TEXT;
+                case PLAN_TEXT -> plan = PLAN_COLOR;
+            }
+            showToast("切换方案：" + plan);
+            onPlanChanged(plan);
+            return true;
+        }
         return super.onOptionsItemSelected(item);
     }
 
@@ -74,5 +90,8 @@ public abstract class BaseActivity extends AppCompatActivity {
     }
 
     protected void onDebugModeChanged(boolean enabled) {
+    }
+
+    protected void onPlanChanged(int plan) {
     }
 }

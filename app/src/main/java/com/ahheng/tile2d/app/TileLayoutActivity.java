@@ -9,27 +9,61 @@ import android.widget.TextView;
 
 import androidx.annotation.Nullable;
 
+import com.ahheng.tile2d.TileLayoutModel;
 import com.ahheng.tile2d.widget.layout.TileLayout;
 
 public class TileLayoutActivity extends BaseActivity {
 
     private TileLayout layout;
     private RandomAdapter adapter;
+    private boolean displayText = false;
 
     @Override
     protected void onCreate(@Nullable Bundle savedInstanceState) {
         super.onCreate(savedInstanceState);
         layout = new TileLayout(this);
         setContentView(layout, new ViewGroup.LayoutParams(-1, -1));
-
-        int size = dp2px(40);
-        layout.setDefaultTileWidth(size);
-        layout.setDefaultTileHeight(size);
-        int padding = dp2px(80);
+        int padding = dp2px(40);
         layout.setPadding(padding, padding, padding, padding);
         layout.setDebugMode(isDebugMode());
         layout.setAdapter((adapter = new RandomAdapter()));
-        layout.seek(0, 0, 0, 0);
+        initTextPlan(true);
+    }
+
+    private void initColorPlan(boolean first) {
+        displayText = false;
+        int size = dp2px(40);
+        layout.setDefaultTileWidth(size);
+        layout.setDefaultTileHeight(size);
+        layout.setAdapter((adapter = new RandomAdapter()));
+        if (first) {
+            layout.seek(0, 0, 0, 0);
+        } else {
+            TileLayoutModel model = layout.getLayoutModel();
+            layout.seek(model.colStart, model.rowStart, model.offsetX, model.offsetY);
+        }
+    }
+
+    private void initTextPlan(boolean first) {
+        displayText = true;
+        layout.setDefaultTileWidth(dp2px(80));
+        layout.setDefaultTileHeight(dp2px(45));
+        layout.setAdapter((adapter = new RandomAdapter()));
+        if (first) {
+            layout.seek(0, 0, 0, 0);
+        } else {
+            TileLayoutModel model = layout.getLayoutModel();
+            layout.seek(model.colStart, model.rowStart, model.offsetX, model.offsetY);
+        }
+    }
+
+    @Override
+    protected void onPlanChanged(int plan) {
+        super.onPlanChanged(plan);
+        switch (plan) {
+            case PLAN_COLOR -> initColorPlan(true);
+            case PLAN_TEXT -> initTextPlan(true);
+        }
     }
 
     @Override
@@ -52,8 +86,12 @@ public class TileLayoutActivity extends BaseActivity {
 
         public void bind() {
             textView.setBackgroundColor(backgroundColor);
-            //textView.setText(getColumn() + "," + getRow());
-            //textView.setTextColor(luminance(backgroundColor) > 0.40 ? Color.BLACK : Color.WHITE);
+            if (displayText) {
+                textView.setText(getColumn() + "," + getRow());
+                textView.setTextColor(luminance(backgroundColor) > 0.40 ? Color.BLACK : Color.WHITE);
+            } else {
+                textView.setText("");
+            }
 
             textView.setOnClickListener(v -> {
                 showToast("单击了：" + getColumn() + "," + getRow());

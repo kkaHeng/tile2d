@@ -357,6 +357,20 @@ public class TileLayout extends ViewGroup {
         requestLayout();
     }
 
+    public TileLayoutModel getLayoutModel() {
+        TileLayoutModel model = new TileLayoutModel();
+        TileLayoutModel originalModel = coreService.getLayoutModel();
+        model.colStart = originalModel.colStart;
+        model.colEnd = originalModel.colEnd;
+        model.rowStart = originalModel.rowStart;
+        model.rowEnd = originalModel.rowEnd;
+        model.offsetX = originalModel.offsetX;
+        model.offsetY = originalModel.offsetY;
+        model.syncTime = originalModel.syncTime;
+        model.layoutTime = originalModel.layoutTime;
+        return model;
+    }
+
     public boolean isHorizontalScrollEnabled() {
         return coreService.isHorizontalScrollEnabled();
     }

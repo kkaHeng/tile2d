@@ -10,38 +10,74 @@ import android.view.ViewGroup;
 import androidx.annotation.Nullable;
 import androidx.appcompat.app.ActionBar;
 
+import com.ahheng.tile2d.TileLayoutModel;
 import com.ahheng.tile2d.widget.canvas.TileView;
 
 public class TileViewActivity extends BaseActivity {
 
     private TileView view;
     private RandomAdapter adapter;
+    private boolean displayText = false;
 
     @Override
     protected void onCreate(@Nullable Bundle savedInstanceState) {
         super.onCreate(savedInstanceState);
         view = new TileView(this);
         setContentView(view, new ViewGroup.LayoutParams(-1, -1));
-
-        // int size = dp2px(40）；
-        // view.setDefaultTileWidth(size);
-        // view.setDefaultTileHeight(size);
         int padding = dp2px(40);
         view.setPadding(padding, padding, padding, padding);
         view.setDebugMode(isDebugMode());
         view.setAdapter((adapter = new RandomAdapter()));
-        view.seek(0, 0, 0, 0);
+        initTextPlan(true);
+
         /*
         Handler handler = new Handler(getMainLooper());
         handler.postDelayed(() -> {
             view.setTileWidth(0, dp2px(40));
             view.setTileHeight(0, dp2px(80));
-        }, 2000);*/
+        }, 2000);
+         */
+    }
+
+    private void initColorPlan(boolean first) {
+        displayText = false;
+        int size = dp2px(40);
+        view.setDefaultTileWidth(size);
+        view.setDefaultTileHeight(size);
+        view.setAdapter((adapter = new RandomAdapter()));
+        if (first) {
+            view.seek(0, 0, 0, 0);
+        } else {
+            TileLayoutModel model = view.getLayoutModel();
+            view.seek(model.colStart, model.rowStart, model.offsetX, model.offsetY);
+        }
+    }
+
+    private void initTextPlan(boolean first) {
+        displayText = true;
+        view.setDefaultTileWidth(dp2px(80));
+        view.setDefaultTileHeight(dp2px(45));
+        view.setAdapter((adapter = new RandomAdapter()));
+        if (first) {
+            view.seek(0, 0, 0, 0);
+        } else {
+            TileLayoutModel model = view.getLayoutModel();
+            view.seek(model.colStart, model.rowStart, model.offsetX, model.offsetY);
+        }
     }
 
     @Override
     protected void onDebugModeChanged(boolean enabled) {
         view.setDebugMode(enabled);
+    }
+
+    @Override
+    protected void onPlanChanged(int plan) {
+        super.onPlanChanged(plan);
+        switch (plan) {
+            case PLAN_COLOR -> initColorPlan(false);
+            case PLAN_TEXT -> initTextPlan(false);
+        }
     }
 
     public class ColorTileHolder extends TileView.TileHolder {
@@ -79,6 +115,7 @@ public class TileViewActivity extends BaseActivity {
             canvas.drawRect(0, 0, w, h, fillPaint);
             canvas.drawRect(0, 0, w, h, borderPaint);
 
+            if (!displayText) return;
             textPaint.setColor(cachedTextColor);
             if (w != lastWidth || h != lastHeight) {
                 lastWidth = w;

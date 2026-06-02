@@ -131,7 +131,7 @@ public class TileLayoutService {
         syncTime = System.nanoTime() - t;
         t = System.nanoTime();
 
-        platform.prediff(colStart, rowStart, colEnd, rowEnd);
+        platform.beforeDiff(colStart, rowStart, colEnd, rowEnd);
         diff(this.colStart, this.rowStart, this.colEnd, this.rowEnd, colStart, rowStart, colEnd, rowEnd);
         this.colStart = colStart;
         this.rowStart = rowStart;
@@ -196,6 +196,30 @@ public class TileLayoutService {
         this.colEnd = colEnd;
         this.rowEnd = rowEnd;
         return sync(offsetX, offsetY);
+    }
+
+    public void updateWidth(int column, int oldWidth, int newWidth) {
+        if (column >= colStart && column <= colEnd) {
+            totalWidth += (newWidth - oldWidth);
+            float newOffsetX = offsetX;
+            if (column == colStart) {
+                newOffsetX = offsetX + oldWidth - newWidth;
+                newOffsetX = Math.min(0, Math.max(-newWidth, newOffsetX));
+            }
+            sync(newOffsetX, 0);
+        }
+    }
+
+    public void updateHeight(int row, int oldHeight, int newHeight) {
+        if (row >= rowStart && row <= rowEnd) {
+            totalHeight += (newHeight - oldHeight);
+            float newOffsetY = offsetY;
+            if (row == rowStart) {
+                newOffsetY = offsetY + oldHeight - newHeight;
+                newOffsetY = Math.min(0, Math.max(-newHeight, newOffsetY));
+            }
+            sync(0, newOffsetY);
+        }
     }
 
     private void diff(int oldColStart, int oldRowStart, int oldColEnd, int oldRowEnd, int newColStart, int newRowStart, int newColEnd, int newRowEnd) {
@@ -326,7 +350,7 @@ public class TileLayoutService {
 
         void out(int column, int row);
         
-        void prediff(int colStart, int rowStart, int colEnd, int rowEnd);
+        void beforeDiff(int colStart, int rowStart, int colEnd, int rowEnd);
     }
 
 }
