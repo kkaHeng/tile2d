@@ -30,8 +30,9 @@ public class MainActivity extends AppCompatActivity {
         tileViewButton.setOnClickListener(v -> startActivity(new Intent(this, TileViewActivity.class)));
         tileLayoutButton.setOnClickListener(v -> startActivity(new Intent(this, TileLayoutActivity.class)));
 
-        // startActivity(new Intent(this, TileViewActivity.class));
-        startActivity(new Intent(this, TileLayoutActivity.class));
+        // 默认启动
+        startActivity(new Intent(this, TileViewActivity.class));
+        // startActivity(new Intent(this, TileLayoutActivity.class));
     }
 
 }

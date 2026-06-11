@@ -32,21 +32,25 @@ public class TileLayout extends ViewGroup {
 
         @Override
         public void onTileIn(TileHolder holder, int column, int row) {
-            if (holder.itemView.getLayoutParams() == null) {
-                holder.itemView.setLayoutParams(new ViewGroup.LayoutParams(-2, -2));
-            }
-            holder.view = TileLayout.this;
-            addViewInLayout(holder.itemView, -1, holder.itemView.getLayoutParams(), true);
+            addViewInLayout(holder.itemView, -1, holder.itemView.getLayoutParams(), false);
         }
 
         @Override
         public void onTileOut(TileHolder holder, int column, int row) {
-            holder.view = null;
             removeViewInLayout(holder.itemView);
+        }
+        
+        @Override
+        public void onTileRecycled(TileHolder holder, int column, int row) {
+            holder.view = null;
         }
 
         @Override
         public void onTileBind(TileHolder holder, int column, int row) {
+            if (holder.itemView.getLayoutParams() == null) {
+                holder.itemView.setLayoutParams(new ViewGroup.LayoutParams(-2, -2));
+            }
+            holder.view = TileLayout.this;
             holder.itemView.measure(
                     MeasureSpec.makeMeasureSpec(coreService.getTileWidth(column), MeasureSpec.EXACTLY),
                     MeasureSpec.makeMeasureSpec(coreService.getTileHeight(row), MeasureSpec.EXACTLY));
@@ -144,7 +148,7 @@ public class TileLayout extends ViewGroup {
 
     @Override
     protected void onLayout(boolean changed, int left, int top, int right, int bottom) {
-        if (adapter != null) {
+        if (adapter != null && coreService.getActiveTileCount() == 0) {
             if (overrideInitLocation) {
                 overrideInitLocation = false;
                 coreService.seek(initLocationColumn, initLocationRow, initOffsetX, initOffsetY);
@@ -342,6 +346,13 @@ public class TileLayout extends ViewGroup {
             return;
         }
         coreService.sync(dx, dy);
+    }
+
+    public void smoohOffset(float dx, float dy) {
+    	if (isEmpty()) {
+            return;
+        }
+        coreService.smoothSync(dx, dy);
     }
 
     public void seek(int column, int row) {

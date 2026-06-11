@@ -30,13 +30,20 @@ public class TileViewActivity extends BaseActivity {
         view.setAdapter((adapter = new RandomAdapter()));
         initTextPlan(true);
 
-        /*
+
         Handler handler = new Handler(getMainLooper());
         handler.postDelayed(() -> {
-            view.setTileWidth(0, dp2px(40));
+            view.smoohOffset(-dp2px(20), -dp2px(20));
+            handler.postDelayed(() -> {
+            view.setTileWidth(0, dp2px(120));
             view.setTileHeight(0, dp2px(80));
-        }, 2000);
-         */
+            handler.postDelayed(() -> {
+            view.smoohOffset(dp2px(1000), 0);
+            
+            }, 1000);
+            }, 1000);
+        }, 1000);
+         
     }
 
     private void initColorPlan(boolean first) {

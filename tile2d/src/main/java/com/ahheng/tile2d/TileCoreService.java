@@ -1,5 +1,6 @@
 package com.ahheng.tile2d;
 
+import android.animation.ValueAnimator;
 import android.content.Context;
 import android.graphics.Rect;
 import android.util.LongSparseArray;
@@ -8,6 +9,7 @@ import android.util.SparseIntArray;
 import android.view.GestureDetector;
 import android.view.MotionEvent;
 import android.view.ViewConfiguration;
+import android.view.animation.DecelerateInterpolator;
 import android.widget.Scroller;
 
 import com.ahheng.tile2d.widget.TileAdapter;
@@ -39,6 +41,7 @@ public class TileCoreService <T extends TileCoreService.BaseTileHolder> {
 
     private final Scroller scroller;
     private final GestureDetector gestureDetector;
+    private ValueAnimator smoothAnimator;
     private final int minVelocity;
     private final int maxVelocity;
 
@@ -46,6 +49,7 @@ public class TileCoreService <T extends TileCoreService.BaseTileHolder> {
     private boolean isInteractingWithView;
     private int lastScrollerX;
     private int lastScrollerY;
+    private float lastSmoothProgress;
 
     private boolean horizontalScrollEnabled = true;
     private boolean verticalScrollEnabled = true;
@@ -191,9 +195,9 @@ public class TileCoreService <T extends TileCoreService.BaseTileHolder> {
 
             if (scrolled) {
                 sync(dx, dy);
+            } else {
+                coreInterface.updateUI();
             }
-            
-            coreInterface.updateUI();
         }
     }
 
@@ -284,13 +288,13 @@ public class TileCoreService <T extends TileCoreService.BaseTileHolder> {
             T tile = activeTiles.valueAt(i);
             tile.onOutWindow();
             coreInterface.onTileOut(tile, getColumn(id), getRow(id));
-            tile.onRecycled();
+            recycle(tile);
         }
         activeTiles.clear();
         
         // 清理濒死瓦片
         for (int i = 0; i < dyingTiles.size(); i++) {
-            dyingTiles.valueAt(i).onRecycled();
+            recycle(dyingTiles.valueAt(i));
         }
         dyingTiles.clear();
         
@@ -312,6 +316,42 @@ public class TileCoreService <T extends TileCoreService.BaseTileHolder> {
         recycledCount = 0;
         
         layoutService.reset();
+    }
+
+    public void smoothSync(float dx, float dy) {
+        float distance = (float) Math.hypot(dx, dy);
+        long duration = (long) (distance / 1.5f);
+        duration = Math.min(Math.max(duration, 150), 600);
+        smoothSync(dx, dy, duration);
+    }
+
+    public void smoothSync(float dx, float dy, long duration) {
+        if (!scroller.isFinished()) {
+            scroller.abortAnimation();
+        }
+        if (smoothAnimator != null && smoothAnimator.isRunning()) {
+            smoothAnimator.cancel();
+        }
+    
+        lastSmoothProgress = 0f;
+    
+        smoothAnimator = ValueAnimator.ofFloat(0f, 1f);
+        smoothAnimator.setDuration(duration);
+        smoothAnimator.setInterpolator(new DecelerateInterpolator(1.5f));
+    
+        smoothAnimator.addUpdateListener(new ValueAnimator.AnimatorUpdateListener() {
+            @Override
+            public void onAnimationUpdate(ValueAnimator animation) {
+                float progress = animation.getAnimatedFraction();
+                float stepProgress = progress - lastSmoothProgress;
+                float stepX = dx * stepProgress;
+                float stepY = dy * stepProgress;
+                lastSmoothProgress = progress;
+                sync(stepX, stepY);
+            }
+        });
+    
+        smoothAnimator.start();
     }
 
     public void sync(float dx, float dy) {
@@ -392,6 +432,7 @@ public class TileCoreService <T extends TileCoreService.BaseTileHolder> {
         }
         tiles.offer(tile);
         tile.onRecycled();
+        coreInterface.onTileRecycled(tile, ((BaseTileHolder) tile).column, ((BaseTileHolder) tile).row);
         if (debugMode) recycledCount++;
     }
 
@@ -451,10 +492,10 @@ public class TileCoreService <T extends TileCoreService.BaseTileHolder> {
     private void reloadTile(int column, int row) {
         long id = getTileId(column, row);
         T tile = activeTiles.get(id);
-        tile.onOutWindow();
-        coreInterface.onTileOut(tile, column, row);
-        recycle(tile);
-        in(column, row);
+        ((BaseTileHolder) tile).width = getTileWidth(column);
+        ((BaseTileHolder) tile).height = getTileHeight(row);
+        coreInterface.onBindTileHolder(tile, column, row);
+        coreInterface.onTileBind(tile, column, row);
     }
 
     public TileDimenProvider getDimenProvider() {
@@ -607,6 +648,8 @@ public class TileCoreService <T extends TileCoreService.BaseTileHolder> {
         void onTileIn(T holder, int column, int row);
 
         void onTileOut(T holder, int column, int row);
+        
+        void onTileRecycled(T holder, int column, int row);
 
         void onTileBind(T holder, int column, int row);
         

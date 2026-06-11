@@ -27,6 +27,9 @@ public class TileLayoutService {
     public TileLayoutModel sync(float dx, float dy) {
         syncTime = 0;
         layoutTime = 0;
+        if (dx == 0 && dy == 0) {
+            return getLayoutModel();
+        }
         if (isEmpty()) {
             return getLayoutModel();
         }
@@ -201,24 +204,26 @@ public class TileLayoutService {
     public void updateWidth(int column, int oldWidth, int newWidth) {
         if (column >= colStart && column <= colEnd) {
             totalWidth += (newWidth - oldWidth);
-            float newOffsetX = offsetX;
+            float dx = 0;
             if (column == colStart) {
-                newOffsetX = offsetX + oldWidth - newWidth;
-                newOffsetX = Math.min(0, Math.max(-newWidth, newOffsetX));
+                dx = offsetX + oldWidth - newWidth;
+                dx = Math.min(0, Math.max(-newWidth, dx));
+                dx -= offsetX;
             }
-            sync(newOffsetX, 0);
+            sync(dx, 0);
         }
     }
 
     public void updateHeight(int row, int oldHeight, int newHeight) {
         if (row >= rowStart && row <= rowEnd) {
             totalHeight += (newHeight - oldHeight);
-            float newOffsetY = offsetY;
+            float dy = 0;
             if (row == rowStart) {
-                newOffsetY = offsetY + oldHeight - newHeight;
-                newOffsetY = Math.min(0, Math.max(-newHeight, newOffsetY));
+                dy = offsetY + oldHeight - newHeight;
+                dy = Math.min(0, Math.max(-newHeight, dy));
+                dy -= offsetY;
             }
-            sync(0, newOffsetY);
+            sync(0, dy);
         }
     }
 

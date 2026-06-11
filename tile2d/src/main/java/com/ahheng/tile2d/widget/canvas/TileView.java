@@ -24,6 +24,7 @@ public class TileView extends View {
     private Adapter<TileHolder> adapter;
 
     private final TileCoreService.CoreInterface<TileHolder> coreInterface = new TileCoreService.CoreInterface<TileHolder>() {
+        
         @Override
         public void updateUI() {
             TileView.this.postInvalidateOnAnimation();
@@ -31,16 +32,20 @@ public class TileView extends View {
 
         @Override
         public void onTileIn(TileHolder holder, int column, int row) {
-            holder.view = TileView.this;
         }
 
         @Override
         public void onTileOut(TileHolder holder, int column, int row) {
+        }
+        
+        @Override
+        public void onTileRecycled(TileHolder holder, int column, int row) {
             holder.view = null;
         }
 
         @Override
         public void onTileBind(TileHolder holder, int column, int row) {
+            holder.view = TileView.this;
         }
 
         @Override
@@ -133,6 +138,13 @@ public class TileView extends View {
         coreService.sync(dx, dy);
     }
 
+    public void smoohOffset(float dx, float dy) {
+    	if (isEmpty()) {
+            return;
+        }
+        coreService.smoothSync(dx, dy);
+    }
+
     public void seek(int column, int row) {
         seek(column, row, 0, 0);
     }
@@ -164,7 +176,7 @@ public class TileView extends View {
     @Override
     protected void onLayout(boolean changed, int left, int top, int right, int bottom) {
         super.onLayout(changed, left, top, right, bottom);
-        if (adapter != null) {
+        if (adapter != null && coreService.getActiveTileCount() == 0) {
             if (overrideInitLocation) {
                 overrideInitLocation = false;
                 coreService.seek(initLocationColumn, initLocationRow, initOffsetX, initOffsetY);

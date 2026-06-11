@@ -2,6 +2,7 @@ package com.ahheng.tile2d.app;
 
 import android.graphics.Color;
 import android.os.Bundle;
+import android.os.Handler;
 import android.util.TypedValue;
 import android.view.Gravity;
 import android.view.ViewGroup;
@@ -28,6 +29,14 @@ public class TileLayoutActivity extends BaseActivity {
         layout.setDebugMode(isDebugMode());
         layout.setAdapter((adapter = new RandomAdapter()));
         initTextPlan(true);
+        
+        /*
+        Handler handler = new Handler(getMainLooper());
+        handler.postDelayed(() -> {
+            layout.setTileWidth(0, dp2px(40));
+            // layout.setTileHeight(0, dp2px(80));
+        }, 2000);
+        */
     }
 
     private void initColorPlan(boolean first) {
