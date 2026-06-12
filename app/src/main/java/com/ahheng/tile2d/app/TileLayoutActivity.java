@@ -1,6 +1,7 @@
 package com.ahheng.tile2d.app;
 
 import android.graphics.Color;
+import android.graphics.drawable.GradientDrawable;
 import android.os.Bundle;
 import android.os.Handler;
 import android.util.TypedValue;
@@ -19,9 +20,15 @@ public class TileLayoutActivity extends BaseActivity {
     private RandomAdapter adapter;
     private boolean displayText = false;
 
+    private PerlinNoise2D perlinNoise;
+    private ColorGenerator colorGenerator;
+
     @Override
     protected void onCreate(@Nullable Bundle savedInstanceState) {
         super.onCreate(savedInstanceState);
+        perlinNoise = new PerlinNoise2D(123456789L);
+        colorGenerator = new ColorGenerator();
+
         layout = new TileLayout(this);
         setContentView(layout, new ViewGroup.LayoutParams(-1, -1));
         int padding = dp2px(40);
@@ -29,18 +36,17 @@ public class TileLayoutActivity extends BaseActivity {
         layout.setDebugMode(isDebugMode());
         layout.setAdapter((adapter = new RandomAdapter()));
         initTextPlan(true);
-        
-        /*
+
         Handler handler = new Handler(getMainLooper());
         handler.postDelayed(() -> {
-            layout.setTileWidth(0, dp2px(40));
-            // layout.setTileHeight(0, dp2px(80));
+            // 测试延迟调整宽度
+            layout.setTileWidth(0, dp2px(160));
         }, 2000);
-        */
     }
 
     private void initColorPlan(boolean first) {
         displayText = false;
+        TileLayoutModel model = layout.getLayoutModel();
         int size = dp2px(40);
         layout.setDefaultTileWidth(size);
         layout.setDefaultTileHeight(size);
@@ -48,30 +54,20 @@ public class TileLayoutActivity extends BaseActivity {
         if (first) {
             layout.seek(0, 0, 0, 0);
         } else {
-            TileLayoutModel model = layout.getLayoutModel();
             layout.seek(model.colStart, model.rowStart, model.offsetX, model.offsetY);
         }
     }
 
     private void initTextPlan(boolean first) {
         displayText = true;
+        TileLayoutModel model = layout.getLayoutModel();
         layout.setDefaultTileWidth(dp2px(80));
         layout.setDefaultTileHeight(dp2px(45));
         layout.setAdapter((adapter = new RandomAdapter()));
         if (first) {
             layout.seek(0, 0, 0, 0);
         } else {
-            TileLayoutModel model = layout.getLayoutModel();
             layout.seek(model.colStart, model.rowStart, model.offsetX, model.offsetY);
-        }
-    }
-
-    @Override
-    protected void onPlanChanged(int plan) {
-        super.onPlanChanged(plan);
-        switch (plan) {
-            case PLAN_COLOR -> initColorPlan(true);
-            case PLAN_TEXT -> initTextPlan(true);
         }
     }
 
@@ -80,33 +76,46 @@ public class TileLayoutActivity extends BaseActivity {
         layout.setDebugMode(enabled);
     }
 
+    @Override
+    protected void onPlanChanged(int plan) {
+        super.onPlanChanged(plan);
+        switch (plan) {
+            case PLAN_COLOR -> initColorPlan(false);
+            case PLAN_TEXT -> initTextPlan(false);
+        }
+    }
+
     public class ColorTileHolder extends TileLayout.TileHolder {
         int backgroundColor;
+        double noise;
 
         private TextView textView;
 
         public ColorTileHolder() {
             super(new TextView(TileLayoutActivity.this));
             textView = (TextView) itemView;
-            textView.setTextColor(Color.WHITE);
             textView.setTextSize(TypedValue.COMPLEX_UNIT_DIP, 14);
             textView.setGravity(Gravity.CENTER);
+            textView.setBackground(new GradientDrawable());
         }
 
         public void bind() {
-            textView.setBackgroundColor(backgroundColor);
+            GradientDrawable bg = (GradientDrawable) textView.getBackground();
+            bg.setColor(backgroundColor);
+            bg.setStroke((int) Math.ceil(dpTopx(0.5f)), Color.GRAY);
+            textView.setBackground(bg);
             if (displayText) {
-                textView.setText(getColumn() + "," + getRow());
+                textView.setText(String.format("%.2f", noise));
                 textView.setTextColor(luminance(backgroundColor) > 0.40 ? Color.BLACK : Color.WHITE);
             } else {
                 textView.setText("");
             }
 
             textView.setOnClickListener(v -> {
-                showToast("单击了：" + getColumn() + "," + getRow());
+                showToast("单击了 " + getColumn() + "," + getRow());
             });
             textView.setOnLongClickListener(v -> {
-                showToast("长按了：" + getColumn() + "," + getRow());
+                showToast("长按了 " + getColumn() + "," + getRow());
                 requestDisallowInterceptTouchEvent(true);
                 return true;
             });
@@ -121,67 +130,12 @@ public class TileLayoutActivity extends BaseActivity {
             b = b <= 0.03928 ? b / 12.92 : Math.pow((b + 0.055) / 1.055, 2.4);
             return 0.2126 * r + 0.7152 * g + 0.0722 * b;
         }
-
-    }
-
-    public static class ColorNoise {
-        private final int[] perm = new int[512];
-
-        public ColorNoise(long seed) {
-            int[] p = new int[256];
-            for (int i = 0; i < 256; i++) p[i] = i;
-            java.util.Random rand = new java.util.Random(seed);
-            for (int i = 255; i > 0; i--) {
-                int j = rand.nextInt(i + 1);
-                int tmp = p[i]; p[i] = p[j]; p[j] = tmp;
-            }
-            for (int i = 0; i < 512; i++) perm[i] = p[i & 255];
-        }
-
-        public int generateColor(int x, int y) {
-            float n = (float) noise(x * 0.03, y * 0.03);
-            float t = (n + 1f) * 0.5f;
-            float[] hsv = new float[3];
-            hsv[0] = 205f;
-            hsv[1] = 0.55f + t * 0.35f;
-            hsv[2] = 0.25f + t * 0.70f;
-            return Color.HSVToColor(hsv);
-        }
-
-        private double noise(double x, double y) {
-            int X = (int) Math.floor(x) & 255;
-            int Y = (int) Math.floor(y) & 255;
-            x -= Math.floor(x);
-            y -= Math.floor(y);
-            double u = fade(x);
-            double v = fade(y);
-            int A = perm[X] + Y;
-            int B = perm[X + 1] + Y;
-            return lerp(v,
-                    lerp(u, grad(perm[A], x, y), grad(perm[B], x - 1, y)),
-                    lerp(u, grad(perm[A + 1], x, y - 1), grad(perm[B + 1], x - 1, y - 1)));
-        }
-
-        private static double fade(double t) {
-            return t * t * t * (t * (t * 6 - 15) + 10);
-        }
-
-        private static double lerp(double t, double a, double b) {
-            return a + t * (b - a);
-        }
-
-        private static double grad(int hash, double x, double y) {
-            int h = hash & 7;
-            double u = (h < 4) ? x : y;
-            double v = (h < 4) ? y : x;
-            return ((h & 1) == 0 ? u : -u) + ((h & 2) == 0 ? v : -v);
-        }
     }
 
     private class RandomAdapter extends TileLayout.Adapter<ColorTileHolder> {
         @Override
         public int getTopBound() {
-            return -50;
+            return -100;
         }
 
         @Override
@@ -196,19 +150,25 @@ public class TileLayoutActivity extends BaseActivity {
 
         @Override
         public int getBottomBound() {
-            return 50;
+            return 100;
         }
 
-        private final ColorNoise noise = new ColorNoise(12345L);
+        @Override
+        public int getTileType(int column, int row) {
+            return perlinNoise.noiseNormalized(column * 0.03, row * 0.03) < 0.3 ? -1 : 0;
+        }
 
         @Override
         public ColorTileHolder onCreateTileHolder(int type) {
+            if (type == -1) return null;
             return new ColorTileHolder();
         }
 
         @Override
         public void onBindTileHolder(ColorTileHolder holder, int column, int row) {
-            holder.backgroundColor = noise.generateColor(column, row);
+            double noise = perlinNoise.noiseNormalized(column * 0.03, row * 0.03);
+            holder.backgroundColor = colorGenerator.getColor((noise - 0.03) / 0.97);
+            holder.noise = noise / 0.03;
             holder.bind();
         }
     }

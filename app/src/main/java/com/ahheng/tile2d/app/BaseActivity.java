@@ -35,6 +35,10 @@ public abstract class BaseActivity extends AppCompatActivity {
         return (int) (getResources().getDisplayMetrics().density * dp + 0.5f);
     }
 
+    public float dpTopx(float dp) {
+        return getResources().getDisplayMetrics().density * dp;
+    }
+
     public void showToast(String text) {
         if (toast != null) toast.cancel();
         toast = Toast.makeText(this, text, Toast.LENGTH_SHORT);

@@ -151,6 +151,11 @@ public class TileLayout extends ViewGroup {
     }
 
     @Override
+    public void requestLayout() {
+        super.requestLayout();
+    }
+
+    @Override
     public void computeScroll() {
         super.computeScroll();
         coreService.computeScroll();
