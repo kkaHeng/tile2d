@@ -258,10 +258,15 @@ public class TileCoreService <T extends TileCoreService.BaseTileHolder> {
     }
 
     private void diffDying(int colStart, int rowStart, int colEnd, int rowEnd) {
-        int left = colStart > coreInterface.getLeftBound() ? colStart - 1 : coreInterface.getLeftBound();
-        int top  = rowStart > coreInterface.getTopBound() ? rowStart - 1 : coreInterface.getTopBound();
-        int right = colEnd < coreInterface.getRightBound() ? colEnd + 1 : coreInterface.getRightBound();
-        int bottom = rowEnd < coreInterface.getBottomBound() ? rowEnd + 1 : coreInterface.getBottomBound();
+        dyingColStart = colStart;
+        dyingColEnd = colEnd;
+        dyingRowStart = rowStart;
+        dyingRowEnd = rowEnd;
+        
+        int left = getDyingLeft();
+        int top  = getDyingTop();
+        int right = getDyingRight();
+        int bottom = getDyingBottom();
     
         for (int i = dyingTiles.size() - 1; i >= 0; i--) {
             long id = dyingTiles.keyAt(i);
@@ -274,11 +279,6 @@ public class TileCoreService <T extends TileCoreService.BaseTileHolder> {
                 recycle(tile);
             }
         }
-        
-        dyingColStart = colStart;
-        dyingColEnd = colEnd;
-        dyingRowStart = rowStart;
-        dyingRowEnd = rowEnd;
     }
 
     public void reset() {
@@ -286,8 +286,8 @@ public class TileCoreService <T extends TileCoreService.BaseTileHolder> {
         for (int i = 0; i < activeTiles.size(); i++) {
             long id = activeTiles.keyAt(i);
             T tile = activeTiles.valueAt(i);
-            tile.onOutWindow();
             coreInterface.onTileOut(tile, getColumn(id), getRow(id));
+            if (tile != null) tile.onOutWindow();
             recycle(tile);
         }
         activeTiles.clear();
@@ -366,10 +366,8 @@ public class TileCoreService <T extends TileCoreService.BaseTileHolder> {
         for (int i = 0; i < activeTiles.size(); i++) {
             T tile = activeTiles.valueAt(i);
             long id = activeTiles.keyAt(i);
-            int c = (int) (id >> 32);
-            int r = (int) id;
-            tile.onOutWindow();
-            coreInterface.onTileOut(tile, c, r);
+            coreInterface.onTileOut(tile, getColumn(id), getRow(id));
+            if (tile != null) tile.onOutWindow();
             recycle(tile);
         }
         activeTiles.clear();
@@ -377,7 +375,7 @@ public class TileCoreService <T extends TileCoreService.BaseTileHolder> {
         // 清理濒死瓦片
         for (int i = 0; i < dyingTiles.size(); i++) {
             recycle(dyingTiles.valueAt(i));
-        };
+        }
         dyingTiles.clear();
         layoutService.seek(column, row, offsetX, offsetY);
         coreInterface.updateUI();
@@ -386,27 +384,32 @@ public class TileCoreService <T extends TileCoreService.BaseTileHolder> {
     public void in(int column, int row) {
         long id = getTileId(column, row);
         T tile = dyingTiles.get(id);
-        dyingTiles.remove(id);
         if (tile == null) {
             int type = coreInterface.getTileType(column, row);
             tile = obtain(type);
-            ((BaseTileHolder) tile).column = column;
-            ((BaseTileHolder) tile).row = row;
-            ((BaseTileHolder) tile).width = getTileWidth(column);
-            ((BaseTileHolder) tile).height = getTileHeight(row);
-            coreInterface.onBindTileHolder(tile, column, row);
-            coreInterface.onTileBind(tile, column, row);
+            if (tile != null) {
+                ((BaseTileHolder) tile).column = column;
+                ((BaseTileHolder) tile).row = row;
+                ((BaseTileHolder) tile).width = getTileWidth(column);
+                ((BaseTileHolder) tile).height = getTileHeight(row);
+                coreInterface.onBindTileHolder(tile, column, row);
+                coreInterface.onTileBind(tile, column, row);
+            }
+        } else {
+            dyingTiles.remove(id);
         }
-        activeTiles.put(id, tile);
-        coreInterface.onTileIn(tile, column, row);
-        tile.onInWindow();
+        if (tile != null) {
+            activeTiles.put(id, tile);
+            coreInterface.onTileIn(tile, column, row);
+            tile.onInWindow();
+        }
     }
 
     public void out(int column, int row) {
         long id = getTileId(column, row);
         T tile = activeTiles.get(id);
-        activeTiles.remove(id);
         if (tile != null) {
+            activeTiles.remove(id);
             tile.onOutWindow();
             coreInterface.onTileOut(tile, column, row);
             dyingTiles.put(id, tile);
@@ -420,11 +423,12 @@ public class TileCoreService <T extends TileCoreService.BaseTileHolder> {
             return tiles.poll();
         }
         T tile = coreInterface.onCreateTileHolder(type);
-        ((BaseTileHolder) tile).type = type;
+        if (tile != null) ((BaseTileHolder) tile).type = type;
         return tile;
     }
 
     public void recycle(T tile) {
+        if (tile == null) return;
         int type = ((BaseTileHolder) tile).type;
         Deque<T> tiles = recycledTiles.get(type);
         if (tiles == null) {
@@ -467,6 +471,17 @@ public class TileCoreService <T extends TileCoreService.BaseTileHolder> {
                 row++;
             }
         }
+        int dyingLeft = getDyingLeft();
+        int dyingRight = getDyingRight();
+        if (column >= dyingLeft && column <= dyingRight) {
+            int row = getDyingTop();
+            int end = getDyingBottom();
+            while (row <= end) {
+                reloadTile(column, row);
+                if (row == end) break;
+                row++;
+            }
+        }
         coreInterface.updateUI();
     }
 
@@ -486,16 +501,32 @@ public class TileCoreService <T extends TileCoreService.BaseTileHolder> {
                 column++;
             }
         }
+        int dyingTop = getDyingTop();
+        int dyingBottom = getDyingBottom();
+        if (row >= dyingTop && row <= dyingBottom) {
+            int column = getDyingLeft();
+            int end = getDyingRight();
+            while (column <= end) {
+                reloadTile(column, row);
+                if (column == end) break;
+                column++;
+            }
+        }
         coreInterface.updateUI();
     }
 
     private void reloadTile(int column, int row) {
         long id = getTileId(column, row);
         T tile = activeTiles.get(id);
-        ((BaseTileHolder) tile).width = getTileWidth(column);
-        ((BaseTileHolder) tile).height = getTileHeight(row);
-        coreInterface.onBindTileHolder(tile, column, row);
-        coreInterface.onTileBind(tile, column, row);
+        if (tile == null) {
+            tile = dyingTiles.get(id);
+        }
+        if (tile != null) {
+            ((BaseTileHolder) tile).width = getTileWidth(column);
+            ((BaseTileHolder) tile).height = getTileHeight(row);
+            coreInterface.onBindTileHolder(tile, column, row);
+            coreInterface.onTileBind(tile, column, row);
+        }
     }
 
     public TileDimenProvider getDimenProvider() {
@@ -565,10 +596,6 @@ public class TileCoreService <T extends TileCoreService.BaseTileHolder> {
     	return activeTiles.size();
     }
 
-    public int getDyingTileCount() {
-    	return dyingTiles.size();
-    }
-
     public int getRecycledTileCount() {
     	return recycledCount;
     }
@@ -591,6 +618,22 @@ public class TileCoreService <T extends TileCoreService.BaseTileHolder> {
 
     public boolean isAtBottomBound() {
         return !isEmpty() && layoutService.isAtBottomBound();
+    }
+
+    public int getDyingLeft() {
+    	return dyingColStart > coreInterface.getLeftBound() ? dyingColStart - 1 : coreInterface.getLeftBound();
+    }
+
+    public int getDyingTop() {
+    	return dyingRowStart > coreInterface.getTopBound() ? dyingRowStart - 1 : coreInterface.getTopBound();
+    }
+
+    public int getDyingRight() {
+    	return dyingColEnd < coreInterface.getRightBound() ? dyingColEnd + 1 : coreInterface.getRightBound();
+    }
+
+    public int getDyingBottom() {
+    	return dyingRowEnd < coreInterface.getBottomBound() ? dyingRowEnd + 1 : coreInterface.getBottomBound();
     }
 
     public static long getTileId(int column, int row) {

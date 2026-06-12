@@ -2,13 +2,11 @@ package com.ahheng.tile2d.widget.canvas;
 
 import android.content.Context;
 import android.graphics.Canvas;
-import android.graphics.Paint;
-import android.graphics.Typeface;
+import android.graphics.Rect;
 import android.util.AttributeSet;
 import android.util.DisplayMetrics;
 import android.util.LongSparseArray;
 import android.util.TypedValue;
-import android.view.Choreographer;
 import android.view.MotionEvent;
 import android.view.View;
 import android.view.ViewConfiguration;
@@ -17,6 +15,7 @@ import com.ahheng.tile2d.TileCoreService;
 import com.ahheng.tile2d.TileLayoutModel;
 import com.ahheng.tile2d.widget.TileAdapter;
 import com.ahheng.tile2d.widget.TileDimenProvider;
+import com.ahheng.tile2d.widget.debug.DebugLayer;
 
 public class TileView extends View {
 
@@ -84,15 +83,7 @@ public class TileView extends View {
         }
     };
 
-    private Choreographer choreographer;
-    private Choreographer.FrameCallback frameCallback;
-    private long frameCount = 0;
-    private long lastFpsUpdateTime = 0;
-    private int actualFps = 0;
-    private Paint infoPaint;
-    private float infoMargin;
-    private Paint boundPaint;
-    private Paint dyingOverlayPaint;
+    private DebugLayer debugLayer;
 
     private boolean overrideInitLocation = false;
     private int initLocationColumn;
@@ -196,7 +187,7 @@ public class TileView extends View {
     @Override
     protected void onDraw(Canvas canvas) {
         super.onDraw(canvas);
-        long drawStart = System.nanoTime();
+        if (coreService.isDebugMode() && debugLayer != null) debugLayer.startDraw();
         TileLayoutModel model = coreService.getLayoutModel();
         if (model.colStart <= model.colEnd && model.rowStart <= model.rowEnd) {
             canvas.save();
@@ -229,62 +220,8 @@ public class TileView extends View {
             }
             canvas.restore();
         }
-        if (coreService.isDebugMode()) {
-            LongSparseArray<TileHolder> dyingTiles = coreService.getDyingTiles();
-            for (int i = 0; i < dyingTiles.size(); i++) {
-                long id = dyingTiles.keyAt(i);
-                int c = TileCoreService.getColumn(id);
-                int r = TileCoreService.getRow(id);
-
-                float x = 0;
-                if (c < model.colStart) {
-                    x -= coreService.getTileWidth(c);
-                } else {
-                    for (int j = model.colStart; j < c; j++) {
-                        x += coreService.getTileWidth(j);
-                    }
-                }
-
-                float y = 0;
-                if (r < model.rowStart) {
-                    y -= coreService.getTileHeight(r);
-                } else {
-                    for (int j = model.rowStart; j < r; j++) {
-                        y += coreService.getTileHeight(j);
-                    }
-                }
-
-                TileHolder tile = dyingTiles.valueAt(i);
-                if (tile == null) continue;
-                canvas.save();
-                canvas.translate(getPaddingLeft(), getPaddingTop());
-                canvas.translate(model.offsetX, model.offsetY);
-                canvas.translate(x, y);
-                canvas.drawRect(0, 0, tile.getWidth(), tile.getHeight(), dyingOverlayPaint);
-                canvas.restore();
-            }
-
-            canvas.drawRect(coreService.getBounds(), boundPaint);
-            long drawTime = System.nanoTime() - drawStart;
-            long theoreticalFps = drawTime > 0 ? 1_000_000_000L / drawTime : 0;
-
-            float lineHeight = infoPaint.getTextSize() * 1.25f;
-            float ix = infoMargin;
-            float iy = infoMargin + infoPaint.getTextSize();
-
-            canvas.drawText("实际帧率：" + actualFps + "Hz", ix, iy, infoPaint);
-            iy += lineHeight;
-            canvas.drawText("理论帧率：" + theoreticalFps + "Hz", ix, iy, infoPaint);
-            iy += lineHeight;
-            canvas.drawText("同步耗时：" + model.syncTime + "ns", ix, iy, infoPaint);
-            iy += lineHeight;
-            canvas.drawText("布局耗时：" + model.layoutTime + "ns", ix, iy, infoPaint);
-            iy += lineHeight;
-            canvas.drawText("活跃瓦片：" + coreService.getActiveTileCount(), ix, iy, infoPaint);
-            iy += lineHeight;
-            canvas.drawText("回收瓦片：" + coreService.getRecycledTileCount(), ix, iy, infoPaint);
-            iy += lineHeight;
-            canvas.drawText("濒死瓦片：" + coreService.getDyingTileCount(), ix, iy, infoPaint);
+        if (coreService.isDebugMode() && debugLayer != null) {
+            debugLayer.draw(canvas);
         }
     }
 
@@ -378,17 +315,17 @@ public class TileView extends View {
     @Override
     protected void onAttachedToWindow() {
         super.onAttachedToWindow();
-        if (choreographer != null && frameCallback != null) {
-            lastFpsUpdateTime = System.nanoTime();
-            choreographer.postFrameCallback(frameCallback);
+        if (debugLayer != null) {
+            debugLayer.start();
         }
     }
 
     @Override
     protected void onDetachedFromWindow() {
         super.onDetachedFromWindow();
-        if (choreographer != null && frameCallback != null)
-            choreographer.removeFrameCallback(frameCallback);
+        if (debugLayer != null) {
+            debugLayer.end();
+        }
     }
 
     public long getLongPressTimeout() {
@@ -505,47 +442,50 @@ public class TileView extends View {
         if (coreService.isDebugMode() == enabled) return;
         coreService.setDebugMode(enabled);
         if (coreService.isDebugMode()) {
-            boundPaint = new Paint(Paint.ANTI_ALIAS_FLAG);
-            boundPaint.setColor(0xff008aff);
-            boundPaint.setStyle(Paint.Style.STROKE);
-            boundPaint.setStrokeWidth(2);
-
-            infoPaint = new Paint(Paint.ANTI_ALIAS_FLAG);
-            infoPaint.setColor(0xffefefef);
-            infoPaint.setTypeface(Typeface.create((Typeface) null, Typeface.BOLD));
-            infoPaint.setShadowLayer(6, 0, 0, 0xff333333);
-            infoPaint.setTextSize(TypedValue.applyDimension(
-                    TypedValue.COMPLEX_UNIT_DIP, 12, getResources().getDisplayMetrics()));
-            infoMargin = TypedValue.applyDimension(
-                    TypedValue.COMPLEX_UNIT_DIP, 4, getResources().getDisplayMetrics());
-            dyingOverlayPaint = new Paint(Paint.ANTI_ALIAS_FLAG);
-            dyingOverlayPaint.setColor(0x60FF0000);
-
-            this.choreographer = Choreographer.getInstance();
-            this.frameCallback = new Choreographer.FrameCallback() {
+            debugLayer = new DebugLayer(getContext(), new DebugLayer.Callback() {
                 @Override
-                public void doFrame(long frameTimeNanos) {
-                    frameCount++;
-                    long now = System.nanoTime();
-                    if (now - lastFpsUpdateTime >= 1_000_000_000L) {
-                        actualFps = (int) frameCount;
-                        frameCount = 0;
-                        lastFpsUpdateTime = now;
-                        postInvalidateOnAnimation();
-                    }
-                    choreographer.postFrameCallback(this);
+                public int getActiveTileCount() {
+                    return coreService.getActiveTileCount();
                 }
-            };
+                
+                @Override
+                public int getRecycledTileCount() {
+                    return coreService.getRecycledTileCount();
+                }
+                
+                @Override
+                public int getTileWidth(int column) {
+                    return coreService.getTileWidth(column);
+                }
+                
+                @Override
+                public int getTileHeight(int row) {
+                    return coreService.getTileHeight(row);
+                }
+                
+                @Override
+                public Rect getBounds() {
+                    return coreService.getBounds();
+                }
+                @Override
+                public TileLayoutModel getLayoutModel() {
+                    return coreService.getLayoutModel();
+                }
+                @Override
+                public LongSparseArray<? extends TileCoreService.BaseTileHolder> getDyingTiles() {
+                    return coreService.getDyingTiles();
+                }
+                @Override
+                public void postInvalidateOnAnimation() {
+                    TileView.this.postInvalidateOnAnimation();
+                }
+            });
             if (isAttachedToWindow()) {
-                choreographer.postFrameCallback(frameCallback);
+                debugLayer.start();
             }
         } else {
-            boundPaint = null;
-            infoPaint = null;
-            dyingOverlayPaint = null;
-            choreographer.removeFrameCallback(frameCallback);
-            choreographer = null;
-            frameCallback = null;
+            if (debugLayer != null) debugLayer.end();
+            debugLayer = null;
         }
         postInvalidateOnAnimation();
     }

@@ -33,16 +33,16 @@ public class TileViewActivity extends BaseActivity {
 
         Handler handler = new Handler(getMainLooper());
         handler.postDelayed(() -> {
-            view.smoohOffset(-dp2px(20), -dp2px(20));
-            handler.postDelayed(() -> {
+            /*view.smoohOffset(-dp2px(20), -dp2px(20));
+            handler.postDelayed(() -> {*/
             view.setTileWidth(0, dp2px(120));
-            view.setTileHeight(0, dp2px(80));
+            /*view.setTileHeight(0, dp2px(80));
             handler.postDelayed(() -> {
             view.smoohOffset(dp2px(1000), 0);
             
             }, 1000);
-            }, 1000);
-        }, 1000);
+            }, 1000);*/
+        }, 2000);
          
     }
 
@@ -89,6 +89,7 @@ public class TileViewActivity extends BaseActivity {
 
     public class ColorTileHolder extends TileView.TileHolder {
         int backgroundColor;
+        double noise;
 
         private final Paint fillPaint = new Paint(Paint.ANTI_ALIAS_FLAG);
         private final Paint borderPaint = new Paint(Paint.ANTI_ALIAS_FLAG);
@@ -109,7 +110,8 @@ public class TileViewActivity extends BaseActivity {
         @Override
         public void onInWindow() {
             super.onInWindow();
-            cachedText = getColumn() + "," + getRow();
+            // cachedText = getColumn() + "," + getRow();
+            cachedText = String.format("%.2f", noise);
             cachedTextColor = luminance(backgroundColor) > 0.40 ? Color.BLACK : Color.WHITE;
         }
 
@@ -182,7 +184,7 @@ public class TileViewActivity extends BaseActivity {
             return Color.HSVToColor(hsv);
         }
 
-        private double noise(double x, double y) {
+        public double noise(double x, double y) {
             int X = (int) Math.floor(x) & 255;
             int Y = (int) Math.floor(y) & 255;
             x -= Math.floor(x);
@@ -210,12 +212,13 @@ public class TileViewActivity extends BaseActivity {
             double v = (h < 4) ? y : x;
             return ((h & 1) == 0 ? u : -u) + ((h & 2) == 0 ? v : -v);
         }
+        
     }
 
     private class RandomAdapter extends TileView.Adapter<ColorTileHolder> {
         @Override
         public int getTopBound() {
-            return -50;
+            return -100;
         }
 
         @Override
@@ -230,19 +233,26 @@ public class TileViewActivity extends BaseActivity {
 
         @Override
         public int getBottomBound() {
-            return 50;
+            return 100;
+        }
+        
+        @Override
+        public int getTileType(int column, int row) {
+            return noise.noise(column * 0.03, row * 0.03) < -0.5 ? -1 : 0;
         }
 
         private final ColorNoise noise = new ColorNoise(12345L);
 
         @Override
         public ColorTileHolder onCreateTileHolder(int type) {
+            if (type == -1) return null;
             return new ColorTileHolder();
         }
 
         @Override
         public void onBindTileHolder(ColorTileHolder holder, int column, int row) {
             holder.backgroundColor = noise.generateColor(column, row);
+            holder.noise = noise.noise(column * 0.03, row * 0.03) / 0.03;
         }
     }
 
