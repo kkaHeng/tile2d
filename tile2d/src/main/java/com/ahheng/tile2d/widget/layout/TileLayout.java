@@ -46,7 +46,6 @@ public class TileLayout extends ViewGroup {
 
         @Override
         public void onTileBind(TileHolder holder, int column, int row) {
-            if (holder == null) return;
             if (holder.itemView.getLayoutParams() == null) {
                 holder.itemView.setLayoutParams(new ViewGroup.LayoutParams(-2, -2));
             }

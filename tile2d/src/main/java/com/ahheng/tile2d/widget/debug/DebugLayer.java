@@ -158,7 +158,7 @@ public class DebugLayer {
         iy += lineHeight;
         canvas.drawText("濒死瓦片：" + dyingTiles.size(), ix, iy, infoPaint);
         iy += lineHeight;
-        canvas.drawText("布局范围：" + model.colStart + "," + model.colEnd + " " + model.rowStart + "," + model.rowEnd, ix, iy, infoPaint);
+        canvas.drawText("布局范围：" + model.colStart + "," + model.rowStart + " " + model.colEnd + "," + model.rowEnd, ix, iy, infoPaint);
     }
 
     public interface Callback {
