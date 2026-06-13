@@ -11,8 +11,12 @@ import android.widget.TextView;
 
 import androidx.annotation.Nullable;
 
+import com.ahheng.tile2d.TileCoreService;
 import com.ahheng.tile2d.TileLayoutModel;
 import com.ahheng.tile2d.widget.layout.TileLayout;
+
+import java.util.HashSet;
+import java.util.Set;
 
 public class TileLayoutActivity extends BaseActivity {
 
@@ -22,6 +26,8 @@ public class TileLayoutActivity extends BaseActivity {
 
     private PerlinNoise2D perlinNoise;
     private ColorGenerator colorGenerator;
+
+    private Set<Long> removedTiles = new HashSet<>();
 
     @Override
     protected void onCreate(@Nullable Bundle savedInstanceState) {
@@ -77,6 +83,12 @@ public class TileLayoutActivity extends BaseActivity {
     }
 
     @Override
+    protected void onMaxModeChanged(boolean maxMode) {
+        super.onMaxModeChanged(maxMode);
+        layout.snap();
+    }
+
+    @Override
     protected void onPlanChanged(int plan) {
         super.onPlanChanged(plan);
         switch (plan) {
@@ -115,8 +127,9 @@ public class TileLayoutActivity extends BaseActivity {
                 showToast("单击了 " + getColumn() + "," + getRow());
             });
             textView.setOnLongClickListener(v -> {
-                showToast("长按了 " + getColumn() + "," + getRow());
                 requestDisallowInterceptTouchEvent(true);
+                removedTiles.add(TileCoreService.getTileId(getColumn(), getRow()));
+                layout.update(getColumn(), getRow());
                 return true;
             });
         }
@@ -135,26 +148,29 @@ public class TileLayoutActivity extends BaseActivity {
     private class RandomAdapter extends TileLayout.Adapter<ColorTileHolder> {
         @Override
         public int getTopBound() {
-            return -100;
+            return isMaxMode() ? Integer.MIN_VALUE : -100;
         }
 
         @Override
         public int getLeftBound() {
-            return -50;
+            return isMaxMode() ? Integer.MIN_VALUE : -50;
         }
 
         @Override
         public int getRightBound() {
-            return 50;
+            return isMaxMode() ? Integer.MAX_VALUE : 50;
         }
 
         @Override
         public int getBottomBound() {
-            return 100;
+            return isMaxMode() ? Integer.MAX_VALUE : 100;
         }
 
         @Override
         public int getTileType(int column, int row) {
+            if (removedTiles.contains(TileCoreService.getTileId(column, row))) {
+                return -1;
+            }
             return perlinNoise.noiseNormalized(column * 0.03, row * 0.03) < 0.3 ? -1 : 0;
         }
 

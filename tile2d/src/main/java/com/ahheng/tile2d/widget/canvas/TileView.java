@@ -150,18 +150,12 @@ public class TileView extends View {
         requestLayout();
     }
 
+    public void snap() {
+    	coreService.snap();
+    }
+
     public TileLayoutModel getLayoutModel() {
-        TileLayoutModel model = new TileLayoutModel();
-        TileLayoutModel originalModel = coreService.getLayoutModel();
-        model.colStart = originalModel.colStart;
-        model.colEnd = originalModel.colEnd;
-        model.rowStart = originalModel.rowStart;
-        model.rowEnd = originalModel.rowEnd;
-        model.offsetX = originalModel.offsetX;
-        model.offsetY = originalModel.offsetY;
-        model.syncTime = originalModel.syncTime;
-        model.layoutTime = originalModel.layoutTime;
-        return model;
+        return coreService.getLayoutModel().newInstance();
     }
 
     @Override
@@ -366,6 +360,18 @@ public class TileView extends View {
 
     public void setTileHeight(int row, int height) {
         coreService.setTileHeight(row, height);
+    }
+
+    public void updateColumn(int column) {
+    	coreService.updateColumn(column);
+    }
+
+    public void updateRow(int row) {
+    	coreService.updateRow(row);
+    }
+
+    public void update(int column, int row) {
+    	coreService.update(column, row);
     }
 
     public Adapter<?> getAdapter() {

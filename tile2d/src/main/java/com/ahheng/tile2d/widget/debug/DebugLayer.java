@@ -28,11 +28,13 @@ public class DebugLayer {
         @Override
         public void doFrame(long frameTimeNanos) {
             frameCount++;
+            collectStats();
             long now = System.nanoTime();
             if (now - lastFpsUpdateTime >= 1_000_000_000L) {
                 actualFps = (int) frameCount;
                 frameCount = 0;
                 lastFpsUpdateTime = now;
+                settleAverages();
                 callback.postInvalidateOnAnimation();
             }
             choreographer.postFrameCallback(this);
@@ -42,7 +44,41 @@ public class DebugLayer {
     private long frameCount;
     private long lastFpsUpdateTime;
     private int actualFps;
-    private long drawStart;
+    private long drawStart = -1;
+    private long drawEnd = -1;
+
+    private long sumDrawTime = 0;
+    private long sumSyncTime = 0;
+    private long sumLayoutTime = 0;
+    private long drawSampleCount = 0;
+    private long syncSampleCount = 0;
+    private long layoutSampleCount = 0;
+
+    private long lastSyncTime = -1;
+    private long lastLayoutTime = -1;
+
+    private String fpsText = "实际帧率：0Hz";
+    private String theoreticalFpsText = "理论帧率：0Hz";
+    private String syncTimeText = "同步耗时：0ns";
+    private String layoutTimeText = "布局耗时：0ns";
+    private String activeTileText = "活跃瓦片：0";
+    private String recycledTileText = "回收瓦片：0";
+    private String dyingTileText = "濒死瓦片：0";
+    private String layoutRangeText = "布局范围：0,0 0,0";
+    private String offsetText = "当前位置：0,0";
+    private String dimensionText = "内容尺寸：0/0";
+
+    private int cachedActiveTileCount = -1;
+    private int cachedRecycledTileCount = -1;
+    private int cachedDyingTileCount = -1;
+    private int cachedColStart;
+    private int cachedRowStart;
+    private int cachedColEnd;
+    private int cachedRowEnd;
+    private float cachedOffsetX;
+    private float cachedOffsetY;
+    private int cachedTotalWidth;
+    private int cachedTotalHeight;
 
     public DebugLayer(Context context, Callback callback) {
         this(new Paint(Paint.ANTI_ALIAS_FLAG) {
@@ -85,27 +121,121 @@ public class DebugLayer {
     }
 
     public void start() {
-    	lastFpsUpdateTime = System.nanoTime();
+        lastFpsUpdateTime = System.nanoTime();
+        lastSyncTime = -1;
+        lastLayoutTime = -1;
+        drawStart = -1;
+        drawEnd = -1;
         choreographer.postFrameCallback(frameCallback);
     }
 
     public void end() {
-    	choreographer.removeFrameCallback(frameCallback);
+        choreographer.removeFrameCallback(frameCallback);
     }
 
     public void startDraw() {
-    	drawStart = System.nanoTime();
+        drawStart = System.nanoTime();
+    }
+
+    private void collectStats() {
+        if (drawEnd > drawStart) {
+            sumDrawTime += (drawEnd - drawStart);
+            drawSampleCount++;
+        }
+
+        TileLayoutModel model = callback.getLayoutModel();
+        long sync = model.syncTime;
+        if (sync != lastSyncTime) {
+            sumSyncTime += sync;
+            syncSampleCount++;
+            lastSyncTime = sync;
+        }
+
+        long layout = model.layoutTime;
+        if (layout != lastLayoutTime) {
+            sumLayoutTime += layout;
+            layoutSampleCount++;
+            lastLayoutTime = layout;
+        }
+
+        int activeTileCount = callback.getActiveTileCount();
+        if (activeTileCount != cachedActiveTileCount) {
+            cachedActiveTileCount = activeTileCount;
+            activeTileText = "活跃瓦片：" + activeTileCount;
+        }
+
+        int recycledTileCount = callback.getRecycledTileCount();
+        if (recycledTileCount != cachedRecycledTileCount) {
+            cachedRecycledTileCount = recycledTileCount;
+            recycledTileText = "回收瓦片：" + recycledTileCount;
+        }
+
+        LongSparseArray<? extends TileCoreService.BaseTileHolder> dyingTiles = callback.getDyingTiles();
+        int dyingTileCount = dyingTiles.size();
+        if (dyingTileCount != cachedDyingTileCount) {
+            cachedDyingTileCount = dyingTileCount;
+            dyingTileText = "濒死瓦片：" + dyingTileCount;
+        }
+
+        if (model.colStart != cachedColStart || model.rowStart != cachedRowStart 
+                || model.colEnd != cachedColEnd || model.rowEnd != cachedRowEnd) {
+            cachedColStart = model.colStart;
+            cachedRowStart = model.rowStart;
+            cachedColEnd = model.colEnd;
+            cachedRowEnd = model.rowEnd;
+            layoutRangeText = "布局范围：" + cachedColStart + "," + cachedRowStart + " " + cachedColEnd + "," + cachedRowEnd;
+        }
+        
+        if (model.offsetX != cachedOffsetX || model.offsetY != cachedOffsetY) {
+            cachedOffsetX = model.offsetX;
+            cachedOffsetY = model.offsetY;
+            offsetText = String.format("当前位置：%.2f,%.2f", cachedOffsetX, cachedOffsetY);
+        }
+        
+        if (model.totalWidth != cachedTotalWidth || model.totalHeight != cachedTotalHeight) {
+            cachedTotalWidth = model.totalWidth;
+            cachedTotalHeight = model.totalHeight;
+            dimensionText = "内容尺寸：" + cachedTotalWidth + "/" + cachedTotalHeight;
+        }
+    }
+
+    private void settleAverages() {
+        fpsText = "实际帧率：" + actualFps + "Hz";
+
+        if (drawSampleCount > 0) {
+            long avgDrawTime = sumDrawTime / drawSampleCount;
+            long avgTheoreticalFps = avgDrawTime > 0 ? 1_000_000_000L / avgDrawTime : 0;
+            theoreticalFpsText = "理论帧率：" + avgTheoreticalFps + "Hz";
+        } else {
+            theoreticalFpsText = "理论帧率：0Hz";
+        }
+
+        if (syncSampleCount > 0) {
+            syncTimeText = "同步耗时：" + (sumSyncTime / syncSampleCount) + "ns";
+        }
+
+        if (layoutSampleCount > 0) {
+            layoutTimeText = "布局耗时：" + (sumLayoutTime / layoutSampleCount) + "ns";
+        }
+
+        sumDrawTime = 0; drawSampleCount = 0;
+        sumSyncTime = 0; syncSampleCount = 0;
+        sumLayoutTime = 0; layoutSampleCount = 0;
     }
 
     public void draw(Canvas canvas) {
+        // 在这里结束统计，确保结果仅包含非测试数据
+        drawEnd = System.nanoTime();
+        
         TileLayoutModel model = callback.getLayoutModel();
         LongSparseArray<? extends TileCoreService.BaseTileHolder> dyingTiles = callback.getDyingTiles();
         Rect bounds = callback.getBounds();
         
+        // 开始绘制濒死区
         canvas.save();
         canvas.translate(bounds.left, bounds.top);
         canvas.translate(model.offsetX, model.offsetY);
-    	for (int i = 0; i < dyingTiles.size(); i++) {
+        for (int i = 0; i < dyingTiles.size(); i++) {
             long id = dyingTiles.keyAt(i);
             int c = TileCoreService.getColumn(id);
             int r = TileCoreService.getRow(id);
@@ -136,29 +266,31 @@ public class DebugLayer {
         }
         canvas.restore();
         canvas.drawRect(bounds, boundPaint);
-        
-        long drawTime = System.nanoTime() - drawStart;
-        long theoreticalFps = drawTime > 0 ? 1_000_000_000L / drawTime : 0;
 
+        // 开始绘制数据面板
         float lineHeight = infoPaint.getTextSize() * 1.25f;
         float ix = infoMargin;
         float iy = infoMargin + infoPaint.getTextSize();
 
-        canvas.drawText("实际帧率：" + actualFps + "Hz", ix, iy, infoPaint);
+        canvas.drawText(fpsText, ix, iy, infoPaint);
         iy += lineHeight;
-        canvas.drawText("理论帧率：" + theoreticalFps + "Hz", ix, iy, infoPaint);
+        canvas.drawText(theoreticalFpsText, ix, iy, infoPaint);
         iy += lineHeight;
-        canvas.drawText("同步耗时：" + model.syncTime + "ns", ix, iy, infoPaint);
+        canvas.drawText(syncTimeText, ix, iy, infoPaint);
         iy += lineHeight;
-        canvas.drawText("布局耗时：" + model.layoutTime + "ns", ix, iy, infoPaint);
+        canvas.drawText(layoutTimeText, ix, iy, infoPaint);
         iy += lineHeight;
-        canvas.drawText("活跃瓦片：" + callback.getActiveTileCount(), ix, iy, infoPaint);
+        canvas.drawText(activeTileText, ix, iy, infoPaint);
         iy += lineHeight;
-        canvas.drawText("回收瓦片：" + callback.getRecycledTileCount(), ix, iy, infoPaint);
+        canvas.drawText(recycledTileText, ix, iy, infoPaint);
         iy += lineHeight;
-        canvas.drawText("濒死瓦片：" + dyingTiles.size(), ix, iy, infoPaint);
+        canvas.drawText(dyingTileText, ix, iy, infoPaint);
         iy += lineHeight;
-        canvas.drawText("布局范围：" + model.colStart + "," + model.rowStart + " " + model.colEnd + "," + model.rowEnd, ix, iy, infoPaint);
+        canvas.drawText(layoutRangeText, ix, iy, infoPaint);
+        iy += lineHeight;
+        canvas.drawText(offsetText, ix, iy, infoPaint);
+        iy += lineHeight;
+        canvas.drawText(dimensionText, ix, iy, infoPaint);
     }
 
     public interface Callback {
@@ -182,7 +314,7 @@ public class DebugLayer {
     }
 
     private static float dpTopx(Resources res, float dp) {
-    	return res.getDisplayMetrics().density * dp;
+        return res.getDisplayMetrics().density * dp;
     }
 
 }

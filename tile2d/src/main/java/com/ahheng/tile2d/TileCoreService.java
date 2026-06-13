@@ -381,6 +381,43 @@ public class TileCoreService <T extends TileCoreService.BaseTileHolder> {
         coreInterface.updateUI();
     }
 
+    public void snap() {
+    	if (isEmpty()) {
+            return;
+        }
+        TileLayoutModel model = getLayoutModel();
+        int left = coreInterface.getLeftBound();
+        int top = coreInterface.getTopBound();
+        int right = coreInterface.getRightBound();
+        int bottom = coreInterface.getBottomBound();
+        
+        if (model.colStart >= left &&
+            model.colEnd <= right &&
+            model.rowStart >= top &&
+            model.rowEnd <= bottom) {
+            return;
+        }
+        
+        int column;
+        int row;
+        if (model.colStart < left) {
+            column = left;
+        } else if (model.colStart > right) {
+            column = right;
+        } else {
+            column = model.colStart;
+        }
+        if (model.rowStart < top) {
+            row = top;
+        } else if (model.rowStart > bottom) {
+            row = bottom;
+        } else {
+            row = model.rowStart;
+        }
+        
+        seek(column, row, 0, 0);
+    }
+
     public void in(int column, int row) {
         long id = getTileId(column, row);
         T tile = dyingTiles.get(id);
@@ -458,19 +495,12 @@ public class TileCoreService <T extends TileCoreService.BaseTileHolder> {
     public void setTileWidth(int column, int width) {
         if (width <= 0) throw new IllegalArgumentException("宽度必须大于 0");
         if (isEmpty()) return;
-        if (column > coreInterface.getRightBound() || column < coreInterface.getLeftBound()) throw new IndexOutOfBoundsException("列索引 " + column + " 不在 [" + coreInterface.getLeftBound() + "," + coreInterface.getRightBound() + "] 范围内");
+        if (column > coreInterface.getRightBound() || column < coreInterface.getLeftBound())
+            throw new IndexOutOfBoundsException("列索引 " + column + " 不在 [" + coreInterface.getLeftBound() + "," + coreInterface.getRightBound() + "] 范围内");
         int old = getTileWidth(column);
         widths.put(column, width);
         layoutService.updateWidth(column, old, width);
-        TileLayoutModel model = getLayoutModel();
-        if (column >= model.colStart && column <= model.colEnd) {
-            int row = model.rowStart;
-            while (row <= model.rowEnd) {
-                reloadTile(column, row);
-                if (row == model.rowEnd) break;
-                row++;
-            }
-        }
+    
         int dyingLeft = getDyingLeft();
         int dyingRight = getDyingRight();
         if (column >= dyingLeft && column <= dyingRight) {
@@ -481,26 +511,19 @@ public class TileCoreService <T extends TileCoreService.BaseTileHolder> {
                 if (row == end) break;
                 row++;
             }
+            coreInterface.updateUI();
         }
-        coreInterface.updateUI();
     }
-
+    
     public void setTileHeight(int row, int height) {
         if (height <= 0) throw new IllegalArgumentException("高度必须大于 0");
         if (isEmpty()) return;
-        if (row > coreInterface.getBottomBound() || row < coreInterface.getTopBound()) throw new IndexOutOfBoundsException("行索引 " + row + " 不在 [" + coreInterface.getTopBound() + "," + coreInterface.getBottomBound() + "] 范围内");
+        if (row > coreInterface.getBottomBound() || row < coreInterface.getTopBound())
+            throw new IndexOutOfBoundsException("行索引 " + row + " 不在 [" + coreInterface.getTopBound() + "," + coreInterface.getBottomBound() + "] 范围内");
         int old = getTileHeight(row);
         heights.put(row, height);
         layoutService.updateHeight(row, old, height);
-        TileLayoutModel model = getLayoutModel();
-        if (row >= model.rowStart && row <= model.rowEnd) {
-            int column = model.colStart;
-            while (column <= model.colEnd) {
-                reloadTile(column, row);
-                if (column == model.colEnd) break;
-                column++;
-            }
-        }
+    
         int dyingTop = getDyingTop();
         int dyingBottom = getDyingBottom();
         if (row >= dyingTop && row <= dyingBottom) {
@@ -511,8 +534,75 @@ public class TileCoreService <T extends TileCoreService.BaseTileHolder> {
                 if (column == end) break;
                 column++;
             }
+            coreInterface.updateUI();
         }
-        coreInterface.updateUI();
+    }
+
+    public void update(int column, int row) {
+        if (column >= getDyingLeft() &&
+            column <= getDyingRight() &&
+            row >= getDyingTop() &&
+            row <= getDyingBottom()) {
+            rebuildTile(column, row);
+            coreInterface.updateUI();
+        }
+    }
+
+    public void updateColumn(int column) {
+        if (column >= getDyingLeft() && column <= getDyingRight()) {
+            int row = getDyingTop();
+            int end = getDyingBottom();
+            while (row <= end) {
+                rebuildTile(column, row);
+                if (row == end) break;
+                row++;
+            }
+            coreInterface.updateUI();
+        }
+    }
+
+    public void updateRow(int row) {
+        if (row >= getDyingTop() && row <= getDyingBottom()) {
+            int column = getDyingLeft();
+            int end = getDyingRight();
+            while (column <= end) {
+                rebuildTile(column, row);
+                if (column == end) break;
+                column++;
+            }
+            coreInterface.updateUI();
+        }
+    }
+    
+    private void rebuildTile(int column, int row) {
+        long id = getTileId(column, row);
+        T tile = activeTiles.get(id);
+        if (tile != null) {
+            activeTiles.remove(id);
+            tile.onOutWindow();
+            coreInterface.onTileOut(tile, column, row);
+            recycle(tile);
+            in(column, row);
+            return;
+        }
+    
+        tile = dyingTiles.get(id);
+        if (tile != null) {
+            dyingTiles.remove(id);
+            recycle(tile);
+    
+            int type = coreInterface.getTileType(column, row);
+            T newTile = obtain(type);
+            if (newTile != null) {
+                ((BaseTileHolder) newTile).column = column;
+                ((BaseTileHolder) newTile).row = row;
+                ((BaseTileHolder) newTile).width = getTileWidth(column);
+                ((BaseTileHolder) newTile).height = getTileHeight(row);
+                coreInterface.onBindTileHolder(newTile, column, row);
+                coreInterface.onTileBind(newTile, column, row);
+                dyingTiles.put(id, newTile);
+            }
+        }
     }
 
     private void reloadTile(int column, int row) {

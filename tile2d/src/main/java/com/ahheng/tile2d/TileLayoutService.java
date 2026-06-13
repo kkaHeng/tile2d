@@ -24,15 +24,9 @@ public class TileLayoutService {
         this.platform = service;
     }
 
-    public TileLayoutModel sync(float dx, float dy) {
+    public boolean sync(float dx, float dy) {
         syncTime = 0;
         layoutTime = 0;
-        if (dx == 0 && dy == 0) {
-            return getLayoutModel();
-        }
-        if (isEmpty()) {
-            return getLayoutModel();
-        }
         long t = System.nanoTime();
 
         int colStart = this.colStart;
@@ -50,11 +44,19 @@ public class TileLayoutService {
         int topBound = platform.getTopBound();
         int rightBound = platform.getRightBound();
         int bottomBound = platform.getBottomBound();
+        
+        if (colStart > rightBound ||
+            rowStart > bottomBound ||
+            colEnd < leftBound ||
+            rowEnd < topBound) {
+            // 窗口状态不合法，避免向外传递不合法的坐标，直接短路
+            return false;
+        }
 
         // 水平同步到 [-tileWidth, 0]
         if (platform.isHorizontalScrollEnabled()) {
             // 起始锚点
-            if (offsetX < 0 && totalWidth + offsetX < windowWidth && colEnd == rightBound) {
+            if (offsetX <= 0 && totalWidth + offsetX < windowWidth && colEnd == rightBound) {
                 // 右侧有空白
                 float end = windowWidth - (totalWidth + offsetX);
                 offsetX += end;
@@ -94,7 +96,7 @@ public class TileLayoutService {
         // 垂直同步到 [-tileHeight, 0]
         if (platform.isVerticalScrollEnabled()) {
             // 起始锚点
-            if (offsetY < 0 && totalHeight + offsetY < windowHeight && rowEnd == bottomBound) {
+            if (offsetY <= 0 && totalHeight + offsetY < windowHeight && rowEnd == bottomBound) {
                 // 底部有空白
                 float end = windowHeight - (totalHeight + offsetY);
                 offsetY += end;
@@ -144,15 +146,14 @@ public class TileLayoutService {
         this.offsetY = offsetY;
         this.totalWidth = totalWidth;
         this.totalHeight = totalHeight;
-        layoutTime = System.nanoTime() - t;
-        return getLayoutModel();
+        this.layoutTime = System.nanoTime() - t;
+        return true;
     }
 
-    public TileLayoutModel seek(int column, int row, float offsetX, float offsetY) {
-        if (isEmpty()) {
-            return getLayoutModel();
+    public boolean seek(int column, int row, float offsetX, float offsetY) {
+        if (isEmpty() || !checkLocationInBounds(column, row)) {
+            return false;
         }
-        checkLocationInBounds(column, row);
         int rightBound = platform.getRightBound();
         int bottomBound = platform.getBottomBound();
         int windowWidth = platform.getWindowWidth();
@@ -177,7 +178,10 @@ public class TileLayoutService {
                 } else {
                     if (r == rowEnd) break;
                 }
-                if (r == bottomBound) break;
+                if (r == bottomBound) {
+                    rowEnd = r;
+                    break;
+                }
                 r++;
             }
 
@@ -186,7 +190,12 @@ public class TileLayoutService {
                 colEnd = c;
                 break;
             }
-            if (c == rightBound) break;
+            if (c == rightBound) {
+                // 已到达尽头
+                // 避坑：未更新 colEnd 导致在右下边界处出现 totalWidth、totalHeight 与实际不同步的问题
+                colEnd = c;
+                break;
+            }
             c++;
         }
 
@@ -198,7 +207,8 @@ public class TileLayoutService {
         this.totalHeight = totalHeight - (int) offsetY;
         this.colEnd = colEnd;
         this.rowEnd = rowEnd;
-        return sync(offsetX, offsetY);
+        sync(offsetX, offsetY);
+        return true;
     }
 
     public void updateWidth(int column, int oldWidth, int newWidth) {
@@ -286,14 +296,14 @@ public class TileLayoutService {
                 && row >= platform.getTopBound() && row <= platform.getBottomBound();
     }
 
-    public void checkLocationInBounds(int column, int row) {
-        int left = platform.getLeftBound();
-        int top = platform.getTopBound();
-        int right = platform.getRightBound();
-        int bottom = platform.getBottomBound();
-        if (column < left || column > right || row < top || row > bottom) {
-            throw new IllegalArgumentException("(" + column + "," + row + ") 不在边界 (" + left + "," + top + "," + right + "," + bottom + ") 范围内");
+    public boolean checkLocationInBounds(int column, int row) {
+        if (column < platform.getLeftBound() ||
+            column > platform.getRightBound() ||
+            row < platform.getTopBound() ||
+            row > platform.getBottomBound()) {
+            return false;
         }
+        return true;
     }
 
     public boolean isEmpty() {
@@ -309,11 +319,11 @@ public class TileLayoutService {
     }
 
     public boolean isAtRightBound() {
-        return colEnd == platform.getRightBound() && (int) (totalWidth + offsetX) == platform.getWindowWidth();
+        return colEnd == platform.getRightBound() && totalWidth + offsetX == platform.getWindowWidth();
     }
 
     public boolean isAtBottomBound() {
-        return rowEnd == platform.getBottomBound() && (int) (totalHeight + offsetY) == platform.getWindowHeight();
+        return rowEnd == platform.getBottomBound() && totalHeight + offsetY == platform.getWindowHeight();
     }
 
     public void reset() {

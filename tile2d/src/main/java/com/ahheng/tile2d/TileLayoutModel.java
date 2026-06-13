@@ -30,4 +30,17 @@ public class TileLayoutModel {
         layoutTime = 0;
     }
 
+    public TileLayoutModel newInstance() {
+    	TileLayoutModel model = new TileLayoutModel();
+        model.colStart = colStart;
+        model.colEnd = colEnd;
+        model.rowStart = rowStart;
+        model.rowEnd = rowEnd;
+        model.offsetX = offsetX;
+        model.offsetY = offsetY;
+        model.syncTime = syncTime;
+        model.layoutTime = layoutTime;
+        return model;
+    }
+
 }
