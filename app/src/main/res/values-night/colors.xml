@@ -1,4 +1,68 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
+    <!-- Primary -->
+    <color name="md_primary">#FFDF9E</color>
+    <color name="md_on_primary">#442C00</color>
+    <color name="md_primary_container">#614000</color>
+    <color name="md_on_primary_container">#FDDDA6</color>
 
+    <!-- Secondary -->
+    <color name="md_secondary">#DBC3A0</color>
+    <color name="md_on_secondary">#3D2E15</color>
+    <color name="md_secondary_container">#554429</color>
+    <color name="md_on_secondary_container">#F8DFBB</color>
+
+    <!-- Tertiary -->
+    <color name="md_tertiary">#B3CCBB</color>
+    <color name="md_on_tertiary">#1F352A</color>
+    <color name="md_tertiary_container">#374B3F</color>
+    <color name="md_on_tertiary_container">#CFE9D8</color>
+
+    <!-- Error -->
+    <color name="md_error">#FFB4AB</color>
+    <color name="md_on_error">#690005</color>
+    <color name="md_error_container">#93000A</color>
+    <color name="md_on_error_container">#FFDAD6</color>
+
+    <!-- Background & Surface -->
+    <color name="md_background">#1F1B16</color>
+    <color name="md_on_background">#EAE1D9</color>
+    <color name="md_surface">#1F1B16</color>
+    <color name="md_on_surface">#EAE1D9</color>
+    <color name="md_surface_variant">#4F4539</color>
+    <color name="md_on_surface_variant">#D3C4B4</color>
+
+    <!-- Surface Containers -->
+    <color name="md_surface_dim">#1F1B16</color>
+    <color name="md_surface_bright">#453E37</color>
+    <color name="md_surface_container_lowest">#1A1611</color>
+    <color name="md_surface_container_low">#231F1A</color>
+    <color name="md_surface_container">#28241E</color>
+    <color name="md_surface_container_high">#332E28</color>
+    <color name="md_surface_container_highest">#3E3932</color>
+
+    <!-- Outline -->
+    <color name="md_outline">#9C8E7F</color>
+    <color name="md_outline_variant">#4F4539</color>
+
+    <!-- Inverse -->
+    <color name="md_inverse_surface">#EAE1D9</color>
+    <color name="md_inverse_on_surface">#362F27</color>
+    <color name="md_inverse_primary">#7D570F</color>
+
+    <!-- Fixed Colors (same as light for brand consistency) -->
+    <color name="md_primary_fixed">#FDDDA6</color>
+    <color name="md_on_primary_fixed">#281800</color>
+    <color name="md_primary_fixed_dim">#EAC27D</color>
+    <color name="md_on_primary_fixed_variant">#614000</color>
+
+    <color name="md_secondary_fixed">#F8DFBB</color>
+    <color name="md_on_secondary_fixed">#261904</color>
+    <color name="md_secondary_fixed_dim">#DBC3A0</color>
+    <color name="md_on_secondary_fixed_variant">#554429</color>
+
+    <color name="md_tertiary_fixed">#CFE9D8</color>
+    <color name="md_on_tertiary_fixed">#0C1E14</color>
+    <color name="md_tertiary_fixed_dim">#B3CCBB</color>
+    <color name="md_on_tertiary_fixed_variant">#374B3F</color>
 </resources>

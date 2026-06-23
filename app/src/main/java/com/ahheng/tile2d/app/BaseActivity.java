@@ -23,6 +23,14 @@ public abstract class BaseActivity extends AppCompatActivity {
     private boolean maxMode = false;
     private int plan = PLAN_TEXT;
 
+    public boolean hasMaxMode() {
+        return true;
+    }
+
+    public boolean hasPlanMode() {
+        return true;
+    }
+
     public boolean isDebugMode() {
         return debugMode;
     }
@@ -62,11 +70,15 @@ public abstract class BaseActivity extends AppCompatActivity {
         menu.add(Menu.NONE, MENU_ID_DEBUG, Menu.NONE, "Debug模式")
                 .setCheckable(true)
                 .setShowAsAction(MenuItem.SHOW_AS_ACTION_NEVER);
-        menu.add(Menu.NONE, MENU_ID_MAX, Menu.NONE, "伪无限模式")
-                .setCheckable(true)
-                .setShowAsAction(MenuItem.SHOW_AS_ACTION_NEVER);
-        menu.add(Menu.NONE, MENU_ID_PLAN, Menu.NONE, "切换方案")
-                .setShowAsAction(MenuItem.SHOW_AS_ACTION_NEVER);
+        if (hasMaxMode()) {
+            menu.add(Menu.NONE, MENU_ID_MAX, Menu.NONE, "伪无限模式")
+                    .setCheckable(true)
+                    .setShowAsAction(MenuItem.SHOW_AS_ACTION_NEVER);
+        }
+        if (hasPlanMode()) {
+            menu.add(Menu.NONE, MENU_ID_PLAN, Menu.NONE, "切换方案")
+                    .setShowAsAction(MenuItem.SHOW_AS_ACTION_NEVER);
+        }
         return true;
     }
 
@@ -74,8 +86,10 @@ public abstract class BaseActivity extends AppCompatActivity {
     public boolean onPrepareOptionsMenu(Menu menu) {
         MenuItem item = menu.findItem(MENU_ID_DEBUG);
         if (item != null) item.setChecked(debugMode);
-        item = menu.findItem(MENU_ID_MAX);
-        if (item != null) item.setChecked(maxMode);
+        if (hasMaxMode()) {
+            item = menu.findItem(MENU_ID_MAX);
+            if (item != null) item.setChecked(maxMode);
+        }
         return super.onPrepareOptionsMenu(menu);
     }
 

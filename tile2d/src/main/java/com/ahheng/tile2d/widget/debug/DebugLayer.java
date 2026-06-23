@@ -14,6 +14,7 @@ import android.view.Choreographer;
 import com.ahheng.tile2d.TileCoreService;
 import com.ahheng.tile2d.TileLayoutModel;
 
+import java.util.Locale;
 import java.util.Objects;
 
 public class DebugLayer {
@@ -86,8 +87,8 @@ public class DebugLayer {
                 Resources r = context.getResources();
                 setColor(0xff333333);
                 setStyle(Style.STROKE);
-                setStrokeWidth(dpTopx(r, 1));
-                setShadowLayer(dpTopx(r, 2), 0, 0, 0xffefefef);
+                setStrokeWidth(dpToPx(r, 1));
+                setShadowLayer(dpToPx(r, 2), 0, 0, 0xffefefef);
             }
         },
         new Paint(Paint.ANTI_ALIAS_FLAG) {
@@ -95,8 +96,8 @@ public class DebugLayer {
                 Resources r = context.getResources();
                 setColor(0xffefefef);
                 setTypeface(Typeface.create(Typeface.MONOSPACE, Typeface.BOLD));
-                setTextSize(dpTopx(r, 12));
-                setShadowLayer(dpTopx(r, 3), 0, 0, 0xff333333);
+                setTextSize(dpToPx(r, 12));
+                setShadowLayer(dpToPx(r, 3), 0, 0, 0xff333333);
             }
         }, 
         new Paint(Paint.ANTI_ALIAS_FLAG) {
@@ -108,7 +109,7 @@ public class DebugLayer {
                 int c = r.getColor(v.resourceId);
                 setColor(Color.argb(128, Color.red(c), Color.green(c), Color.blue(c)));
             }
-        }, dpTopx(context.getResources(), 4), callback);
+        }, dpToPx(context.getResources(), 4), callback);
     }
 
     public DebugLayer(Paint boundPaint, Paint infoPaint, Paint dyingOverlayPaint, float infoMargin, Callback callback) {
@@ -144,14 +145,14 @@ public class DebugLayer {
         }
 
         TileLayoutModel model = callback.getLayoutModel();
-        long sync = model.syncTime;
+        long sync = callback.getSyncTime();
         if (sync != lastSyncTime) {
             sumSyncTime += sync;
             syncSampleCount++;
             lastSyncTime = sync;
         }
 
-        long layout = model.layoutTime;
+        long layout = callback.getLayoutTime();
         if (layout != lastLayoutTime) {
             sumLayoutTime += layout;
             layoutSampleCount++;
@@ -189,7 +190,7 @@ public class DebugLayer {
         if (model.offsetX != cachedOffsetX || model.offsetY != cachedOffsetY) {
             cachedOffsetX = model.offsetX;
             cachedOffsetY = model.offsetY;
-            offsetText = String.format("当前位置：%.2f,%.2f", cachedOffsetX, cachedOffsetY);
+            offsetText = String.format(Locale.getDefault(), "当前位置：%.2f,%.2f", cachedOffsetX, cachedOffsetY);
         }
         
         if (model.totalWidth != cachedTotalWidth || model.totalHeight != cachedTotalHeight) {
@@ -310,10 +311,14 @@ public class DebugLayer {
         LongSparseArray<? extends TileCoreService.BaseTileHolder> getDyingTiles();
         
         void postInvalidateOnAnimation();
+
+        long getSyncTime();
+
+        long getLayoutTime();
         
     }
 
-    private static float dpTopx(Resources res, float dp) {
+    private static float dpToPx(Resources res, float dp) {
         return res.getDisplayMetrics().density * dp;
     }
 

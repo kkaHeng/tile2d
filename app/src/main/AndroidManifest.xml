@@ -13,11 +13,15 @@
         <activity
             android:name=".TileViewActivity"
             android:exported="true"
-            android:label="TileView Demo"/>
+            android:label="瓦片画板 Demo"/>
         <activity
             android:name=".TileLayoutActivity"
             android:exported="true"
-            android:label="TileLayout Demo"/>
+            android:label="瓦片布局 Demo"/>
+        <activity
+            android:name=".TableActivity"
+            android:exported="true"
+            android:label="数据表 Demo"/>
     </application>
     
 </manifest>

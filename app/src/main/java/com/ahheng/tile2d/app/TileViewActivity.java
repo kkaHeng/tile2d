@@ -14,6 +14,7 @@ import com.ahheng.tile2d.TileLayoutModel;
 import com.ahheng.tile2d.widget.canvas.TileView;
 
 import java.util.HashSet;
+import java.util.Locale;
 import java.util.Set;
 
 public class TileViewActivity extends BaseActivity {
@@ -25,7 +26,7 @@ public class TileViewActivity extends BaseActivity {
     private PerlinNoise2D perlinNoise;
     private ColorGenerator colorGenerator;
 
-    private Set<Long> removedTiles = new HashSet<>();
+    private final Set<Long> removedTiles = new HashSet<>();
 
     @Override
     protected void onCreate(@Nullable Bundle savedInstanceState) {
@@ -120,7 +121,7 @@ public class TileViewActivity extends BaseActivity {
         @Override
         public void onInWindow() {
             super.onInWindow();
-            cachedText = String.format("%.2f", noise);
+            cachedText = String.format(Locale.getDefault(), "%.2f", noise);
             cachedTextColor = luminance(backgroundColor) > 0.40 ? Color.BLACK : Color.WHITE;
         }
 
@@ -169,7 +170,7 @@ public class TileViewActivity extends BaseActivity {
         }
     }
 
-    private class RandomAdapter extends TileView.Adapter<ColorTileHolder> {
+    private class RandomAdapter extends TileView.Adapter {
         @Override
         public int getTopBound() {
             return isMaxMode() ? Integer.MIN_VALUE : -100;
@@ -199,16 +200,17 @@ public class TileViewActivity extends BaseActivity {
         }
 
         @Override
-        public ColorTileHolder onCreateTileHolder(int type) {
+        public TileView.TileHolder onCreateTileHolder(int type) {
             if (type == -1) return null;
             return new ColorTileHolder();
         }
 
         @Override
-        public void onBindTileHolder(ColorTileHolder holder, int column, int row) {
+        public void onBindTileHolder(TileView.TileHolder holder, int column, int row) {
+            ColorTileHolder colorTileHolder = (ColorTileHolder) holder;
             double noise = perlinNoise.noiseNormalized(column * 0.03, row * 0.03);
-            holder.backgroundColor = colorGenerator.getColor((noise - 0.03) / 0.97);
-            holder.noise = noise / 0.03;
+            colorTileHolder.backgroundColor = colorGenerator.getColor((noise - 0.03) / 0.97);
+            colorTileHolder.noise = noise / 0.03;
         }
     }
 

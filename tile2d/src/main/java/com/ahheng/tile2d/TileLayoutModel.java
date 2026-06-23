@@ -11,10 +11,6 @@ public class TileLayoutModel {
     public float offsetY;
     public int totalWidth;
     public int totalHeight;
-    
-    // 调试数据
-    public long syncTime;
-    public long layoutTime;
 
     public void reset() {
     	colStart = 
@@ -25,9 +21,6 @@ public class TileLayoutModel {
         offsetX = offsetY = 0;
         
         totalWidth = totalHeight = 0;
-        
-        syncTime =
-        layoutTime = 0;
     }
 
     public TileLayoutModel newInstance() {
@@ -38,8 +31,6 @@ public class TileLayoutModel {
         model.rowEnd = rowEnd;
         model.offsetX = offsetX;
         model.offsetY = offsetY;
-        model.syncTime = syncTime;
-        model.layoutTime = layoutTime;
         return model;
     }
 

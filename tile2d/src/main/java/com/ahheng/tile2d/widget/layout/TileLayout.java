@@ -20,7 +20,7 @@ import com.ahheng.tile2d.widget.debug.DebugLayer;
 public class TileLayout extends ViewGroup {
 
     private TileCoreService<TileHolder> coreService;
-    private Adapter<TileHolder> adapter;
+    private Adapter adapter;
 
     private final TileCoreService.CoreInterface<TileHolder> coreInterface = new TileCoreService.CoreInterface<TileHolder>() {
         @Override
@@ -92,6 +92,7 @@ public class TileLayout extends ViewGroup {
     };
 
     private DebugLayer debugLayer;
+    private boolean debugMode;
 
     private boolean overrideInitLocation = false;
     private int initLocationColumn;
@@ -195,13 +196,12 @@ public class TileLayout extends ViewGroup {
     }
 
     public boolean isDebugMode() {
-        return coreService.isDebugMode();
+        return debugMode;
     }
 
     public void setDebugMode(boolean enabled) {
-        if (coreService.isDebugMode() == enabled) return;
-        coreService.setDebugMode(enabled);
-
+        if (debugMode == enabled) return;
+        debugMode = enabled;
         if (enabled) {
             debugLayer = new DebugLayer(getContext(), new DebugLayer.Callback() {
                 @Override
@@ -240,6 +240,16 @@ public class TileLayout extends ViewGroup {
                 public void postInvalidateOnAnimation() {
                     TileLayout.this.postInvalidateOnAnimation();
                 }
+
+                @Override
+                public long getSyncTime() {
+                    return coreService.getSyncTime();
+                }
+
+                @Override
+                public long getLayoutTime() {
+                    return coreService.getLayoutTime();
+                }
             });
             if (isAttachedToWindow()) {
                 debugLayer.start();
@@ -271,9 +281,9 @@ public class TileLayout extends ViewGroup {
 
     @Override
     protected void dispatchDraw(Canvas canvas) {
-        if (coreService.isDebugMode() && debugLayer != null) debugLayer.startDraw();
+        if (debugMode && debugLayer != null) debugLayer.startDraw();
         super.dispatchDraw(canvas);
-        if (coreService.isDebugMode() && debugLayer != null) {
+        if (debugMode && debugLayer != null) {
             debugLayer.draw(canvas);
         }
     }
@@ -285,7 +295,7 @@ public class TileLayout extends ViewGroup {
         coreService.sync(dx, dy);
     }
 
-    public void smoohOffset(float dx, float dy) {
+    public void smoothOffset(float dx, float dy) {
     	if (isEmpty()) {
             return;
         }
@@ -357,7 +367,7 @@ public class TileLayout extends ViewGroup {
     	coreService.update(column, row);
     }
 
-    public Adapter<?> getAdapter() {
+    public Adapter getAdapter() {
         return adapter;
     }
 
@@ -421,7 +431,7 @@ public class TileLayout extends ViewGroup {
         return coreService.isInteractingWithView();
     }
 
-    public static abstract class Adapter <T extends TileHolder> extends TileAdapter<T> {
+    public static abstract class Adapter extends TileAdapter<TileHolder> {
     }
 
     public static class TileHolder extends TileCoreService.BaseTileHolder {

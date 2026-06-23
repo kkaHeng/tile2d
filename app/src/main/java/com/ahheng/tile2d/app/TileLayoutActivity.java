@@ -16,6 +16,7 @@ import com.ahheng.tile2d.TileLayoutModel;
 import com.ahheng.tile2d.widget.layout.TileLayout;
 
 import java.util.HashSet;
+import java.util.Locale;
 import java.util.Set;
 
 public class TileLayoutActivity extends BaseActivity {
@@ -27,7 +28,7 @@ public class TileLayoutActivity extends BaseActivity {
     private PerlinNoise2D perlinNoise;
     private ColorGenerator colorGenerator;
 
-    private Set<Long> removedTiles = new HashSet<>();
+    private final Set<Long> removedTiles = new HashSet<>();
 
     @Override
     protected void onCreate(@Nullable Bundle savedInstanceState) {
@@ -101,7 +102,7 @@ public class TileLayoutActivity extends BaseActivity {
         int backgroundColor;
         double noise;
 
-        private TextView textView;
+        private final TextView textView;
 
         public ColorTileHolder() {
             super(new TextView(TileLayoutActivity.this));
@@ -117,7 +118,7 @@ public class TileLayoutActivity extends BaseActivity {
             bg.setStroke((int) Math.ceil(dpTopx(0.5f)), Color.GRAY);
             textView.setBackground(bg);
             if (displayText) {
-                textView.setText(String.format("%.2f", noise));
+                textView.setText(String.format(Locale.getDefault(), "%.2f", noise));
                 textView.setTextColor(luminance(backgroundColor) > 0.40 ? Color.BLACK : Color.WHITE);
             } else {
                 textView.setText("");
@@ -145,7 +146,7 @@ public class TileLayoutActivity extends BaseActivity {
         }
     }
 
-    private class RandomAdapter extends TileLayout.Adapter<ColorTileHolder> {
+    private class RandomAdapter extends TileLayout.Adapter {
         @Override
         public int getTopBound() {
             return isMaxMode() ? Integer.MIN_VALUE : -100;
@@ -175,17 +176,18 @@ public class TileLayoutActivity extends BaseActivity {
         }
 
         @Override
-        public ColorTileHolder onCreateTileHolder(int type) {
+        public TileLayout.TileHolder onCreateTileHolder(int type) {
             if (type == -1) return null;
             return new ColorTileHolder();
         }
 
         @Override
-        public void onBindTileHolder(ColorTileHolder holder, int column, int row) {
+        public void onBindTileHolder(TileLayout.TileHolder holder, int column, int row) {
+            ColorTileHolder colorTileHolder = (ColorTileHolder) holder;
             double noise = perlinNoise.noiseNormalized(column * 0.03, row * 0.03);
-            holder.backgroundColor = colorGenerator.getColor((noise - 0.03) / 0.97);
-            holder.noise = noise / 0.03;
-            holder.bind();
+            colorTileHolder.backgroundColor = colorGenerator.getColor((noise - 0.03) / 0.97);
+            colorTileHolder.noise = noise / 0.03;
+            colorTileHolder.bind();
         }
     }
 }

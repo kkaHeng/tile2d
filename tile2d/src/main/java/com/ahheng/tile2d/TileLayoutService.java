@@ -15,9 +15,6 @@ public class TileLayoutService {
     private float offsetY;
     private int totalWidth;
     private int totalHeight;
-    
-    private long syncTime;
-    private long layoutTime;
 
     public TileLayoutService(PlatformService service) {
         this.layoutModel = new TileLayoutModel();
@@ -25,9 +22,6 @@ public class TileLayoutService {
     }
 
     public boolean sync(float dx, float dy) {
-        syncTime = 0;
-        layoutTime = 0;
-        long t = System.nanoTime();
 
         int colStart = this.colStart;
         int rowStart = this.rowStart;
@@ -133,9 +127,6 @@ public class TileLayoutService {
                 rowEnd--;
             }
         }
-        syncTime = System.nanoTime() - t;
-        t = System.nanoTime();
-
         platform.beforeDiff(colStart, rowStart, colEnd, rowEnd);
         diff(this.colStart, this.rowStart, this.colEnd, this.rowEnd, colStart, rowStart, colEnd, rowEnd);
         this.colStart = colStart;
@@ -146,7 +137,6 @@ public class TileLayoutService {
         this.offsetY = offsetY;
         this.totalWidth = totalWidth;
         this.totalHeight = totalHeight;
-        this.layoutTime = System.nanoTime() - t;
         return true;
     }
 
@@ -286,24 +276,14 @@ public class TileLayoutService {
         layoutModel.offsetY = offsetY;
         layoutModel.totalWidth = totalWidth;
         layoutModel.totalHeight = totalHeight;
-        layoutModel.syncTime = syncTime;
-        layoutModel.layoutTime = layoutTime;
         return this.layoutModel;
     }
 
-    public boolean contains(int column, int row) {
-        return column >= platform.getLeftBound() && column <= platform.getRightBound()
-                && row >= platform.getTopBound() && row <= platform.getBottomBound();
-    }
-
     public boolean checkLocationInBounds(int column, int row) {
-        if (column < platform.getLeftBound() ||
-            column > platform.getRightBound() ||
-            row < platform.getTopBound() ||
-            row > platform.getBottomBound()) {
-            return false;
-        }
-        return true;
+        return column >= platform.getLeftBound() &&
+                column <= platform.getRightBound() &&
+                row >= platform.getTopBound() &&
+                row <= platform.getBottomBound();
     }
 
     public boolean isEmpty() {

@@ -20,7 +20,7 @@ import com.ahheng.tile2d.widget.debug.DebugLayer;
 public class TileView extends View {
 
     private TileCoreService<TileHolder> coreService;
-    private Adapter<TileHolder> adapter;
+    private Adapter adapter;
 
     private final TileCoreService.CoreInterface<TileHolder> coreInterface = new TileCoreService.CoreInterface<TileHolder>() {
         
@@ -84,6 +84,7 @@ public class TileView extends View {
     };
 
     private DebugLayer debugLayer;
+    private boolean debugMode;
 
     private boolean overrideInitLocation = false;
     private int initLocationColumn;
@@ -129,7 +130,7 @@ public class TileView extends View {
         coreService.sync(dx, dy);
     }
 
-    public void smoohOffset(float dx, float dy) {
+    public void smoothOffset(float dx, float dy) {
     	if (isEmpty()) {
             return;
         }
@@ -181,11 +182,11 @@ public class TileView extends View {
     @Override
     protected void onDraw(Canvas canvas) {
         super.onDraw(canvas);
-        if (coreService.isDebugMode() && debugLayer != null) debugLayer.startDraw();
+        if (debugMode && debugLayer != null) debugLayer.startDraw();
         TileLayoutModel model = coreService.getLayoutModel();
         if (model.colStart <= model.colEnd && model.rowStart <= model.rowEnd) {
             canvas.save();
-            if (!coreService.isDebugMode()) canvas.clipRect(coreService.getBounds());
+            if (!debugMode) canvas.clipRect(coreService.getBounds());
             canvas.translate(getPaddingLeft(), getPaddingTop());
             canvas.translate(model.offsetX, model.offsetY);
             float x = 0;
@@ -214,7 +215,7 @@ public class TileView extends View {
             }
             canvas.restore();
         }
-        if (coreService.isDebugMode() && debugLayer != null) {
+        if (debugMode && debugLayer != null) {
             debugLayer.draw(canvas);
         }
     }
@@ -261,8 +262,8 @@ public class TileView extends View {
             boolean isScrolling = coreService.isInteractingWithView();
             boolean intercepted = !disallowIntercept && isScrolling;
 
+            MotionEvent tileEvent = toTileEvent(event);
             if (intercepted || action == MotionEvent.ACTION_CANCEL) {
-                MotionEvent tileEvent = toTileEvent(event);
                 tileEvent.setAction(MotionEvent.ACTION_CANCEL);
                 touchTarget.onTouchEvent(tileEvent);
                 tileEvent.recycle();
@@ -270,7 +271,6 @@ public class TileView extends View {
                 removeLongPress();
                 isClickCandidate = false;
             } else {
-                MotionEvent tileEvent = toTileEvent(event);
                 touchTarget.onTouchEvent(tileEvent);
                 tileEvent.recycle();
 
@@ -374,7 +374,7 @@ public class TileView extends View {
     	coreService.update(column, row);
     }
 
-    public Adapter<?> getAdapter() {
+    public Adapter getAdapter() {
         return adapter;
     }
 
@@ -441,34 +441,34 @@ public class TileView extends View {
     }
 
     public boolean isDebugMode() {
-        return coreService.isDebugMode();
+        return debugMode;
     }
 
     public void setDebugMode(boolean enabled) {
-        if (coreService.isDebugMode() == enabled) return;
-        coreService.setDebugMode(enabled);
-        if (coreService.isDebugMode()) {
+        if (debugMode == enabled) return;
+        debugMode = enabled;
+        if (debugMode) {
             debugLayer = new DebugLayer(getContext(), new DebugLayer.Callback() {
                 @Override
                 public int getActiveTileCount() {
                     return coreService.getActiveTileCount();
                 }
-                
+
                 @Override
                 public int getRecycledTileCount() {
                     return coreService.getRecycledTileCount();
                 }
-                
+
                 @Override
                 public int getTileWidth(int column) {
                     return coreService.getTileWidth(column);
                 }
-                
+
                 @Override
                 public int getTileHeight(int row) {
                     return coreService.getTileHeight(row);
                 }
-                
+
                 @Override
                 public Rect getBounds() {
                     return coreService.getBounds();
@@ -484,6 +484,16 @@ public class TileView extends View {
                 @Override
                 public void postInvalidateOnAnimation() {
                     TileView.this.postInvalidateOnAnimation();
+                }
+
+                @Override
+                public long getSyncTime() {
+                    return coreService.getSyncTime();
+                }
+
+                @Override
+                public long getLayoutTime() {
+                    return coreService.getLayoutTime();
                 }
             });
             if (isAttachedToWindow()) {
@@ -554,7 +564,7 @@ public class TileView extends View {
         }
     }
 
-    public static abstract class Adapter<T extends TileHolder> extends TileAdapter<T> {
+    public static abstract class Adapter extends TileAdapter<TileHolder> {
     }
 
     public static class TileHolder extends TileCoreService.BaseTileHolder {

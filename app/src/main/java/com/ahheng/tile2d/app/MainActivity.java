@@ -19,20 +19,27 @@ public class MainActivity extends AppCompatActivity {
         layout.setOrientation(LinearLayout.VERTICAL);
         layout.setGravity(Gravity.CENTER);
         MaterialButton tileViewButton = new MaterialButton(this);
-        tileViewButton.setText("TileView Demo");
+        tileViewButton.setText("瓦片画板 Demo");
         layout.addView(tileViewButton, -2, -2);
 
         MaterialButton tileLayoutButton = new MaterialButton(this);
-        tileLayoutButton.setText("TileLayout Demo");
+        tileLayoutButton.setText("瓦片布局 Demo");
         layout.addView(tileLayoutButton, -2, -2);
+
+        MaterialButton tableButton = new MaterialButton(this);
+        tableButton.setText("数据表 Demo");
+        layout.addView(tableButton, -2, -2);
+
         setContentView(layout, new ViewGroup.LayoutParams(-1, -1));
 
         tileViewButton.setOnClickListener(v -> startActivity(new Intent(this, TileViewActivity.class)));
         tileLayoutButton.setOnClickListener(v -> startActivity(new Intent(this, TileLayoutActivity.class)));
+        tableButton.setOnClickListener(v -> startActivity(new Intent(this, TableActivity.class)));
 
         // 默认启动
-        startActivity(new Intent(this, TileViewActivity.class));
+        // startActivity(new Intent(this, TileViewActivity.class));
         // startActivity(new Intent(this, TileLayoutActivity.class));
+        startActivity(new Intent(this, TableActivity.class));
     }
 
 }

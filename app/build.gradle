@@ -8,7 +8,7 @@ android {
 
     defaultConfig {
         applicationId 'com.ahheng.tile2d.app'
-        minSdk 21
+        minSdk 23
         targetSdk 34
         versionName "26.5.1"
         versionCode 26050201
