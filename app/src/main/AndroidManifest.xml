@@ -22,6 +22,10 @@
             android:name=".TableActivity"
             android:exported="true"
             android:label="数据表 Demo"/>
+        <activity
+            android:name=".auto.AutoTileActivity"
+            android:exported="true"
+            android:label="自动瓦片 Demo"/>
     </application>
     
 </manifest>

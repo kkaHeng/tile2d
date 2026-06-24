@@ -531,6 +531,82 @@ public class TileCoreService<T extends TileCoreService.BaseTileHolder> {
         }
     }
 
+    /**
+     * 计算指定列在视口内的绝对 X 坐标（已包含 bounds.left / paddingLeft）。
+     */
+    public float getTileX(int column) {
+        TileLayoutModel model = layoutService.getLayoutModel();
+        float x = bounds.left + model.offsetX;
+        int c = model.colStart;
+        while (c < column) {
+            x += getTileWidth(c);
+            c++;
+        }
+        while (c > column) {
+            c--;
+            x -= getTileWidth(c);
+        }
+        return x;
+    }
+
+    /**
+     * 计算指定行在视口内的绝对 Y 坐标（已包含 bounds.top / paddingTop）。
+     */
+    public float getTileY(int row) {
+        TileLayoutModel model = layoutService.getLayoutModel();
+        float y = bounds.top + model.offsetY;
+        int r = model.rowStart;
+        while (r < row) {
+            y += getTileHeight(r);
+            r++;
+        }
+        while (r > row) {
+            r--;
+            y -= getTileHeight(r);
+        }
+        return y;
+    }
+
+    public int findColumn(float x) {
+        TileLayoutModel model = layoutService.getLayoutModel();
+        int leftBound = coreInterface.getLeftBound();
+        int rightBound = coreInterface.getRightBound();
+        int col = model.colStart;
+
+        if (col > rightBound) return leftBound;
+
+        float currX = bounds.left + model.offsetX;
+        while (col > leftBound && x < currX) {
+            col--;
+            currX -= getTileWidth(col);
+        }
+        while (col < rightBound && x >= currX + getTileWidth(col)) {
+            currX += getTileWidth(col);
+            col++;
+        }
+        return col;
+    }
+
+    public int findRow(float y) {
+        TileLayoutModel model = layoutService.getLayoutModel();
+        int topBound = coreInterface.getTopBound();
+        int bottomBound = coreInterface.getBottomBound();
+        int row = model.rowStart;
+
+        if (row > bottomBound) return topBound;
+
+        float currY = bounds.top + model.offsetY;
+        while (row > topBound && y < currY) {
+            row--;
+            currY -= getTileHeight(row);
+        }
+        while (row < bottomBound && y >= currY + getTileHeight(row)) {
+            currY += getTileHeight(row);
+            row++;
+        }
+        return row;
+    }
+
     public void update(int column, int row) {
         if (column >= getDyingLeft() &&
                 column <= getDyingRight() &&

@@ -155,6 +155,22 @@ public class TileView extends View {
     	coreService.snap();
     }
 
+    public float getTileX(int column) {
+        return coreService.getTileX(column);
+    }
+
+    public float getTileY(int row) {
+        return coreService.getTileY(row);
+    }
+
+    public int findColumn(float x) {
+        return coreService.findColumn(x);
+    }
+
+    public int findRow(float y) {
+        return coreService.findRow(y);
+    }
+
     public TileLayoutModel getLayoutModel() {
         return coreService.getLayoutModel().newInstance();
     }
@@ -162,11 +178,11 @@ public class TileView extends View {
     @Override
     protected void onLayout(boolean changed, int left, int top, int right, int bottom) {
         super.onLayout(changed, left, top, right, bottom);
-        if (adapter != null && coreService.getActiveTileCount() == 0) {
+        if (adapter != null) {
             if (overrideInitLocation) {
                 overrideInitLocation = false;
                 coreService.seek(initLocationColumn, initLocationRow, initOffsetX, initOffsetY);
-            } else {
+            } else if (coreService.getActiveTileCount() == 0) {
                 coreService.seek(adapter.getLeftBound(), adapter.getTopBound(), 0, 0);
             }
         }
@@ -233,9 +249,7 @@ public class TileView extends View {
             disallowIntercept = false;
             coreService.requestDisallowInterceptTouchEvent(false);
 
-            float contentX = event.getX() - getPaddingLeft();
-            float contentY = event.getY() - getPaddingTop();
-            touchTarget = findTileAt(contentX, contentY, touchTargetPos, touchTargetLoc);
+            touchTarget = findTileAt(event.getX(), event.getY(), touchTargetPos, touchTargetLoc);
 
             if (touchTarget != null) {
                 MotionEvent tileEvent = toTileEvent(event);
@@ -506,39 +520,19 @@ public class TileView extends View {
         postInvalidateOnAnimation();
     }
 
-    public TileHolder findTileAt(float contentX, float contentY, int[] outPos, float[] outLoc) {
-        TileLayoutModel model = coreService.getLayoutModel();
-        float x = model.offsetX;
-        int col = model.colStart;
-        while (col <= model.colEnd) {
-            int width = coreService.getTileWidth(col);
-            if (contentX >= x && contentX < x + width) {
-                // 找到列，开始找行
-                float y = model.offsetY;
-                int row = model.rowStart;
-                while (row <= model.rowEnd) {
-                    int height = coreService.getTileHeight(row);
-                    if (contentY >= y && contentY < y + height) {
-                        if (outPos != null) {
-                            outPos[0] = col;
-                            outPos[1] = row;
-                        }
-                        if (outLoc != null) {
-                            outLoc[0] = x;
-                            outLoc[1] = y;
-                        }
-                        return coreService.getActiveTile(col, row);
-                    }
-                    y += height;
-                    if (row == model.rowEnd) break;
-                    row++;
-                }
-            }
-            x += width;
-            if (col == model.colEnd) break;
-            col++;
+    public TileHolder findTileAt(float viewX, float viewY, int[] outPos, float[] outLoc) {
+        int col = findColumn(viewX);
+        int row = findRow(viewY);
+        if (outPos != null) {
+            outPos[0] = col;
+            outPos[1] = row;
         }
-        return null;
+        if (outLoc != null) {
+            // 转回 content 坐标，兼容触摸事件转换
+            outLoc[0] = getTileX(col) - getPaddingLeft();
+            outLoc[1] = getTileY(row) - getPaddingTop();
+        }
+        return coreService.getActiveTile(col, row);
     }
 
     private MotionEvent toTileEvent(MotionEvent viewEvent) {

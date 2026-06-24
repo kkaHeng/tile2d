@@ -140,11 +140,11 @@ public class TileLayout extends ViewGroup {
 
     @Override
     protected void onLayout(boolean changed, int left, int top, int right, int bottom) {
-        if (adapter != null && coreService.getActiveTileCount() == 0) {
+        if (adapter != null) {
             if (overrideInitLocation) {
                 overrideInitLocation = false;
                 coreService.seek(initLocationColumn, initLocationRow, initOffsetX, initOffsetY);
-            } else {
+            } else if (coreService.getActiveTileCount() == 0) {
                 coreService.seek(adapter.getLeftBound(), adapter.getTopBound(), 0, 0);
             }
         }
@@ -317,6 +317,22 @@ public class TileLayout extends ViewGroup {
 
     public void snap() {
     	coreService.snap();
+    }
+
+    public float getTileX(int column) {
+        return coreService.getTileX(column);
+    }
+
+    public float getTileY(int row) {
+        return coreService.getTileY(row);
+    }
+
+    public int findColumn(float x) {
+        return coreService.findColumn(x);
+    }
+
+    public int findRow(float y) {
+        return coreService.findRow(y);
     }
 
     public TileLayoutModel getLayoutModel() {
