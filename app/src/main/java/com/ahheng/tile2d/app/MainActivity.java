@@ -9,6 +9,7 @@ import android.widget.LinearLayout;
 import androidx.appcompat.app.AppCompatActivity;
 
 import com.ahheng.tile2d.app.auto.AutoTileActivity;
+import com.ahheng.tile2d.app.auto.MazeActivity;
 import com.google.android.material.button.MaterialButton;
 
 public class MainActivity extends AppCompatActivity {
@@ -35,18 +36,24 @@ public class MainActivity extends AppCompatActivity {
         autoTileButton.setText("自动瓦片 Demo");
         layout.addView(autoTileButton, -2, -2);
 
+        MaterialButton mazeButton = new MaterialButton(this);
+        mazeButton.setText("迷宫 Demo");
+        layout.addView(mazeButton, -2, -2);
+
         setContentView(layout, new ViewGroup.LayoutParams(-1, -1));
 
         tileViewButton.setOnClickListener(v -> startActivity(new Intent(this, TileViewActivity.class)));
         tileLayoutButton.setOnClickListener(v -> startActivity(new Intent(this, TileLayoutActivity.class)));
         tableButton.setOnClickListener(v -> startActivity(new Intent(this, TableActivity.class)));
         autoTileButton.setOnClickListener(v -> startActivity(new Intent(this, AutoTileActivity.class)));
+        mazeButton.setOnClickListener(v -> startActivity(new Intent(this, MazeActivity.class)));
 
         // 默认启动
         // startActivity(new Intent(this, TileViewActivity.class));
         // startActivity(new Intent(this, TileLayoutActivity.class));
         // startActivity(new Intent(this, TableActivity.class));
-        startActivity(new Intent(this, AutoTileActivity.class));
+        // startActivity(new Intent(this, AutoTileActivity.class));
+        startActivity(new Intent(this, MazeActivity.class));
     }
 
 }

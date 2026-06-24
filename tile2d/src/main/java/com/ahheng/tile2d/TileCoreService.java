@@ -310,14 +310,22 @@ public class TileCoreService<T extends TileCoreService.BaseTileHolder> {
         dyingRowStart = 0;
         dyingColEnd =
         dyingRowEnd = -1;
-
-        if (!scroller.isFinished()) scroller.abortAnimation();
         disallowIntercept = false;
         isInteractingWithView = false;
         lastScrollerX = lastScrollerY = 0;
         recycledCount = 0;
 
         layoutService.reset();
+        resetAnimator();
+    }
+
+    public void resetAnimator() {
+        if (!scroller.isFinished()) scroller.abortAnimation();
+        if (smoothAnimator != null && smoothAnimator.isRunning()) {
+            smoothAnimator.cancel();
+        }
+        smoothAnimator = null;
+        lastSmoothProgress = 0f;
     }
 
     public void smoothSync(float dx, float dy) {
@@ -643,23 +651,33 @@ public class TileCoreService<T extends TileCoreService.BaseTileHolder> {
         }
     }
 
+    public void updateAll() {
+        TileLayoutModel model = layoutService.getLayoutModel();
+        seek(model.colStart, model.rowStart, model.offsetX, model.offsetY);
+    }
+
     private void rebuildTile(int column, int row) {
         long id = getTileId(column, row);
-        T tile = activeTiles.get(id);
-        if (tile != null) {
-            activeTiles.remove(id);
-            tile.onOutWindow();
-            coreInterface.onTileOut(tile, column, row);
-            recycle(tile);
+        TileLayoutModel model = layoutService.getLayoutModel();
+        T tile;
+        if (column >= model.colStart && column <= model.colEnd &&
+                row >= model.rowStart && row <= model.rowEnd) {
+            // 在活跃区
+            tile = activeTiles.get(id);
+            if (tile != null) {
+                activeTiles.remove(id);
+                tile.onOutWindow();
+                coreInterface.onTileOut(tile, column, row);
+                recycle(tile);
+            }
             in(column, row);
-            return;
-        }
-
-        tile = dyingTiles.get(id);
-        if (tile != null) {
-            dyingTiles.remove(id);
-            recycle(tile);
-
+        } else {
+            // 在濒死区里
+            tile = dyingTiles.get(id);
+            if (tile != null) {
+                dyingTiles.remove(id);
+                recycle(tile);
+            }
             int type = coreInterface.getTileType(column, row);
             T newTile = obtain(type);
             if (newTile != null) {

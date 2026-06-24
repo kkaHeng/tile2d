@@ -27,6 +27,7 @@ public class TileViewActivity extends BaseActivity {
     private ColorGenerator colorGenerator;
 
     private final Set<Long> removedTiles = new HashSet<>();
+    private Handler handler;
 
     @Override
     protected void onCreate(@Nullable Bundle savedInstanceState) {
@@ -43,7 +44,7 @@ public class TileViewActivity extends BaseActivity {
         initTextPlan(true);
 
 
-        Handler handler = new Handler(getMainLooper());
+        handler = new Handler(getMainLooper());
         handler.postDelayed(() -> {
             // 测试延迟调整宽度
             view.setTileWidth(0, dp2px(160));
@@ -212,6 +213,15 @@ public class TileViewActivity extends BaseActivity {
             colorTileHolder.backgroundColor = colorGenerator.getColor((noise - 0.03) / 0.97);
             colorTileHolder.noise = noise / 0.03;
         }
+    }
+
+    @Override
+    protected void onDestroy() {
+        super.onDestroy();
+        if (handler != null) {
+            handler.removeCallbacksAndMessages(null);
+        }
+        view.setAdapter(null);
     }
 
 }

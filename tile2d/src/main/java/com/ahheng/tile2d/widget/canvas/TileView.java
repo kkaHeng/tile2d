@@ -137,6 +137,13 @@ public class TileView extends View {
         coreService.smoothSync(dx, dy);
     }
 
+    public void smoothOffset(float dx, float dy, int duration) {
+        if (isEmpty()) {
+            return;
+        }
+        coreService.smoothSync(dx, dy, duration);
+    }
+
     public void seek(int column, int row) {
         seek(column, row, 0, 0);
     }
@@ -334,6 +341,9 @@ public class TileView extends View {
         if (debugLayer != null) {
             debugLayer.end();
         }
+        removeLongPress();
+        resetTouchTarget();
+        coreService.resetAnimator();
     }
 
     public long getLongPressTimeout() {
@@ -386,6 +396,10 @@ public class TileView extends View {
 
     public void update(int column, int row) {
     	coreService.update(column, row);
+    }
+
+    public void updateAll() {
+        coreService.updateAll();
     }
 
     public Adapter getAdapter() {

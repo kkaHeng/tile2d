@@ -107,8 +107,6 @@ public class AutoTileActivity extends BaseActivity {
         root.addView(animationLayer, new FrameLayout.LayoutParams(-1, -1));
         setContentView(root, new ViewGroup.LayoutParams(-1, -1));
 
-        int padding = dp2px(8);
-        tileLayout.setPadding(padding, padding, padding, padding);
         tileLayout.setDebugMode(isDebugMode());
         tileLayout.setDefaultTileWidth(size);
         tileLayout.setDefaultTileHeight(size);
@@ -218,12 +216,12 @@ public class AutoTileActivity extends BaseActivity {
         view.setScaleY(0f);
         view.setAlpha(0f);
         view.animate()
-            .scaleX(1f)
-            .scaleY(1f)
-            .alpha(1f)
-            .setDuration(250)
-            .setInterpolator(new android.view.animation.OvershootInterpolator(1.8f))
-            .start();
+                .scaleX(1f)
+                .scaleY(1f)
+                .alpha(1f)
+                .setDuration(250)
+                .setInterpolator(new android.view.animation.OvershootInterpolator(1.8f))
+                .start();
     }
 
     private void setDragMode(boolean enabled) {
@@ -261,11 +259,6 @@ public class AutoTileActivity extends BaseActivity {
     @Override
     protected void onDebugModeChanged(boolean enabled) {
         tileLayout.setDebugMode(enabled);
-    }
-
-    @Override
-    public boolean hasMaxMode() {
-        return true;
     }
 
     @Override
@@ -341,4 +334,25 @@ public class AutoTileActivity extends BaseActivity {
             }
         }
     }
+
+    @Override
+    protected void onDestroy() {
+        super.onDestroy();
+        for (int i = animationLayer.getChildCount() - 1; i >= 0; i--) {
+            View child = animationLayer.getChildAt(i);
+            child.animate().cancel();
+            if (child instanceof ImageView iv) {
+                if (iv.getDrawable() instanceof BitmapDrawable) {
+                    Bitmap bmp = ((BitmapDrawable) iv.getDrawable()).getBitmap();
+                    if (bmp != null && !bmp.isRecycled()) bmp.recycle();
+                }
+            }
+            animationLayer.removeView(child);
+        }
+        for (int i = tileLayout.getChildCount() - 1; i >= 0; i--) {
+            tileLayout.getChildAt(i).animate().cancel();
+        }
+        tileLayout.setAdapter(null);
+    }
+
 }

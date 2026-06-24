@@ -303,4 +303,14 @@ public class TableActivity extends BaseActivity {
         }
     }
 
+    @Override
+    protected void onDestroy() {
+        super.onDestroy();
+        if (dimenProvider != null) {
+            dimenProvider.clearRecycledTiles();
+        }
+        tileLayout.setAdapter(null);
+    }
+
+
 }

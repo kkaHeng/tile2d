@@ -277,6 +277,7 @@ public class TileLayout extends ViewGroup {
         if (debugLayer != null) {
             debugLayer.end();
         }
+        coreService.resetAnimator();
     }
 
     @Override
@@ -300,6 +301,13 @@ public class TileLayout extends ViewGroup {
             return;
         }
         coreService.smoothSync(dx, dy);
+    }
+
+    public void smoothOffset(float dx, float dy, int duration) {
+        if (isEmpty()) {
+            return;
+        }
+        coreService.smoothSync(dx, dy, duration);
     }
 
     public void seek(int column, int row) {
@@ -381,6 +389,10 @@ public class TileLayout extends ViewGroup {
 
     public void update(int column, int row) {
     	coreService.update(column, row);
+    }
+
+    public void updateAll() {
+        coreService.updateAll();
     }
 
     public Adapter getAdapter() {
