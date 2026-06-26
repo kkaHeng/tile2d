@@ -630,7 +630,7 @@ public class TileCoreService<T extends TileCoreService.BaseTileHolder> {
                 int r = top;
                 while (r <= bottom) {
                     rebuildTile(c, r);
-                    if (r == right) break;
+                    if (r == bottom) break;
                     r++;
                 }
                 if (c == right) break;
