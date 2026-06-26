@@ -10,8 +10,8 @@ android {
         applicationId 'com.ahheng.tile2d.app'
         minSdk 23
         targetSdk 34
-        versionName "26.5.1"
-        versionCode 26050201
+        versionName project.findProperty('version.name')
+        versionCode project.findProperty('version.code').toInteger()
     }
 
     buildTypes {

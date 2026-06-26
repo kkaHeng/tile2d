@@ -538,7 +538,7 @@ public class TileView extends View {
         postInvalidateOnAnimation();
     }
 
-    public TileHolder findTileAt(float viewX, float viewY, int[] outPos, float[] outLoc) {
+    private TileHolder findTileAt(float viewX, float viewY, int[] outPos, float[] outLoc) {
         int col = findColumn(viewX);
         int row = findRow(viewY);
         if (outPos != null) {
