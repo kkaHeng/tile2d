@@ -40,4 +40,10 @@ public class Chunk {
         chunkX = 0;
         chunkY = 0;
     }
+
+    public void copyFrom(boolean[][] data) {
+        for (int i = 0; i < CHUNK_SIZE; i++) {
+            System.arraycopy(data[i], 0, tiles[i], 0, CHUNK_SIZE);
+        }
+    }
 }
