@@ -29,6 +29,9 @@
         <activity android:name=".auto.MazeActivity"
             android:exported="true"
             android:label="迷宫 Demo"/>
+        <activity android:name=".maze.MaxMazeActivity"
+            android:exported="true"
+            android:label="迷宫 Max Demo"/>
     </application>
     
 </manifest>
