@@ -9,7 +9,7 @@ import android.widget.LinearLayout;
 import androidx.appcompat.app.AppCompatActivity;
 
 import com.ahheng.tile2d.app.auto.AutoTileActivity;
-import com.ahheng.tile2d.app.auto.MazeActivity;
+import com.ahheng.tile2d.app.maze.MazeActivity;
 import com.ahheng.tile2d.app.maze.MaxMazeActivity;
 import com.google.android.material.button.MaterialButton;
 

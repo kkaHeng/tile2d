@@ -26,7 +26,7 @@
             android:name=".auto.AutoTileActivity"
             android:exported="true"
             android:label="自动瓦片 Demo"/>
-        <activity android:name=".auto.MazeActivity"
+        <activity android:name=".maze.MazeActivity"
             android:exported="true"
             android:label="迷宫 Demo"/>
         <activity android:name=".maze.MaxMazeActivity"

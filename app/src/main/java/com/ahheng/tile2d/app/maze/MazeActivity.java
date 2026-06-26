@@ -1,4 +1,4 @@
-package com.ahheng.tile2d.app.auto;
+package com.ahheng.tile2d.app.maze;
 
 import android.os.Bundle;
 import android.os.Handler;
@@ -17,6 +17,9 @@ import androidx.annotation.Nullable;
 import com.ahheng.tile2d.TileCoreService;
 import com.ahheng.tile2d.TileLayoutModel;
 import com.ahheng.tile2d.app.BaseActivity;
+import com.ahheng.tile2d.app.auto.ConnectionRule;
+import com.ahheng.tile2d.app.auto.SimpleConnectionRule;
+import com.ahheng.tile2d.app.auto.TileSet;
 import com.ahheng.tile2d.widget.layout.TileLayout;
 import com.google.android.material.progressindicator.LinearProgressIndicator;
 
