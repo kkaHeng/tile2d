@@ -42,6 +42,7 @@ public class MazeActivity extends BaseActivity {
     private static final float CAMERA_LERP = 0.05f;
 
     private TileLayout tileLayout;
+    private MazeAdapter adapter;
     private TileSet tileSet;
     private ConnectionRule connectionRule;
     private final Set<Long> placedTiles = new HashSet<>();
@@ -111,7 +112,7 @@ public class MazeActivity extends BaseActivity {
         root.addView(progressIndicator, progressLp);
         setContentView(root, new ViewGroup.LayoutParams(-1, -1));
 
-        tileLayout.setAdapter(new MazeAdapter());
+        tileLayout.setAdapter((adapter = new MazeAdapter()));
 
         choreographer = Choreographer.getInstance();
 
@@ -234,13 +235,11 @@ public class MazeActivity extends BaseActivity {
     };
 
     private void refreshArea(int centerColumn, int centerRow) {
-        for (int c = centerColumn - 1; c <= centerColumn + 1; c++) {
-            for (int r = centerRow - 1; r <= centerRow + 1; r++) {
-                tileLayout.update(c, r);
-                if (r == centerRow + 1) break;
-            }
-            if (c == centerColumn + 1) break;
-        }
+        int left = centerColumn > adapter.getLeftBound() ? centerColumn - 1 : centerColumn;
+        int top = centerRow > adapter.getTopBound() ? centerRow - 1 : centerRow;
+        int right = centerColumn < adapter.getRightBound() ? centerColumn + 1 : centerColumn;
+        int bottom = centerRow < adapter.getBottomBound() ? centerRow + 1 : centerRow;
+        tileLayout.updateRange(left, top, right, bottom);
     }
 
     private void playEnterAnimation(View view) {

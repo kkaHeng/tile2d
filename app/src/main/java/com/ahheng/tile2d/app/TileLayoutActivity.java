@@ -21,6 +21,8 @@ import java.util.Set;
 
 public class TileLayoutActivity extends BaseActivity {
 
+    private static final int MENU_TO_END = 5;
+
     private TileLayout layout;
     private RandomAdapter adapter;
     private boolean displayText = false;
@@ -97,6 +99,32 @@ public class TileLayoutActivity extends BaseActivity {
             case PLAN_COLOR -> initColorPlan(false);
             case PLAN_TEXT -> initTextPlan(false);
         }
+    }
+
+    @Override
+    protected ToTheEnd onInitToTheEnd() {
+        return new ToTheEnd() {
+            @Override
+            public int getLeftBound() {
+                return adapter.getLeftBound();
+            }
+            @Override
+            public int getTopBound() {
+                return adapter.getTopBound();
+            }
+            @Override
+            public int getRightBound() {
+                return adapter.getRightBound();
+            }
+            @Override
+            public int getBottomBound() {
+                return adapter.getBottomBound();
+            }
+            @Override
+            public void gogogo(int column, int row) {
+                layout.seek(column, row);
+            }
+        };
     }
 
     public class ColorTileHolder extends TileLayout.TileHolder {

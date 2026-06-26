@@ -398,6 +398,10 @@ public class TileView extends View {
     	coreService.update(column, row);
     }
 
+    public void updateRange(int left, int top, int right, int bottom) {
+        coreService.updateRange(left, top, right, bottom);
+    }
+
     public void updateAll() {
         coreService.updateAll();
     }

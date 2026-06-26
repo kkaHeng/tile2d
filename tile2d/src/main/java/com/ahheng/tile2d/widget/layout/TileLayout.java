@@ -131,9 +131,11 @@ public class TileLayout extends ViewGroup {
                 }
 
                 y += coreService.getTileHeight(row);
+                if (row == model.rowEnd) break;
                 row++;
             }
             x += coreService.getTileWidth(column);
+            if (column == model.colEnd) break;
             column++;
         }
     }
@@ -389,6 +391,10 @@ public class TileLayout extends ViewGroup {
 
     public void update(int column, int row) {
     	coreService.update(column, row);
+    }
+
+    public void updateRange(int left, int top, int right, int bottom) {
+        coreService.updateRange(left, top, right, bottom);
     }
 
     public void updateAll() {

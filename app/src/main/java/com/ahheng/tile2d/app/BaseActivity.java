@@ -14,6 +14,7 @@ public abstract class BaseActivity extends AppCompatActivity {
     private static final int MENU_ID_DEBUG = 1;
     private static final int MENU_ID_MAX = 2;
     private static final int MENU_ID_PLAN = 3;
+    private static final int MENU_ID_TO_END = 4;
 
     public final static int PLAN_COLOR = 0;
     public final static int PLAN_TEXT = 1;
@@ -22,6 +23,7 @@ public abstract class BaseActivity extends AppCompatActivity {
     private boolean debugMode = true;
     private boolean maxMode = false;
     private int plan = PLAN_TEXT;
+    private ToTheEnd toTheEnd;
 
     public boolean hasMaxMode() {
         return true;
@@ -79,6 +81,10 @@ public abstract class BaseActivity extends AppCompatActivity {
             menu.add(Menu.NONE, MENU_ID_PLAN, Menu.NONE, "切换方案")
                     .setShowAsAction(MenuItem.SHOW_AS_ACTION_NEVER);
         }
+        if (toTheEnd != null) {
+            menu.add(Menu.NONE, MENU_ID_TO_END, Menu.NONE, "去边界看看")
+                    .setShowAsAction(MenuItem.SHOW_AS_ACTION_NEVER);
+        }
         return true;
     }
 
@@ -120,6 +126,12 @@ public abstract class BaseActivity extends AppCompatActivity {
                 onPlanChanged(plan);
                 return true;
             }
+            case MENU_ID_TO_END -> {
+                if (toTheEnd != null) {
+                    toTheEnd();
+                }
+                return true;
+            }
         }
         return super.onOptionsItemSelected(item);
     }
@@ -129,6 +141,29 @@ public abstract class BaseActivity extends AppCompatActivity {
         super.onCreate(savedInstanceState);
         ActionBar actionBar = getSupportActionBar();
         if (actionBar != null) actionBar.setDisplayHomeAsUpEnabled(true);
+        
+        toTheEnd = onInitToTheEnd();
+    }
+
+    public void toTheEnd() {
+        int i = (int) (Math.random() * 8);
+        int l = toTheEnd.getLeftBound();
+        int t = toTheEnd.getTopBound();
+        int r = toTheEnd.getRightBound();
+        int b = toTheEnd.getBottomBound();
+        int x;
+        int y;
+        switch (i) {
+            case 0 -> { x = 0;  y = t; showToast("去幽都(北)喽"); }
+            case 1 -> { x = r;  y = t; showToast("去榑木(东北)喽"); }
+            case 2 -> { x = r;  y = 0; showToast("去旸谷(东)喽"); }
+            case 3 -> { x = r;  y = b; showToast("去苍梧(东南)喽"); }
+            case 4 -> { x = 0;  y = b; showToast("去南溟(南)喽"); }
+            case 5 -> { x = l;  y = b; showToast("去偏句(西南)喽"); }
+            case 6 -> { x = l;  y = 0; showToast("去昧谷(西)喽"); }
+            default -> { x = l;  y = t; showToast("去不周(西北)喽"); }
+        }
+        toTheEnd.gogogo(x, y);
     }
 
     protected void onDebugModeChanged(boolean enabled) {
@@ -139,4 +174,23 @@ public abstract class BaseActivity extends AppCompatActivity {
 
     protected void onPlanChanged(int plan) {
     }
+
+    protected ToTheEnd onInitToTheEnd() {
+    	return null;
+    }
+
+    public interface ToTheEnd {
+        
+        int getLeftBound();
+        
+        int getTopBound();
+        
+        int getRightBound();
+        
+        int getBottomBound();
+        
+        void gogogo(int column, int row);
+        
+    }
+
 }

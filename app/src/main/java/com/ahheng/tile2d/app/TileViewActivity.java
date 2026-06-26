@@ -99,6 +99,32 @@ public class TileViewActivity extends BaseActivity {
         }
     }
 
+    @Override
+    protected ToTheEnd onInitToTheEnd() {
+        return new ToTheEnd() {
+            @Override
+            public int getLeftBound() {
+                return adapter.getLeftBound();
+            }
+            @Override
+            public int getTopBound() {
+                return adapter.getTopBound();
+            }
+            @Override
+            public int getRightBound() {
+                return adapter.getRightBound();
+            }
+            @Override
+            public int getBottomBound() {
+                return adapter.getBottomBound();
+            }
+            @Override
+            public void gogogo(int column, int row) {
+                view.seek(column, row);
+            }
+        };
+    }
+
     public class ColorTileHolder extends TileView.TileHolder {
         int backgroundColor;
         double noise;

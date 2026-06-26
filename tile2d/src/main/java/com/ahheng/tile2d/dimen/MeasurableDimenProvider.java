@@ -8,6 +8,7 @@ import com.ahheng.tile2d.widget.TileAdapter;
 import com.ahheng.tile2d.widget.TileDimenProvider;
 import com.ahheng.tile2d.widget.tile.TileRecycledPool;
 
+// 简易测量工具，不建议在大数据量场景下使用
 public class MeasurableDimenProvider implements TileDimenProvider {
 
     private final TileAdapter<TileCoreService.BaseTileHolder> adapter;
@@ -17,6 +18,7 @@ public class MeasurableDimenProvider implements TileDimenProvider {
 
     private int defaultTileWidth;
     private int defaultTileHeight;
+    private boolean minDefault; // 内容比默认尺寸小时，是否使用默认尺寸
 
     public MeasurableDimenProvider(TileAdapter<?> adapter) {
         this(0, 0, adapter);
@@ -26,6 +28,14 @@ public class MeasurableDimenProvider implements TileDimenProvider {
         this.defaultTileWidth = defaultTileWidth;
         this.defaultTileHeight = defaultTileHeight;
         this.adapter = (TileAdapter<TileCoreService.BaseTileHolder>) adapter;
+    }
+
+    public boolean isMinDefault() {
+    	return minDefault;
+    }
+
+    public void setMinDefault(boolean minDefault) {
+    	this.minDefault = minDefault;
     }
 
     public void setDefaultTileWidth(int width) {
@@ -73,8 +83,8 @@ public class MeasurableDimenProvider implements TileDimenProvider {
                     width = output[0];
                     height = output[1];
                 }
-                int lastWidth = widths.indexOfKey(column) >= 0 ? widths.get(column) : defaultTileWidth;
-                int lastHeight = heights.indexOfKey(row) >= 0 ? heights.get(row) : defaultTileHeight;
+                int lastWidth = widths.indexOfKey(column) >= 0 ? widths.get(column) : (minDefault ? defaultTileWidth : width);
+                int lastHeight = heights.indexOfKey(row) >= 0 ? heights.get(row) : (minDefault ? defaultTileHeight : height);
                 lastWidth = Math.max(lastWidth, width);
                 lastHeight = Math.max(lastHeight, height);
                 if (lastWidth != defaultTileWidth) {

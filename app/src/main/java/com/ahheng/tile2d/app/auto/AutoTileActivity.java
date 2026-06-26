@@ -30,9 +30,10 @@ public class AutoTileActivity extends BaseActivity {
     private static final int TYPE_EMPTY = 0;
     private static final int PIECE_COLS = 4;
     private static final int PIECE_ROWS = 4;
-    private static final int MENU_ID_DRAG = 4;
+    private static final int MENU_ID_DRAG = 5;
 
     private TileLayout tileLayout;
+    private AutoTileAdapter adapter;
     private FrameLayout animationLayer;
     private TileSet tileSet;
     private ConnectionRule connectionRule;
@@ -111,7 +112,7 @@ public class AutoTileActivity extends BaseActivity {
         tileLayout.setDefaultTileWidth(size);
         tileLayout.setDefaultTileHeight(size);
 
-        tileLayout.setAdapter(new AutoTileAdapter());
+        tileLayout.setAdapter((adapter = new AutoTileAdapter()));
 
         presetTiles();
         tileLayout.seek(-4, -8);
@@ -138,13 +139,11 @@ public class AutoTileActivity extends BaseActivity {
     }
 
     private void refreshArea(int centerColumn, int centerRow) {
-        for (int c = centerColumn - 1; c <= centerColumn + 1; c++) {
-            for (int r = centerRow - 1; r <= centerRow + 1; r++) {
-                tileLayout.update(c, r);
-                if (r == centerRow + 1) break;
-            }
-            if (c == centerColumn + 1) break;
-        }
+        int left = centerColumn > adapter.getLeftBound() ? centerColumn - 1 : centerColumn;
+        int top = centerRow > adapter.getTopBound() ? centerRow - 1 : centerRow;
+        int right = centerColumn < adapter.getRightBound() ? centerColumn + 1 : centerColumn;
+        int bottom = centerRow < adapter.getBottomBound() ? centerRow + 1 : centerRow;
+        tileLayout.updateRange(left, top, right, bottom);
     }
 
     private void playBreakAnimation(int column, int row) {
@@ -270,6 +269,32 @@ public class AutoTileActivity extends BaseActivity {
     protected void onMaxModeChanged(boolean maxMode) {
         super.onMaxModeChanged(maxMode);
         tileLayout.snap();
+    }
+
+    @Override
+    protected ToTheEnd onInitToTheEnd() {
+        return new ToTheEnd() {
+            @Override
+            public int getLeftBound() {
+                return adapter.getLeftBound();
+            }
+            @Override
+            public int getTopBound() {
+                return adapter.getTopBound();
+            }
+            @Override
+            public int getRightBound() {
+                return adapter.getRightBound();
+            }
+            @Override
+            public int getBottomBound() {
+                return adapter.getBottomBound();
+            }
+            @Override
+            public void gogogo(int column, int row) {
+                tileLayout.seek(column, row);
+            }
+        };
     }
 
     private class AutoTileAdapter extends TileLayout.Adapter {

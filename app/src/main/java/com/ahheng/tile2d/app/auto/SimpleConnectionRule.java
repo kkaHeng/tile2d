@@ -5,7 +5,7 @@ import com.ahheng.tile2d.TileCoreService;
 import java.util.Set;
 
 /**
- * 基于 4 方向邻居的自动连接规则（修正版）。
+ * 基于 4 方向邻居的自动连接规则
  *
  * 语义：浅色硬边 = 该方向有邻居（mask 位=1），深色边缘 = 该方向无邻居（mask 位=0）。
  *

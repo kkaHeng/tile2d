@@ -539,9 +539,6 @@ public class TileCoreService<T extends TileCoreService.BaseTileHolder> {
         }
     }
 
-    /**
-     * 计算指定列在视口内的绝对 X 坐标（已包含 bounds.left / paddingLeft）。
-     */
     public float getTileX(int column) {
         TileLayoutModel model = layoutService.getLayoutModel();
         float x = bounds.left + model.offsetX;
@@ -557,9 +554,6 @@ public class TileCoreService<T extends TileCoreService.BaseTileHolder> {
         return x;
     }
 
-    /**
-     * 计算指定行在视口内的绝对 Y 坐标（已包含 bounds.top / paddingTop）。
-     */
     public float getTileY(int row) {
         TileLayoutModel model = layoutService.getLayoutModel();
         float y = bounds.top + model.offsetY;
@@ -621,6 +615,27 @@ public class TileCoreService<T extends TileCoreService.BaseTileHolder> {
                 row >= getDyingTop() &&
                 row <= getDyingBottom()) {
             rebuildTile(column, row);
+            coreInterface.updateUI();
+        }
+    }
+
+    public void updateRange(int left, int top, int right, int bottom) {
+    	if (left >= getDyingLeft() &&
+                right <= getDyingRight() &&
+                top >= getDyingTop() &&
+                bottom <= getDyingBottom() &&
+                left <= right && top <= bottom) {
+            int c = left;
+            while (c <= right) {
+                int r = top;
+                while (r <= bottom) {
+                    rebuildTile(c, r);
+                    if (r == right) break;
+                    r++;
+                }
+                if (c == right) break;
+                c++;
+            }
             coreInterface.updateUI();
         }
     }
