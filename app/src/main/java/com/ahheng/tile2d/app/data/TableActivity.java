@@ -1,4 +1,4 @@
-package com.ahheng.tile2d.app;
+package com.ahheng.tile2d.app.data;
 
 import android.content.res.Configuration;
 import android.graphics.Color;
@@ -14,6 +14,7 @@ import android.widget.TextView;
 import androidx.annotation.Nullable;
 import androidx.core.content.ContextCompat;
 
+import com.ahheng.tile2d.app.BaseActivity;
 import com.ahheng.tile2d.dimen.Measurable;
 import com.ahheng.tile2d.dimen.MeasurableDimenProvider;
 import com.ahheng.tile2d.widget.layout.TileLayout;

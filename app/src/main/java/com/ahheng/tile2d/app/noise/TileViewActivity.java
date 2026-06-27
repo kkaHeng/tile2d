@@ -1,4 +1,4 @@
-package com.ahheng.tile2d.app;
+package com.ahheng.tile2d.app.noise;
 
 import android.graphics.Canvas;
 import android.graphics.Color;
@@ -11,6 +11,7 @@ import androidx.annotation.Nullable;
 
 import com.ahheng.tile2d.TileCoreService;
 import com.ahheng.tile2d.TileLayoutModel;
+import com.ahheng.tile2d.app.BaseActivity;
 import com.ahheng.tile2d.widget.canvas.TileView;
 
 import java.util.HashSet;

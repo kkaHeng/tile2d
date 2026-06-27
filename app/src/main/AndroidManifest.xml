@@ -11,15 +11,15 @@
             </intent-filter>
         </activity>
         <activity
-            android:name=".TileViewActivity"
+            android:name=".noise.TileViewActivity"
             android:exported="true"
             android:label="瓦片画板 Demo"/>
         <activity
-            android:name=".TileLayoutActivity"
+            android:name=".noise.TileLayoutActivity"
             android:exported="true"
             android:label="瓦片布局 Demo"/>
         <activity
-            android:name=".TableActivity"
+            android:name=".data.TableActivity"
             android:exported="true"
             android:label="数据表 Demo"/>
         <activity

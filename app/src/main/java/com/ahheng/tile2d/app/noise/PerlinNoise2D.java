@@ -1,4 +1,4 @@
-package com.ahheng.tile2d.app;
+package com.ahheng.tile2d.app.noise;
 
 import java.util.Random;
 
