@@ -346,7 +346,7 @@ public class TileLayout extends ViewGroup {
     }
 
     public TileLayoutModel getLayoutModel() {
-        return coreService.getLayoutModel().newInstance();
+        return coreService.getLayoutModel();
     }
 
     public boolean isHorizontalScrollEnabled() {

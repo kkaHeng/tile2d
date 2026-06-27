@@ -116,7 +116,7 @@ tileLayout.setAdapter(new TileLayout.Adapter() {
 根据纵坐标查找行。(基于View原点)
 
 - `TileLayoutModel getLayoutModel()`
-获取当前视窗布局模型的副本。
+获取当前视窗布局模型的快照(如果没有高频访问需求与实时更新需求，建议使用`newInstance`方法拷贝一份)。
 
 - `void requestDisallowInterceptTouchEvent(boolean disallowIntercept)`
 请求**TileView**或**TileLayout**放弃当前触摸事件序列，使瓦片获得完整事件序列。

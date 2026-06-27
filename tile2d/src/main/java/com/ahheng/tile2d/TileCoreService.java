@@ -620,24 +620,36 @@ public class TileCoreService<T extends TileCoreService.BaseTileHolder> {
     }
 
     public void updateRange(int left, int top, int right, int bottom) {
-    	if (left >= getDyingLeft() &&
-                right <= getDyingRight() &&
-                top >= getDyingTop() &&
-                bottom <= getDyingBottom() &&
-                left <= right && top <= bottom) {
-            int c = left;
-            while (c <= right) {
-                int r = top;
-                while (r <= bottom) {
-                    rebuildTile(c, r);
-                    if (r == bottom) break;
-                    r++;
-                }
-                if (c == right) break;
-                c++;
-            }
-            coreInterface.updateUI();
+        if (left > right || top > bottom) {
+            return;
         }
+        int dl = getDyingLeft();
+        int dr = getDyingRight();
+        int dt = getDyingTop();
+        int db = getDyingBottom();
+    
+        int intersectLeft   = Math.max(left, dl);
+        int intersectRight  = Math.min(right, dr);
+        int intersectTop    = Math.max(top, dt);
+        int intersectBottom = Math.min(bottom, db);
+    
+        if (intersectLeft > intersectRight || intersectTop > intersectBottom) {
+            return;
+        }
+    
+        int c = intersectLeft;
+        while (c <= intersectRight) {
+            int r = intersectTop;
+            while (r <= intersectBottom) {
+                rebuildTile(c, r);
+                if (r == intersectBottom) break;
+                r++;
+            }
+            if (c == intersectRight) break;
+            c++;
+        }
+    
+        coreInterface.updateUI();
     }
 
     public void updateColumn(int column) {

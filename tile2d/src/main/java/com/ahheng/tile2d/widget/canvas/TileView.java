@@ -179,7 +179,7 @@ public class TileView extends View {
     }
 
     public TileLayoutModel getLayoutModel() {
-        return coreService.getLayoutModel().newInstance();
+        return coreService.getLayoutModel();
     }
 
     @Override
