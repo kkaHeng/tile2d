@@ -81,6 +81,11 @@ public class TileView extends View {
         public int getTileType(int column, int row) {
             return adapter.getTileType(column, row);
         }
+
+        @Override
+        public boolean isDebugMode() {
+            return debugMode;
+        }
     };
 
     private DebugLayer debugLayer;
@@ -532,6 +537,11 @@ public class TileView extends View {
                 @Override
                 public long getSyncTime() {
                     return coreService.getSyncTime();
+                }
+
+                @Override
+                public long getBindTime() {
+                    return coreService.getBindTime();
                 }
 
                 @Override

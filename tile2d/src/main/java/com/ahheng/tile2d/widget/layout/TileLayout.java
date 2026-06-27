@@ -89,6 +89,11 @@ public class TileLayout extends ViewGroup {
         public int getTileType(int column, int row) {
             return adapter.getTileType(column, row);
         }
+
+        @Override
+        public boolean isDebugMode() {
+            return debugMode;
+        }
     };
 
     private DebugLayer debugLayer;
@@ -246,6 +251,11 @@ public class TileLayout extends ViewGroup {
                 @Override
                 public long getSyncTime() {
                     return coreService.getSyncTime();
+                }
+
+                @Override
+                public long getBindTime() {
+                    return coreService.getBindTime();
                 }
 
                 @Override

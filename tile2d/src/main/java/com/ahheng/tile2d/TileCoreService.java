@@ -51,6 +51,8 @@ public class TileCoreService<T extends TileCoreService.BaseTileHolder> {
     private int recycledCount;
     private long startSyncTime;
     private long syncTime;
+    private long startBindTime;
+    private long bindTime;
     private long startLayoutTime;
     private long layoutTime;
 
@@ -118,8 +120,10 @@ public class TileCoreService<T extends TileCoreService.BaseTileHolder> {
 
         @Override
         public void beforeDiff(int colStart, int rowStart, int colEnd, int rowEnd) {
-            syncTime = Debug.threadCpuTimeNanos() - startSyncTime;
-            startLayoutTime = Debug.threadCpuTimeNanos();
+            if (coreInterface.isDebugMode()) {
+                syncTime = Debug.threadCpuTimeNanos() - startSyncTime;
+                startBindTime = Debug.threadCpuTimeNanos();
+            }
             if (dyingColStart != colStart || dyingColEnd != colEnd
                     || dyingRowStart != rowStart || dyingRowEnd != rowEnd) {
                 // 边界变化了
@@ -348,10 +352,15 @@ public class TileCoreService<T extends TileCoreService.BaseTileHolder> {
     }
 
     public void sync(float dx, float dy) {
-        startSyncTime = Debug.threadCpuTimeNanos();
+        boolean debugMode = coreInterface.isDebugMode();
+        if (debugMode) startSyncTime = Debug.threadCpuTimeNanos();
         layoutService.sync(dx, dy);
-        layoutTime = Debug.threadCpuTimeNanos() - startLayoutTime;
+        if (debugMode) {
+            bindTime = Debug.threadCpuTimeNanos() - startBindTime;
+            startLayoutTime = Debug.threadCpuTimeNanos();
+        }
         coreInterface.updateUI();
+        if (debugMode) layoutTime = Debug.threadCpuTimeNanos() - startLayoutTime;
     }
 
     public void seek(int column, int row, float offsetX, float offsetY) {
@@ -774,6 +783,10 @@ public class TileCoreService<T extends TileCoreService.BaseTileHolder> {
         return syncTime;
     }
 
+    public long getBindTime() {
+        return bindTime;
+    }
+
     public long getLayoutTime() {
         return layoutTime;
     }
@@ -890,6 +903,8 @@ public class TileCoreService<T extends TileCoreService.BaseTileHolder> {
         void onBindTileHolder(T holder, int column, int row);
 
         int getTileType(int column, int row);
+
+        boolean isDebugMode();
 
     }
 

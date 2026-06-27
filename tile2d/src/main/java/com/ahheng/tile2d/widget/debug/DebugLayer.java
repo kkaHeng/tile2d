@@ -50,17 +50,21 @@ public class DebugLayer {
 
     private long sumDrawTime = 0;
     private long sumSyncTime = 0;
+    private long sumBindTime = 0;
     private long sumLayoutTime = 0;
     private long drawSampleCount = 0;
     private long syncSampleCount = 0;
+    private long bindSampleCount = 0;
     private long layoutSampleCount = 0;
 
     private long lastSyncTime = -1;
+    private long lastBindTime = -1;
     private long lastLayoutTime = -1;
 
     private String fpsText = "实际帧率：0Hz";
     private String theoreticalFpsText = "理论帧率：0Hz";
     private String syncTimeText = "同步耗时：0ns";
+    private String bindTimeText = "业务耗时：0ns";
     private String layoutTimeText = "布局耗时：0ns";
     private String activeTileText = "活跃瓦片：0";
     private String recycledTileText = "回收瓦片：0";
@@ -124,6 +128,7 @@ public class DebugLayer {
     public void start() {
         lastFpsUpdateTime = System.nanoTime();
         lastSyncTime = -1;
+        lastBindTime = -1;
         lastLayoutTime = -1;
         drawStart = -1;
         drawEnd = -1;
@@ -150,6 +155,13 @@ public class DebugLayer {
             sumSyncTime += sync;
             syncSampleCount++;
             lastSyncTime = sync;
+        }
+
+        long bind = callback.getBindTime();
+        if (bind != lastBindTime) {
+            sumBindTime += bind;
+            bindSampleCount++;
+            lastBindTime = bind;
         }
 
         long layout = callback.getLayoutTime();
@@ -213,6 +225,10 @@ public class DebugLayer {
 
         if (syncSampleCount > 0) {
             syncTimeText = "同步耗时：" + (sumSyncTime / syncSampleCount) + "ns";
+        }
+
+        if (bindSampleCount > 0) {
+            bindTimeText = "业务耗时：" + (sumBindTime / bindSampleCount) + "ns";
         }
 
         if (layoutSampleCount > 0) {
@@ -279,6 +295,8 @@ public class DebugLayer {
         iy += lineHeight;
         canvas.drawText(syncTimeText, ix, iy, infoPaint);
         iy += lineHeight;
+        canvas.drawText(bindTimeText, ix, iy, infoPaint);
+        iy += lineHeight;
         canvas.drawText(layoutTimeText, ix, iy, infoPaint);
         iy += lineHeight;
         canvas.drawText(activeTileText, ix, iy, infoPaint);
@@ -313,6 +331,8 @@ public class DebugLayer {
         void postInvalidateOnAnimation();
 
         long getSyncTime();
+
+        long getBindTime();
 
         long getLayoutTime();
         

@@ -240,38 +240,108 @@ public class TileLayoutService {
                 && oldColEnd == newColEnd && oldRowEnd == newRowEnd) {
             return; // 提前退出
         }
-        // 计算最大边界
-        int boundLeft = Math.min(oldColStart, newColStart);
-        int boundRight = Math.max(oldColEnd, newColEnd);
-        int boundTop = Math.min(oldRowStart, newRowStart);
-        int boundBottom = Math.max(oldRowEnd, newRowEnd);
-
-        // 计算交集
-        int inLeft = Math.max(oldColStart, newColStart);
-        int inRight = Math.min(oldColEnd, newColEnd);
-        int inTop = Math.max(oldRowStart, newRowStart);
-        int inBottom = Math.min(oldRowEnd, newRowEnd);
-
-        int y = boundTop;
-        while (y <= boundBottom) {
-            int x = boundLeft;
-            while (x <= boundRight) {
-                if (!(x >= inLeft && x <= inRight && y >= inTop && y <= inBottom)) {
-                    boolean inBefore = x >= oldColStart && x <= oldColEnd && y >= oldRowStart && y <= oldRowEnd;
-                    boolean inAfter = x >= newColStart && x <= newColEnd && y >= newRowStart && y <= newRowEnd;
-
-                    if (inBefore && !inAfter) {
-                        platform.out(x, y);
-                    } else if (!inBefore && inAfter) {
-                        platform.in(x, y);
-                    }
+        if (newColStart > oldColEnd || newRowStart > oldRowEnd || newColEnd < oldColStart || newRowEnd < oldRowStart) {
+            // 说明 sync 跑了很远，直接兜底
+            int oldX = oldColStart;
+            while (oldX <= oldColEnd) {
+                int oldY = oldRowStart;
+                while (oldY <= oldRowEnd) {
+                    platform.out(oldX, oldY);
+                    if (oldY == oldRowEnd) break;
+                    oldY++;
                 }
-                if (x == boundRight) break;
-                x++;
+                if (oldX == oldColEnd) break;
+                oldX++;
             }
 
-            if (y == boundBottom) break;
-            y++;
+            int newX = newColStart;
+            while (newX <= newColEnd) {
+                int newY = newRowStart;
+                while (newY <= newRowEnd) {
+                    platform.in(newX, newY);
+                    if (newY == newRowEnd) break;
+                    newY++;
+                }
+                if (newX == newColEnd) break;
+                newX++;
+            }
+            return;
+        }
+        // 计算最大边界
+        int boundLeft = min(oldColStart, newColStart);
+        int boundRight = max(oldColEnd, newColEnd);
+        int boundTop = min(oldRowStart, newRowStart);
+        int boundBottom = max(oldRowEnd, newRowEnd);
+
+        // 计算交集
+        int inLeft = max(oldColStart, newColStart);
+        int inRight = min(oldColEnd, newColEnd);
+        int inTop = max(oldRowStart, newRowStart);
+        int inBottom = min(oldRowEnd, newRowEnd);
+
+        // 遍历顶部区域
+        check(inLeft, boundTop, boundRight, inTop - 1,
+                oldColStart, oldRowStart, oldColEnd, oldRowEnd,
+                newColStart, newRowStart, newColEnd, newRowEnd);
+
+        // 遍历右边区域
+        check(inRight + 1, inTop, boundRight, boundBottom,
+                oldColStart, oldRowStart, oldColEnd, oldRowEnd,
+                newColStart, newRowStart, newColEnd, newRowEnd);
+
+        // 遍历底部区域
+        check(boundLeft, inBottom + 1, inRight, boundBottom,
+                oldColStart, oldRowStart, oldColEnd, oldRowEnd,
+                newColStart, newRowStart, newColEnd, newRowEnd);
+
+        // 遍历左边区域
+        check(boundLeft, boundTop, inLeft - 1, inBottom,
+                oldColStart, oldRowStart, oldColEnd, oldRowEnd,
+                newColStart, newRowStart, newColEnd, newRowEnd);
+
+//      已废弃的旧算法：
+//        int y = boundTop;
+//        while (y <= boundBottom) {
+//            int x = boundLeft;
+//            while (x <= boundRight) {
+//                if (!(x >= inLeft && x <= inRight && y >= inTop && y <= inBottom)) {
+//                    boolean inBefore = x >= oldColStart && x <= oldColEnd && y >= oldRowStart && y <= oldRowEnd;
+//                    boolean inAfter = x >= newColStart && x <= newColEnd && y >= newRowStart && y <= newRowEnd;
+//
+//                    if (inBefore && !inAfter) {
+//                        platform.out(x, y);
+//                    } else if (!inBefore && inAfter) {
+//                        platform.in(x, y);
+//                    }
+//                }
+//                if (x == boundRight) break;
+//                x++;
+//            }
+//
+//            if (y == boundBottom) break;
+//            y++;
+//        }
+    }
+
+    private void check(int left, int top, int right, int bottom,
+                       int oldColStart, int oldRowStart, int oldColEnd, int oldRowEnd,
+                       int newColStart, int newRowStart, int newColEnd, int newRowEnd) {
+        int x = left;
+        while (x <= right) {
+            int y = top;
+            while (y <= bottom) {
+                boolean inBefore = x >= oldColStart && x <= oldColEnd && y >= oldRowStart && y <= oldRowEnd;
+                boolean inAfter = x >= newColStart && x <= newColEnd && y >= newRowStart && y <= newRowEnd;
+                if (inBefore && !inAfter) {
+                    platform.out(x, y);
+                } else if (!inBefore && inAfter) {
+                    platform.in(x, y);
+                }
+                if (y == bottom) break;
+                y++;
+            }
+            if (x == right) break;
+            x++;
         }
     }
 
@@ -366,6 +436,22 @@ public class TileLayoutService {
         void out(int column, int row);
         
         void beforeDiff(int colStart, int rowStart, int colEnd, int rowEnd);
+    }
+
+    private static int min(int a, int b) {
+        if (a <= b) {
+            return a;
+        } else {
+            return b;
+        }
+    }
+
+    private static int max(int a, int b) {
+        if (a >= b) {
+            return a;
+        } else {
+            return b;
+        }
     }
 
 }
