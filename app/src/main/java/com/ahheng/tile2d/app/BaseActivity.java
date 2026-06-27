@@ -154,14 +154,14 @@ public abstract class BaseActivity extends AppCompatActivity {
         int x;
         int y;
         switch (i) {
-            case 0 -> { x = 0;  y = t; showToast("去幽都(北)喽"); }
-            case 1 -> { x = r;  y = t; showToast("去榑木(东北)喽"); }
-            case 2 -> { x = r;  y = 0; showToast("去旸谷(东)喽"); }
-            case 3 -> { x = r;  y = b; showToast("去苍梧(东南)喽"); }
-            case 4 -> { x = 0;  y = b; showToast("去南溟(南)喽"); }
-            case 5 -> { x = l;  y = b; showToast("去偏句(西南)喽"); }
-            case 6 -> { x = l;  y = 0; showToast("去昧谷(西)喽"); }
-            default -> { x = l;  y = t; showToast("去不周(西北)喽"); }
+            case 0 -> { x = 0;  y = t; showToast("到达最上边"); }
+            case 1 -> { x = r;  y = t; showToast("到达右上角"); }
+            case 2 -> { x = r;  y = 0; showToast("到达最右边"); }
+            case 3 -> { x = r;  y = b; showToast("到达右下角"); }
+            case 4 -> { x = 0;  y = b; showToast("到达最下边"); }
+            case 5 -> { x = l;  y = b; showToast("到达左下角"); }
+            case 6 -> { x = l;  y = 0; showToast("到达最左边"); }
+            default -> { x = l;  y = t; showToast("到达左上角"); }
         }
         toTheEnd.gogogo(x, y);
     }

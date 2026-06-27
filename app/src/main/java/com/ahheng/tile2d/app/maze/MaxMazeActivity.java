@@ -1,5 +1,8 @@
 package com.ahheng.tile2d.app.maze;
 
+import android.annotation.SuppressLint;
+import android.graphics.Bitmap;
+import android.graphics.BitmapFactory;
 import android.os.Bundle;
 import android.os.Handler;
 import android.os.Looper;
@@ -16,32 +19,28 @@ import androidx.annotation.Nullable;
 import androidx.core.content.ContextCompat;
 
 import com.ahheng.tile2d.TileCoreService;
-import com.ahheng.tile2d.TileLayoutModel;
 import com.ahheng.tile2d.app.BaseActivity;
-import com.ahheng.tile2d.app.auto.TileSet;
 import com.ahheng.tile2d.widget.layout.TileLayout;
 
+import java.io.IOException;
+import java.io.InputStream;
 import java.util.ArrayDeque;
-import java.util.ArrayList;
 import java.util.Deque;
-import java.util.List;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
-import java.util.concurrent.Future;
 
 public class MaxMazeActivity extends BaseActivity {
 
     private static final int TYPE_EMPTY = 0;  // 空白，不创建View
     private static final int TYPE_LOADING = -1; // 正在加载，返回null
-    private static final int TYPE_WALL = 12; // 墙壁类型ID
+    private static final int TYPE_WALL = 1; // 墙壁类型ID
 
     private TileLayout tileLayout;
     private TextView chunkTextView;
     private MaxMazeAdapter adapter;
-    private TileSet tileSet;
     private int tileSize;
-    
-    private long seed = 123456789L;
+
+    private final long seed = 123456789L;
 
     private ExecutorService executorService;
     private final Handler mainHandler = new Handler(Looper.getMainLooper());
@@ -52,13 +51,12 @@ public class MaxMazeActivity extends BaseActivity {
 
     private int centerChunkCol = 0;
     private int centerChunkRow = 0;
-    private int expandRange = 1;
+    private final int expandRange = 1;
 
     @Override
     protected void onCreate(@Nullable Bundle savedInstanceState) {
         super.onCreate(savedInstanceState);
         tileSize = dp2px(45);
-        tileSet = new TileSet(this, "dirt_tileset.png", tileSize);
 
         FrameLayout root = new FrameLayout(this);
         chunkTextView = new TextView(this);
@@ -66,8 +64,9 @@ public class MaxMazeActivity extends BaseActivity {
         TypedValue v = new TypedValue();
         getTheme().resolveAttribute(android.R.attr.textColorPrimary, v, true);
         chunkTextView.setTextColor(ContextCompat.getColor(this, v.resourceId));
-        FrameLayout.LayoutParams params = new FrameLayout.LayoutParams(-2, -2, Gravity.RIGHT | Gravity.BOTTOM);
-        params.rightMargin = dp2px(8);
+        chunkTextView.setGravity(Gravity.END | Gravity.BOTTOM);
+        FrameLayout.LayoutParams params = new FrameLayout.LayoutParams(-2, -2, Gravity.END | Gravity.BOTTOM);
+        params.setMarginEnd(dp2px(8));
         params.bottomMargin = dp2px(4);
         
         tileLayout = new TileLayout(this);
@@ -114,6 +113,7 @@ public class MaxMazeActivity extends BaseActivity {
         return Math.abs(chunkCol - centerChunkCol) <= expandRange && Math.abs(chunkRow - centerChunkRow) <= expandRange;
     }
 
+    @SuppressLint("SetTextI18n")
     private void updateChunks() {
         // 计算实际可用的区块范围（自适应裁剪）
         int actualColStart = Math.max(centerChunkCol - expandRange, Chunk.MIN_CHUNK);
@@ -156,11 +156,19 @@ public class MaxMazeActivity extends BaseActivity {
         if (removed) {
             tileLayout.updateAll();
         }
-        chunkTextView.setText("当前区块：" + centerChunkCol + "," + centerChunkRow + "  共 " + activeChunks.size() + " 个");
-        // showToast("种子：" + activeChunks.get(TileCoreService.getTileId(centerChunkCol, centerChunkRow)).seed);
+        Chunk center = activeChunks.get(TileCoreService.getTileId(centerChunkCol, centerChunkRow));
+        chunkTextView.setText(
+                "可见 " + activeChunks.size() + " 个，回收 " + chunkPool.size() + " 个\n" +
+                "当前区块：" + centerChunkCol + "," + centerChunkRow + "\n" +
+                "区块种子：" + (center == null ? "?" : center.seed)
+        );
+
     }
 
     private void generateChunk(Chunk chunk) {
+        long chunkId = TileCoreService.getTileId(chunk.col, chunk.row);
+        int finalCol = chunk.col;
+        int finalRow = chunk.row;
         chunk.future = executorService.submit(() -> {
             try {
                 // 测试环境用于模拟极慢情况下的耗时
@@ -172,19 +180,34 @@ public class MaxMazeActivity extends BaseActivity {
                     chunk.setWall(0, i, true);
                 }
                 // 生成边界开口(≥1)
-                chunk.setWall(chunk.randomOddLocal(), 0, false);
-                chunk.setWall(0, chunk.randomOddLocal(), false);
+                int wallX = chunk.randomOddLocal();
+                chunk.setWall(wallX, 0, false);
+                int wallY = chunk.randomOddLocal();
+                chunk.setWall(0, wallY, false);
+                if (chunk.random.nextDouble() <= 0.5) {
+                    // 50% 概率额外生成2个边界开口
+                    int i = chunk.randomOddLocal();
+                    if (Math.abs(i - wallX) > 3) {
+                        chunk.setWall(i, 0, false);
+                    }
+                    i = chunk.randomOddLocal();
+                    if (Math.abs(i - wallY) > 3) {
+                        chunk.setWall(0, i, false);
+                    }
+                }
                 
                 // 递归分割法
                 recursiveDivision(1, 1, Chunk.CHUNK_SIZE - 1, Chunk.CHUNK_SIZE - 1, chunk);
                 
                 // 生成完毕，回到主线程更新状态和UI
                 mainHandler.post(() -> {
-                    if (chunk.future != null && !chunk.future.isCancelled()) {
-                        chunk.generated = true;
-                        int left = chunk.col << Chunk.CHUNK_SHIFT;
-                        int top = chunk.row << Chunk.CHUNK_SHIFT;
-                        tileLayout.updateRange(left, top, left + Chunk.CHUNK_SIZE - 1, top + Chunk.CHUNK_SIZE - 1);
+                    Chunk current = activeChunks.get(chunkId);
+                    if (current != null && current.col == finalCol && current.row == finalRow) {
+                        current.generated = true;
+                        int left = finalCol << Chunk.CHUNK_SHIFT;
+                        int top = finalRow << Chunk.CHUNK_SHIFT;
+                        tileLayout.updateRange(left, top,
+                                left + Chunk.CHUNK_SIZE - 1, top + Chunk.CHUNK_SIZE - 1);
                     }
                 });
             } catch (Exception e) {
@@ -218,13 +241,30 @@ public class MaxMazeActivity extends BaseActivity {
             }
         }
         
-        // 开洞与递归
+        // 开洞
+        double extra = c.random.nextDouble(); // 50% 概率额外生成一个洞
         if (w >= h) {
-            c.setWall(x, c.randomOdd(t, b), false);
+            int i = c.randomOdd(t, b);
+            c.setWall(x, i, false);
+            if (extra <= 0.5) {
+                int i2 = c.randomOdd(t, b);
+                if (Math.abs(i2 - i) > 3) c.setWall(x, i2, false);
+            }
+        } else {
+            int i = c.randomOdd(l, r);
+            c.setWall(i, y, false);
+            if (extra <= 0.5) {
+                int i2 = c.randomOdd(l, r);
+                if (Math.abs(i2 - i) > 3) c.setWall(i2, y, false);
+            }
+
+        }
+
+        // 递归分割
+        if (w >= h) {
             recursiveDivision(l, t, x - 1, b, c);
             recursiveDivision(x + 1, t, r, b, c);
         } else {
-            c.setWall(c.randomOdd(l, r), y, false);
             recursiveDivision(l, t, r, y - 1, c);
             recursiveDivision(l, y + 1, r, b, c);
         }
@@ -246,7 +286,7 @@ public class MaxMazeActivity extends BaseActivity {
         if (chunk.future != null && !chunk.future.isDone()) {
             chunk.future.cancel(true);
         }
-        chunk.clear();
+        chunk.clear(); // 完全重置 Chunk 的一切状态
         chunkPool.offer(chunk);
     }
 
@@ -266,14 +306,6 @@ public class MaxMazeActivity extends BaseActivity {
     }
 
     private class MaxMazeAdapter extends TileLayout.Adapter {
-        @Override
-        public int getLeftBound() { return Integer.MIN_VALUE; }
-        @Override
-        public int getTopBound() { return Integer.MIN_VALUE; }
-        @Override
-        public int getRightBound() { return Integer.MAX_VALUE; }
-        @Override
-        public int getBottomBound() { return Integer.MAX_VALUE; }
 
         @Override
         public int getTileType(int column, int row) {
@@ -301,7 +333,10 @@ public class MaxMazeActivity extends BaseActivity {
                 return null;
             }
             ImageView imageView = new ImageView(MaxMazeActivity.this);
-            imageView.setImageBitmap(tileSet.getTile(type));
+            try (InputStream is = getAssets().open("bricks.png")) {
+                Bitmap bitmap = BitmapFactory.decodeStream(is);
+                imageView.setImageBitmap(Bitmap.createScaledBitmap(bitmap, tileSize, tileSize, false));
+            } catch (IOException ignored) {}
             imageView.setLayoutParams(new ViewGroup.LayoutParams(-2, -2));
             imageView.setScaleType(ImageView.ScaleType.CENTER);
             return new TileLayout.TileHolder(imageView);
