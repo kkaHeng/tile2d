@@ -5,6 +5,9 @@ public class TileLayoutService {
     private final TileLayoutModel layoutModel;
     private final PlatformService platform;
 
+    private boolean horizontalScrollEnabled = true;
+    private boolean verticalScrollEnabled = true;
+
     private int colStart;
     private int rowStart;
     private int colEnd = -1;
@@ -48,10 +51,10 @@ public class TileLayoutService {
         }
 
         // 水平同步到 [-tileWidth, 0]
-        if (platform.isHorizontalScrollEnabled()) {
+        if (horizontalScrollEnabled) {
             // 起始锚点
             if (offsetX <= 0 && totalWidth + offsetX < windowWidth && colEnd == rightBound) {
-                // 右侧有空白
+                // 右侧有空白，尝试右对齐
                 float end = windowWidth - (totalWidth + offsetX);
                 offsetX += end;
             }
@@ -62,12 +65,13 @@ public class TileLayoutService {
                 offsetX -= width;
                 totalWidth += width;
             }
-            while (offsetX < -platform.getTileWidth(colStart) && colStart < rightBound) {
+            int startWidth = platform.getTileWidth(colStart);
+            while (offsetX < -startWidth && colStart < rightBound) {
                 // 内容向左边滚动，锚点右移
-                int width = platform.getTileWidth(colStart);
-                offsetX += width;
-                totalWidth -= width;
+                offsetX += startWidth;
+                totalWidth -= startWidth;
                 colStart++;
+                startWidth = platform.getTileWidth(colStart);
             }
             if (offsetX > 0 && colStart == leftBound) {
                 // 左边存在空白，内容无法填满窗口，强制对齐左边缘
@@ -80,18 +84,20 @@ public class TileLayoutService {
                 colEnd++;
                 totalWidth += platform.getTileWidth(colEnd);
             }
-            while (totalWidth + offsetX - platform.getTileWidth(colEnd) > windowWidth && colEnd > colStart) {
+            int endWidth = platform.getTileWidth(colEnd);
+            while (totalWidth + offsetX - endWidth > windowWidth && colEnd > colStart) {
                 // 内容过度超出窗口
-                totalWidth -= platform.getTileWidth(colEnd);
+                totalWidth -= endWidth;
                 colEnd--;
+                endWidth = platform.getTileWidth(colEnd);
             }
         }
 
         // 垂直同步到 [-tileHeight, 0]
-        if (platform.isVerticalScrollEnabled()) {
+        if (verticalScrollEnabled) {
             // 起始锚点
             if (offsetY <= 0 && totalHeight + offsetY < windowHeight && rowEnd == bottomBound) {
-                // 底部有空白
+                // 底部有空白，尝试下对齐
                 float end = windowHeight - (totalHeight + offsetY);
                 offsetY += end;
             }
@@ -102,13 +108,13 @@ public class TileLayoutService {
                 offsetY -= height;
                 totalHeight += height;
             }
-            while (offsetY < -platform.getTileHeight(rowStart) && rowStart < bottomBound) {
+            int startHeight = platform.getTileHeight(rowStart);
+            while (offsetY < -startHeight && rowStart < bottomBound) {
                 // 内容向上边滚动，锚点下移
-                int height = platform.getTileHeight(rowStart);
-                offsetY += height;
-                totalHeight -= height;
+                offsetY += startHeight;
+                totalHeight -= startHeight;
                 rowStart++;
-                
+                startHeight = platform.getTileHeight(rowStart);
             }
             if (offsetY > 0 && rowStart == topBound) {
                 // 顶部存在空白，内容无法填满窗口，强制对齐上边缘
@@ -121,10 +127,12 @@ public class TileLayoutService {
                 rowEnd++;
                 totalHeight += platform.getTileHeight(rowEnd);
             }
-            while (totalHeight + offsetY - platform.getTileHeight(rowEnd) > windowHeight && rowEnd > rowStart) {
+            int endHeight = platform.getTileHeight(rowEnd);
+            while (totalHeight + offsetY - endHeight > windowHeight && rowEnd > rowStart) {
                 // 内容过度超出窗口
-                totalHeight -= platform.getTileHeight(rowEnd);
+                totalHeight -= endHeight;
                 rowEnd--;
+                endHeight = platform.getTileHeight(rowEnd);
             }
         }
         platform.beforeDiff(colStart, rowStart, colEnd, rowEnd);
@@ -319,6 +327,22 @@ public class TileLayoutService {
         layoutModel.reset();
     }
 
+    public void setHorizontalScrollEnabled(boolean enabled) {
+        horizontalScrollEnabled = enabled;
+    }
+
+    public void setVerticalScrollEnabled(boolean enabled) {
+        verticalScrollEnabled = enabled;
+    }
+
+    public boolean isHorizontalScrollEnabled() {
+        return horizontalScrollEnabled;
+    }
+
+    public boolean isVerticalScrollEnabled() {
+        return verticalScrollEnabled;
+    }
+
     public interface PlatformService {
 
         int getWindowWidth();
@@ -336,10 +360,6 @@ public class TileLayoutService {
         int getRightBound();
 
         int getBottomBound();
-
-        boolean isHorizontalScrollEnabled();
-
-        boolean isVerticalScrollEnabled();
 
         void in(int column, int row);
 

@@ -13,8 +13,8 @@ import android.view.ViewGroup;
 
 import com.ahheng.tile2d.TileCoreService;
 import com.ahheng.tile2d.TileLayoutModel;
-import com.ahheng.tile2d.widget.TileAdapter;
-import com.ahheng.tile2d.widget.TileDimenProvider;
+import com.ahheng.tile2d.tile.TileAdapter;
+import com.ahheng.tile2d.dimen.TileDimenProvider;
 import com.ahheng.tile2d.widget.debug.DebugLayer;
 
 public class TileLayout extends ViewGroup {

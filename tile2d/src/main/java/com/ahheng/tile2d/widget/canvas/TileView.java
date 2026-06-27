@@ -13,8 +13,8 @@ import android.view.ViewConfiguration;
 
 import com.ahheng.tile2d.TileCoreService;
 import com.ahheng.tile2d.TileLayoutModel;
-import com.ahheng.tile2d.widget.TileAdapter;
-import com.ahheng.tile2d.widget.TileDimenProvider;
+import com.ahheng.tile2d.tile.TileAdapter;
+import com.ahheng.tile2d.dimen.TileDimenProvider;
 import com.ahheng.tile2d.widget.debug.DebugLayer;
 
 public class TileView extends View {
@@ -198,8 +198,12 @@ public class TileView extends View {
     @Override
     protected void onSizeChanged(int w, int h, int oldw, int oldh) {
         super.onSizeChanged(w, h, oldw, oldh);
-        coreService.setBounds(getPaddingLeft(), getPaddingTop(), getWidth() - getPaddingRight(), getHeight() - getPaddingBottom());
+        updateBounds();
         coreService.sync(0, 0);
+    }
+
+    private void updateBounds() {
+        coreService.setBounds(getPaddingLeft(), getPaddingTop(), getWidth() - getPaddingRight(), getHeight() - getPaddingBottom());
     }
 
     @Override
@@ -344,6 +348,13 @@ public class TileView extends View {
         removeLongPress();
         resetTouchTarget();
         coreService.resetAnimator();
+    }
+
+    @Override
+    public void setPadding(int left, int top, int right, int bottom) {
+        super.setPadding(left, top, right, bottom);
+        updateBounds();
+        coreService.sync(0, 0);
     }
 
     public long getLongPressTimeout() {

@@ -1,4 +1,4 @@
-package com.ahheng.tile2d.widget.tile;
+package com.ahheng.tile2d.tile;
 
 import android.util.SparseArray;
 

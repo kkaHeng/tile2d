@@ -57,7 +57,7 @@ public class TileLayoutActivity extends BaseActivity {
 
     private void initColorPlan(boolean first) {
         displayText = false;
-        TileLayoutModel model = layout.getLayoutModel();
+        TileLayoutModel model = layout.getLayoutModel().newInstance();
         int size = dp2px(40);
         layout.setDefaultTileWidth(size);
         layout.setDefaultTileHeight(size);
@@ -71,7 +71,7 @@ public class TileLayoutActivity extends BaseActivity {
 
     private void initTextPlan(boolean first) {
         displayText = true;
-        TileLayoutModel model = layout.getLayoutModel();
+        TileLayoutModel model = layout.getLayoutModel().newInstance();
         layout.setDefaultTileWidth(dp2px(80));
         layout.setDefaultTileHeight(dp2px(45));
         layout.setAdapter((adapter = new RandomAdapter()));

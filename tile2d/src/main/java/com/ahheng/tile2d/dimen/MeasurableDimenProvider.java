@@ -4,9 +4,8 @@ import android.util.SparseIntArray;
 import android.view.View;
 
 import com.ahheng.tile2d.TileCoreService;
-import com.ahheng.tile2d.widget.TileAdapter;
-import com.ahheng.tile2d.widget.TileDimenProvider;
-import com.ahheng.tile2d.widget.tile.TileRecycledPool;
+import com.ahheng.tile2d.tile.TileAdapter;
+import com.ahheng.tile2d.tile.TileRecycledPool;
 
 // 简易测量工具，不建议在大数据量场景下使用
 public class MeasurableDimenProvider implements TileDimenProvider {

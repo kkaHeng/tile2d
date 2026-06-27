@@ -1,4 +1,4 @@
-package com.ahheng.tile2d.widget;
+package com.ahheng.tile2d.dimen;
 
 public interface TileDimenProvider {
 

@@ -12,8 +12,8 @@ import android.view.ViewConfiguration;
 import android.view.animation.DecelerateInterpolator;
 import android.widget.Scroller;
 
-import com.ahheng.tile2d.widget.TileDimenProvider;
-import com.ahheng.tile2d.widget.tile.TileRecycledPool;
+import com.ahheng.tile2d.dimen.TileDimenProvider;
+import com.ahheng.tile2d.tile.TileRecycledPool;
 
 public class TileCoreService<T extends TileCoreService.BaseTileHolder> {
 
@@ -47,9 +47,6 @@ public class TileCoreService<T extends TileCoreService.BaseTileHolder> {
     private int lastScrollerX;
     private int lastScrollerY;
     private float lastSmoothProgress;
-
-    private boolean horizontalScrollEnabled = true;
-    private boolean verticalScrollEnabled = true;
 
     private int recycledCount;
     private long startSyncTime;
@@ -110,16 +107,6 @@ public class TileCoreService<T extends TileCoreService.BaseTileHolder> {
         }
 
         @Override
-        public boolean isHorizontalScrollEnabled() {
-            return horizontalScrollEnabled;
-        }
-
-        @Override
-        public boolean isVerticalScrollEnabled() {
-            return verticalScrollEnabled;
-        }
-
-        @Override
         public void in(int column, int row) {
             TileCoreService.this.in(column, row);
         }
@@ -142,19 +129,19 @@ public class TileCoreService<T extends TileCoreService.BaseTileHolder> {
     }
 
     public boolean isHorizontalScrollEnabled() {
-        return horizontalScrollEnabled;
-    }
-
-    public void setHorizontalScrollEnabled(boolean enabled) {
-        this.horizontalScrollEnabled = enabled;
+        return layoutService.isHorizontalScrollEnabled();
     }
 
     public boolean isVerticalScrollEnabled() {
-        return verticalScrollEnabled;
+        return layoutService.isVerticalScrollEnabled();
+    }
+
+    public void setHorizontalScrollEnabled(boolean enabled) {
+        layoutService.setHorizontalScrollEnabled(enabled);
     }
 
     public void setVerticalScrollEnabled(boolean enabled) {
-        this.verticalScrollEnabled = enabled;
+        layoutService.setVerticalScrollEnabled(enabled);
     }
 
     public void requestDisallowInterceptTouchEvent(boolean disallowIntercept) {
@@ -165,7 +152,7 @@ public class TileCoreService<T extends TileCoreService.BaseTileHolder> {
         return isInteractingWithView;
     }
 
-    public boolean handleTouchEvent(MotionEvent event) {
+    public void handleTouchEvent(MotionEvent event) {
         int action = event.getActionMasked();
 
         if (action == MotionEvent.ACTION_DOWN) {
@@ -180,7 +167,6 @@ public class TileCoreService<T extends TileCoreService.BaseTileHolder> {
         if (!disallowIntercept) {
             gestureDetector.onTouchEvent(event);
         }
-        return true;
     }
 
     public void computeScroll() {
@@ -192,8 +178,8 @@ public class TileCoreService<T extends TileCoreService.BaseTileHolder> {
             lastScrollerX = currX;
             lastScrollerY = currY;
 
-            boolean scrolled = dx != 0 && horizontalScrollEnabled;
-            if (dy != 0 && verticalScrollEnabled) scrolled = true;
+            boolean scrolled = dx != 0 && layoutService.isHorizontalScrollEnabled();
+            if (dy != 0 && layoutService.isVerticalScrollEnabled()) scrolled = true;
 
             if (scrolled) {
                 sync(dx, dy);
@@ -209,11 +195,11 @@ public class TileCoreService<T extends TileCoreService.BaseTileHolder> {
         public boolean onScroll(MotionEvent e1, MotionEvent e2, float distanceX, float distanceY) {
             boolean scrolled = false;
             float dx = 0, dy = 0;
-            if (horizontalScrollEnabled) {
+            if (layoutService.isHorizontalScrollEnabled()) {
                 dx = -distanceX;
                 scrolled = true;
             }
-            if (verticalScrollEnabled) {
+            if (layoutService.isVerticalScrollEnabled()) {
                 dy = -distanceY;
                 scrolled = true;
             }
@@ -229,14 +215,14 @@ public class TileCoreService<T extends TileCoreService.BaseTileHolder> {
         public boolean onFling(MotionEvent e1, MotionEvent e2, float velocityX, float velocityY) {
             boolean flingX = false, flingY = false;
 
-            if (horizontalScrollEnabled && Math.abs(velocityX) >= minVelocity) {
+            if (layoutService.isHorizontalScrollEnabled() && Math.abs(velocityX) >= minVelocity) {
                 velocityX = velocityX < 0 ? Math.max(velocityX, -maxVelocity) : Math.min(velocityX, maxVelocity);
                 flingX = true;
             } else {
                 velocityX = 0;
             }
 
-            if (verticalScrollEnabled && Math.abs(velocityY) >= minVelocity) {
+            if (layoutService.isVerticalScrollEnabled() && Math.abs(velocityY) >= minVelocity) {
                 velocityY = velocityY < 0 ? Math.max(velocityY, -maxVelocity) : Math.min(velocityY, maxVelocity);
                 flingY = true;
             } else {
@@ -250,10 +236,10 @@ public class TileCoreService<T extends TileCoreService.BaseTileHolder> {
             lastScrollerX = 0;
             lastScrollerY = 0;
             scroller.fling(0, 0, (int) velocityX, (int) velocityY,
-                    horizontalScrollEnabled ? Integer.MIN_VALUE : 0,
-                    horizontalScrollEnabled ? Integer.MAX_VALUE : 0,
-                    verticalScrollEnabled ? Integer.MIN_VALUE : 0,
-                    verticalScrollEnabled ? Integer.MAX_VALUE : 0);
+                    layoutService.isHorizontalScrollEnabled() ? Integer.MIN_VALUE : 0,
+                    layoutService.isHorizontalScrollEnabled() ? Integer.MAX_VALUE : 0,
+                    layoutService.isVerticalScrollEnabled() ? Integer.MIN_VALUE : 0,
+                    layoutService.isVerticalScrollEnabled() ? Integer.MAX_VALUE : 0);
             coreInterface.updateUI();
             return true;
         }
@@ -349,16 +335,13 @@ public class TileCoreService<T extends TileCoreService.BaseTileHolder> {
         smoothAnimator.setDuration(duration);
         smoothAnimator.setInterpolator(new DecelerateInterpolator(1.5f));
 
-        smoothAnimator.addUpdateListener(new ValueAnimator.AnimatorUpdateListener() {
-            @Override
-            public void onAnimationUpdate(ValueAnimator animation) {
-                float progress = animation.getAnimatedFraction();
-                float stepProgress = progress - lastSmoothProgress;
-                float stepX = dx * stepProgress;
-                float stepY = dy * stepProgress;
-                lastSmoothProgress = progress;
-                sync(stepX, stepY);
-            }
+        smoothAnimator.addUpdateListener(animation -> {
+            float progress = animation.getAnimatedFraction();
+            float stepProgress = progress - lastSmoothProgress;
+            float stepX = dx * stepProgress;
+            float stepY = dy * stepProgress;
+            lastSmoothProgress = progress;
+            sync(stepX, stepY);
         });
 
         smoothAnimator.start();
