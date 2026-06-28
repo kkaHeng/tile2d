@@ -237,7 +237,7 @@ public class TileViewActivity extends BaseActivity {
         public void onBindTileHolder(TileView.TileHolder holder, int column, int row) {
             ColorTileHolder colorTileHolder = (ColorTileHolder) holder;
             double noise = perlinNoise.noiseNormalized(column * 0.03, row * 0.03);
-            colorTileHolder.backgroundColor = colorGenerator.getColor((noise - 0.03) / 0.97);
+            colorTileHolder.backgroundColor = colorGenerator.getColor((noise - 0.3) / 0.7);
             colorTileHolder.noise = noise / 0.03;
         }
     }
