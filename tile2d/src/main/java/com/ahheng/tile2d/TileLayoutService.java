@@ -280,93 +280,94 @@ public class TileLayoutService {
         int inTop = max(oldRowStart, newRowStart);
         int inBottom = min(oldRowEnd, newRowEnd);
 
-        // 废弃的“正确”实现
-//
-//        // 遍历顶部区域
-//        if (boundTop < inTop) {
-//            int x = inLeft;
-//            while (x <= boundRight) {
-//                int y = boundTop;
-//                while (y <= inTop - 1) {
-//                    boolean inBefore = x >= oldColStart && x <= oldColEnd && y >= oldRowStart && y <= oldRowEnd;
-//                    boolean inAfter = x >= newColStart && x <= newColEnd && y >= newRowStart && y <= newRowEnd;
-//                    if (inBefore && !inAfter) {
-//                        platform.out(x, y);
-//                    } else if (!inBefore && inAfter) {
-//                        platform.in(x, y);
-//                    }
-//                    if (y == inTop - 1) break;
-//                    y++;
-//                }
-//                if (x == boundRight) break;
-//                x++;
-//            }
-//        }
-//
-//        // 遍历右边区域
-//        if (inRight < boundRight) {
-//            int x = inRight + 1;
-//            while (x <= boundRight) {
-//                int y = inTop;
-//                while (y <= boundBottom) {
-//                    boolean inBefore = x >= oldColStart && x <= oldColEnd && y >= oldRowStart && y <= oldRowEnd;
-//                    boolean inAfter = x >= newColStart && x <= newColEnd && y >= newRowStart && y <= newRowEnd;
-//                    if (inBefore && !inAfter) {
-//                        platform.out(x, y);
-//                    } else if (!inBefore && inAfter) {
-//                        platform.in(x, y);
-//                    }
-//                    if (y == boundBottom) break;
-//                    y++;
-//                }
-//                if (x == boundRight) break;
-//                x++;
-//            }
-//        }
-//
-//        // 遍历底部区域
-//        if (inBottom < boundBottom) {
-//            int x = boundLeft;
-//            while (x <= inRight) {
-//                int y = inBottom + 1;
-//                while (y <= boundBottom) {
-//                    boolean inBefore = x >= oldColStart && x <= oldColEnd && y >= oldRowStart && y <= oldRowEnd;
-//                    boolean inAfter = x >= newColStart && x <= newColEnd && y >= newRowStart && y <= newRowEnd;
-//                    if (inBefore && !inAfter) {
-//                        platform.out(x, y);
-//                    } else if (!inBefore && inAfter) {
-//                        platform.in(x, y);
-//                    }
-//                    if (y == boundBottom) break;
-//                    y++;
-//                }
-//                if (x == inRight) break;
-//                x++;
-//            }
-//        }
-//
-//        // 遍历左边区域
-//        if (boundLeft < inLeft) {
-//            int x = boundLeft;
-//            while (x <= inLeft - 1) {
-//                int y = boundTop;
-//                while (y <= inBottom) {
-//                    boolean inBefore = x >= oldColStart && x <= oldColEnd && y >= oldRowStart && y <= oldRowEnd;
-//                    boolean inAfter = x >= newColStart && x <= newColEnd && y >= newRowStart && y <= newRowEnd;
-//                    if (inBefore && !inAfter) {
-//                        platform.out(x, y);
-//                    } else if (!inBefore && inAfter) {
-//                        platform.in(x, y);
-//                    }
-//                    if (y == inBottom) break;
-//                    y++;
-//                }
-//                if (x == inLeft - 1) break;
-//                x++;
-//            }
-//        }
+        // 方案1
+        
+        // 遍历顶部区域
+        if (boundTop < inTop) {
+            int x = inLeft;
+            while (x <= boundRight) {
+                int y = boundTop;
+                while (y <= inTop - 1) {
+                    boolean inBefore = x >= oldColStart && x <= oldColEnd && y >= oldRowStart && y <= oldRowEnd;
+                    boolean inAfter = x >= newColStart && x <= newColEnd && y >= newRowStart && y <= newRowEnd;
+                    if (inBefore && !inAfter) {
+                        platform.out(x, y);
+                    } else if (!inBefore && inAfter) {
+                        platform.in(x, y);
+                    }
+                    if (y == inTop - 1) break;
+                    y++;
+                }
+                if (x == boundRight) break;
+                x++;
+            }
+        }
 
-        // 看起来笨但效率高
+        // 遍历右边区域
+        if (inRight < boundRight) {
+            int x = inRight + 1;
+            while (x <= boundRight) {
+                int y = inTop;
+                while (y <= boundBottom) {
+                    boolean inBefore = x >= oldColStart && x <= oldColEnd && y >= oldRowStart && y <= oldRowEnd;
+                    boolean inAfter = x >= newColStart && x <= newColEnd && y >= newRowStart && y <= newRowEnd;
+                    if (inBefore && !inAfter) {
+                        platform.out(x, y);
+                    } else if (!inBefore && inAfter) {
+                        platform.in(x, y);
+                    }
+                    if (y == boundBottom) break;
+                    y++;
+                }
+                if (x == boundRight) break;
+                x++;
+            }
+        }
+
+        // 遍历底部区域
+        if (inBottom < boundBottom) {
+            int x = boundLeft;
+            while (x <= inRight) {
+                int y = inBottom + 1;
+                while (y <= boundBottom) {
+                    boolean inBefore = x >= oldColStart && x <= oldColEnd && y >= oldRowStart && y <= oldRowEnd;
+                    boolean inAfter = x >= newColStart && x <= newColEnd && y >= newRowStart && y <= newRowEnd;
+                    if (inBefore && !inAfter) {
+                        platform.out(x, y);
+                    } else if (!inBefore && inAfter) {
+                        platform.in(x, y);
+                    }
+                    if (y == boundBottom) break;
+                    y++;
+                }
+                if (x == inRight) break;
+                x++;
+            }
+        }
+
+        // 遍历左边区域
+        if (boundLeft < inLeft) {
+            int x = boundLeft;
+            while (x <= inLeft - 1) {
+                int y = boundTop;
+                while (y <= inBottom) {
+                    boolean inBefore = x >= oldColStart && x <= oldColEnd && y >= oldRowStart && y <= oldRowEnd;
+                    boolean inAfter = x >= newColStart && x <= newColEnd && y >= newRowStart && y <= newRowEnd;
+                    if (inBefore && !inAfter) {
+                        platform.out(x, y);
+                    } else if (!inBefore && inAfter) {
+                        platform.in(x, y);
+                    }
+                    if (y == inBottom) break;
+                    y++;
+                }
+                if (x == inLeft - 1) break;
+                x++;
+            }
+        }
+
+        // 方案2
+        /*
         int y = boundTop;
         while (y <= boundBottom) {
             int x = boundLeft;
@@ -387,7 +388,7 @@ public class TileLayoutService {
 
             if (y == boundBottom) break;
             y++;
-        }
+        }*/
     }
 
     public TileLayoutModel getLayoutModel() {
