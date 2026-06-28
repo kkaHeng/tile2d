@@ -40,11 +40,12 @@ dependencyResolutionManagement {
 引入依赖：
 ```gradle
 dependencies {
-    implementation 'com.github.kkaHeng:tile2d:26.5.1'
+    implementation 'com.github.kkaHeng:tile2d:26.6.1'
 }
 ```
 
 查看最新版本：[Jitpack](https://jitpack.io/#kkaHeng/tile2d)，或者点击页面顶部的徽章
+> 版本号规则：年份.月份.大版本.小版本
 
 ### 基础使用
 
