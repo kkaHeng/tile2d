@@ -3,10 +3,12 @@ package com.ahheng.tile2d;
 public class TileLayoutService {
 
     private final TileLayoutModel layoutModel;
-    private final PlatformService platform;
+    private final PlatformInterface platform;
 
     private boolean horizontalScrollEnabled = true;
     private boolean verticalScrollEnabled = true;
+    private int windowWidth;
+    private int windowHeight;
 
     private int colStart;
     private int rowStart;
@@ -19,29 +21,21 @@ public class TileLayoutService {
     private int totalWidth;
     private int totalHeight;
 
-    public TileLayoutService(PlatformService service) {
+    public TileLayoutService(PlatformInterface service) {
         this.layoutModel = new TileLayoutModel();
         this.platform = service;
     }
 
     public boolean sync(float dx, float dy) {
-
         int colStart = this.colStart;
         int rowStart = this.rowStart;
         int colEnd = this.colEnd;
         int rowEnd = this.rowEnd;
-        float offsetX = this.offsetX + dx;
-        float offsetY = this.offsetY + dy;
-        int totalWidth = this.totalWidth;
-        int totalHeight = this.totalHeight;
 
-        int windowWidth = platform.getWindowWidth();
-        int windowHeight = platform.getWindowHeight();
         int leftBound = platform.getLeftBound();
         int topBound = platform.getTopBound();
         int rightBound = platform.getRightBound();
         int bottomBound = platform.getBottomBound();
-        
         if (colStart > rightBound ||
             rowStart > bottomBound ||
             colEnd < leftBound ||
@@ -49,6 +43,11 @@ public class TileLayoutService {
             // 窗口状态不合法，避免向外传递不合法的坐标，直接短路
             return false;
         }
+        float offsetX = this.offsetX + dx;
+        float offsetY = this.offsetY + dy;
+
+        int totalWidth = this.totalWidth;
+        int totalHeight = this.totalHeight;
 
         // 水平同步到 [-tileWidth, 0]
         if (horizontalScrollEnabled) {
@@ -135,16 +134,24 @@ public class TileLayoutService {
                 endHeight = platform.getTileHeight(rowEnd);
             }
         }
-        platform.beforeDiff(colStart, rowStart, colEnd, rowEnd);
-        diff(this.colStart, this.rowStart, this.colEnd, this.rowEnd, colStart, rowStart, colEnd, rowEnd);
-        this.colStart = colStart;
-        this.rowStart = rowStart;
-        this.colEnd = colEnd;
-        this.rowEnd = rowEnd;
         this.offsetX = offsetX;
         this.offsetY = offsetY;
-        this.totalWidth = totalWidth;
-        this.totalHeight = totalHeight;
+
+        int lastColStart = this.colStart;
+        int lastRowStart = this.rowStart;
+        int lastColEnd = this.colEnd;
+        int lastRowEnd = this.rowEnd;
+        platform.beforeDiff(colStart, rowStart, colEnd, rowEnd);
+        if (lastColStart != colStart || lastRowStart != rowStart
+                || lastColEnd != colEnd || lastRowEnd != rowEnd) {
+            this.colStart = colStart;
+            this.rowStart = rowStart;
+            this.colEnd = colEnd;
+            this.rowEnd = rowEnd;
+            this.totalWidth = totalWidth;
+            this.totalHeight = totalHeight;
+            diff(lastColStart, lastRowStart, lastColEnd, lastRowEnd, colStart, rowStart, colEnd, rowEnd);
+        }
         return true;
     }
 
@@ -154,8 +161,6 @@ public class TileLayoutService {
         }
         int rightBound = platform.getRightBound();
         int bottomBound = platform.getBottomBound();
-        int windowWidth = platform.getWindowWidth();
-        int windowHeight = platform.getWindowHeight();
         int totalWidth = (int) offsetX;
         int totalHeight = (int) offsetY;
         int colEnd = column;
@@ -236,10 +241,6 @@ public class TileLayoutService {
     }
 
     private void diff(int oldColStart, int oldRowStart, int oldColEnd, int oldRowEnd, int newColStart, int newRowStart, int newColEnd, int newRowEnd) {
-        if (oldColStart == newColStart && oldRowStart == newRowStart
-                && oldColEnd == newColEnd && oldRowEnd == newRowEnd) {
-            return; // 提前退出
-        }
         if (newColStart > oldColEnd || newRowStart > oldRowEnd || newColEnd < oldColStart || newRowEnd < oldRowStart) {
             // 说明 sync 跑了很远，直接兜底
             int oldX = oldColStart;
@@ -279,112 +280,114 @@ public class TileLayoutService {
         int inTop = max(oldRowStart, newRowStart);
         int inBottom = min(oldRowEnd, newRowEnd);
 
-        // 遍历顶部区域
-        if (boundTop < inTop) {
-            int x = inLeft;
-            while (x <= boundRight) {
-                int y = boundTop;
-                while (y <= inTop - 1) {
-                    boolean inBefore = x >= oldColStart && x <= oldColEnd && y >= oldRowStart && y <= oldRowEnd;
-                    boolean inAfter = x >= newColStart && x <= newColEnd && y >= newRowStart && y <= newRowEnd;
-                    if (inBefore && !inAfter) {
-                        platform.out(x, y);
-                    } else if (!inBefore && inAfter) {
-                        platform.in(x, y);
-                    }
-                    if (y == inTop - 1) break;
-                    y++;
-                }
-                if (x == boundRight) break;
-                x++;
-            }
-        }
-
-        // 遍历右边区域
-        if (inRight < boundRight) {
-            int x = inRight + 1;
-            while (x <= boundRight) {
-                int y = inTop;
-                while (y <= boundBottom) {
-                    boolean inBefore = x >= oldColStart && x <= oldColEnd && y >= oldRowStart && y <= oldRowEnd;
-                    boolean inAfter = x >= newColStart && x <= newColEnd && y >= newRowStart && y <= newRowEnd;
-                    if (inBefore && !inAfter) {
-                        platform.out(x, y);
-                    } else if (!inBefore && inAfter) {
-                        platform.in(x, y);
-                    }
-                    if (y == boundBottom) break;
-                    y++;
-                }
-                if (x == boundRight) break;
-                x++;
-            }
-        }
-
-        // 遍历底部区域
-        if (inBottom < boundBottom) {
-            int x = boundLeft;
-            while (x <= inRight) {
-                int y = inBottom + 1;
-                while (y <= boundBottom) {
-                    boolean inBefore = x >= oldColStart && x <= oldColEnd && y >= oldRowStart && y <= oldRowEnd;
-                    boolean inAfter = x >= newColStart && x <= newColEnd && y >= newRowStart && y <= newRowEnd;
-                    if (inBefore && !inAfter) {
-                        platform.out(x, y);
-                    } else if (!inBefore && inAfter) {
-                        platform.in(x, y);
-                    }
-                    if (y == boundBottom) break;
-                    y++;
-                }
-                if (x == inRight) break;
-                x++;
-            }
-        }
-
-        // 遍历左边区域
-        if (boundLeft < inLeft) {
-            int x = boundLeft;
-            while (x <= inLeft - 1) {
-                int y = boundTop;
-                while (y <= inBottom) {
-                    boolean inBefore = x >= oldColStart && x <= oldColEnd && y >= oldRowStart && y <= oldRowEnd;
-                    boolean inAfter = x >= newColStart && x <= newColEnd && y >= newRowStart && y <= newRowEnd;
-                    if (inBefore && !inAfter) {
-                        platform.out(x, y);
-                    } else if (!inBefore && inAfter) {
-                        platform.in(x, y);
-                    }
-                    if (y == inBottom) break;
-                    y++;
-                }
-                if (x == inLeft - 1) break;
-                x++;
-            }
-        }
-
-//      已废弃的旧算法：
-//        int y = boundTop;
-//        while (y <= boundBottom) {
-//            int x = boundLeft;
+        // 废弃的“正确”实现
+//
+//        // 遍历顶部区域
+//        if (boundTop < inTop) {
+//            int x = inLeft;
 //            while (x <= boundRight) {
-//                if (!(x >= inLeft && x <= inRight && y >= inTop && y <= inBottom)) {
+//                int y = boundTop;
+//                while (y <= inTop - 1) {
 //                    boolean inBefore = x >= oldColStart && x <= oldColEnd && y >= oldRowStart && y <= oldRowEnd;
 //                    boolean inAfter = x >= newColStart && x <= newColEnd && y >= newRowStart && y <= newRowEnd;
-//
 //                    if (inBefore && !inAfter) {
 //                        platform.out(x, y);
 //                    } else if (!inBefore && inAfter) {
 //                        platform.in(x, y);
 //                    }
+//                    if (y == inTop - 1) break;
+//                    y++;
 //                }
 //                if (x == boundRight) break;
 //                x++;
 //            }
-//
-//            if (y == boundBottom) break;
-//            y++;
 //        }
+//
+//        // 遍历右边区域
+//        if (inRight < boundRight) {
+//            int x = inRight + 1;
+//            while (x <= boundRight) {
+//                int y = inTop;
+//                while (y <= boundBottom) {
+//                    boolean inBefore = x >= oldColStart && x <= oldColEnd && y >= oldRowStart && y <= oldRowEnd;
+//                    boolean inAfter = x >= newColStart && x <= newColEnd && y >= newRowStart && y <= newRowEnd;
+//                    if (inBefore && !inAfter) {
+//                        platform.out(x, y);
+//                    } else if (!inBefore && inAfter) {
+//                        platform.in(x, y);
+//                    }
+//                    if (y == boundBottom) break;
+//                    y++;
+//                }
+//                if (x == boundRight) break;
+//                x++;
+//            }
+//        }
+//
+//        // 遍历底部区域
+//        if (inBottom < boundBottom) {
+//            int x = boundLeft;
+//            while (x <= inRight) {
+//                int y = inBottom + 1;
+//                while (y <= boundBottom) {
+//                    boolean inBefore = x >= oldColStart && x <= oldColEnd && y >= oldRowStart && y <= oldRowEnd;
+//                    boolean inAfter = x >= newColStart && x <= newColEnd && y >= newRowStart && y <= newRowEnd;
+//                    if (inBefore && !inAfter) {
+//                        platform.out(x, y);
+//                    } else if (!inBefore && inAfter) {
+//                        platform.in(x, y);
+//                    }
+//                    if (y == boundBottom) break;
+//                    y++;
+//                }
+//                if (x == inRight) break;
+//                x++;
+//            }
+//        }
+//
+//        // 遍历左边区域
+//        if (boundLeft < inLeft) {
+//            int x = boundLeft;
+//            while (x <= inLeft - 1) {
+//                int y = boundTop;
+//                while (y <= inBottom) {
+//                    boolean inBefore = x >= oldColStart && x <= oldColEnd && y >= oldRowStart && y <= oldRowEnd;
+//                    boolean inAfter = x >= newColStart && x <= newColEnd && y >= newRowStart && y <= newRowEnd;
+//                    if (inBefore && !inAfter) {
+//                        platform.out(x, y);
+//                    } else if (!inBefore && inAfter) {
+//                        platform.in(x, y);
+//                    }
+//                    if (y == inBottom) break;
+//                    y++;
+//                }
+//                if (x == inLeft - 1) break;
+//                x++;
+//            }
+//        }
+
+        // 看起来笨但效率高
+        int y = boundTop;
+        while (y <= boundBottom) {
+            int x = boundLeft;
+            while (x <= boundRight) {
+                if (!(x >= inLeft && x <= inRight && y >= inTop && y <= inBottom)) {
+                    boolean inBefore = x >= oldColStart && x <= oldColEnd && y >= oldRowStart && y <= oldRowEnd;
+                    boolean inAfter = x >= newColStart && x <= newColEnd && y >= newRowStart && y <= newRowEnd;
+
+                    if (inBefore && !inAfter) {
+                        platform.out(x, y);
+                    } else if (!inBefore && inAfter) {
+                        platform.in(x, y);
+                    }
+                }
+                if (x == boundRight) break;
+                x++;
+            }
+
+            if (y == boundBottom) break;
+            y++;
+        }
     }
 
     public TileLayoutModel getLayoutModel() {
@@ -419,11 +422,11 @@ public class TileLayoutService {
     }
 
     public boolean isAtRightBound() {
-        return colEnd == platform.getRightBound() && totalWidth + offsetX == platform.getWindowWidth();
+        return colEnd == platform.getRightBound() && totalWidth + offsetX == windowWidth;
     }
 
     public boolean isAtBottomBound() {
-        return rowEnd == platform.getBottomBound() && totalHeight + offsetY == platform.getWindowHeight();
+        return rowEnd == platform.getBottomBound() && totalHeight + offsetY == windowHeight;
     }
 
     public void reset() {
@@ -433,7 +436,7 @@ public class TileLayoutService {
         rowEnd = -1;
         
         offsetX = offsetY = 0;
-        
+
         totalWidth = totalHeight = 0;
         
         layoutModel.reset();
@@ -455,15 +458,33 @@ public class TileLayoutService {
         return verticalScrollEnabled;
     }
 
-    public interface PlatformService {
+    public int getWindowWidth() {
+        return windowWidth;
+    }
 
-        int getWindowWidth();
+    public int getWindowHeight() {
+        return windowHeight;
+    }
 
-        int getWindowHeight();
+    public void setWindowWidth(int width) {
+        windowWidth = width;
+    }
+
+    public void setWindowHeight(int height) {
+        windowHeight = height;
+    }
+
+    public interface PlatformInterface {
 
         int getTileWidth(int column);
 
         int getTileHeight(int row);
+
+        void in(int column, int row);
+
+        void out(int column, int row);
+        
+        void beforeDiff(int colStart, int rowStart, int colEnd, int rowEnd);
 
         int getLeftBound();
 
@@ -472,12 +493,6 @@ public class TileLayoutService {
         int getRightBound();
 
         int getBottomBound();
-
-        void in(int column, int row);
-
-        void out(int column, int row);
-        
-        void beforeDiff(int colStart, int rowStart, int colEnd, int rowEnd);
     }
 
     private static int min(int a, int b) {

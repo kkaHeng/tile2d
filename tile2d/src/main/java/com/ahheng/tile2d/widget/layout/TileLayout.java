@@ -25,8 +25,10 @@ public class TileLayout extends ViewGroup {
     private final TileCoreService.CoreInterface<TileHolder> coreInterface = new TileCoreService.CoreInterface<TileHolder>() {
         @Override
         public void updateUI() {
+            if (debugMode) startLayoutTime = System.nanoTime();
             layoutTiles();
             TileLayout.this.postInvalidateOnAnimation();
+            if (debugMode) layoutTime = startLayoutTime == 0 ? 0 : System.nanoTime() - startLayoutTime;
         }
 
         @Override
@@ -98,6 +100,8 @@ public class TileLayout extends ViewGroup {
 
     private DebugLayer debugLayer;
     private boolean debugMode;
+    private long startLayoutTime;
+    private long layoutTime;
 
     private boolean overrideInitLocation = false;
     private int initLocationColumn;
@@ -260,7 +264,7 @@ public class TileLayout extends ViewGroup {
 
                 @Override
                 public long getLayoutTime() {
-                    return coreService.getLayoutTime();
+                    return layoutTime;
                 }
             });
             if (isAttachedToWindow()) {

@@ -3,7 +3,6 @@ package com.ahheng.tile2d;
 import android.animation.ValueAnimator;
 import android.content.Context;
 import android.graphics.Rect;
-import android.os.Debug;
 import android.util.LongSparseArray;
 import android.util.SparseIntArray;
 import android.view.GestureDetector;
@@ -23,7 +22,7 @@ public class TileCoreService<T extends TileCoreService.BaseTileHolder> {
 
     private final Rect bounds = new Rect();
     private final CoreInterface<T> coreInterface;
-    private final TileLayoutService layoutService = new TileLayoutService(new PlatformService());
+    private final TileLayoutService layoutService = new TileLayoutService(new PlatformInterface());
 
     private final LongSparseArray<T> activeTiles = new LongSparseArray<>();
     private final LongSparseArray<T> dyingTiles = new LongSparseArray<>();
@@ -53,8 +52,6 @@ public class TileCoreService<T extends TileCoreService.BaseTileHolder> {
     private long syncTime;
     private long startBindTime;
     private long bindTime;
-    private long startLayoutTime;
-    private long layoutTime;
 
     public TileCoreService(Context context, CoreInterface<T> coreInterface) {
         this.coreInterface = coreInterface;
@@ -66,17 +63,7 @@ public class TileCoreService<T extends TileCoreService.BaseTileHolder> {
         gestureDetector.setIsLongpressEnabled(false);
     }
 
-    private class PlatformService implements TileLayoutService.PlatformService {
-
-        @Override
-        public int getWindowWidth() {
-            return bounds.width();
-        }
-
-        @Override
-        public int getWindowHeight() {
-            return bounds.height();
-        }
+    private class PlatformInterface implements TileLayoutService.PlatformInterface {
 
         @Override
         public int getTileWidth(int column) {
@@ -86,6 +73,29 @@ public class TileCoreService<T extends TileCoreService.BaseTileHolder> {
         @Override
         public int getTileHeight(int row) {
             return TileCoreService.this.getTileHeight(row);
+        }
+
+        @Override
+        public void in(int column, int row) {
+            TileCoreService.this.in(column, row);
+        }
+
+        @Override
+        public void out(int column, int row) {
+            TileCoreService.this.out(column, row);
+        }
+
+        @Override
+        public void beforeDiff(int colStart, int rowStart, int colEnd, int rowEnd) {
+            if (coreInterface.isDebugMode()) {
+                syncTime = startSyncTime == 0 ? 0 : System.nanoTime() - startSyncTime;
+                startBindTime = System.nanoTime();
+            }
+            if (dyingColStart != colStart || dyingColEnd != colEnd
+                    || dyingRowStart != rowStart || dyingRowEnd != rowEnd) {
+                // 边界变化了
+                diffDying(colStart, rowStart, colEnd, rowEnd);
+            }
         }
 
         @Override
@@ -107,29 +117,10 @@ public class TileCoreService<T extends TileCoreService.BaseTileHolder> {
         public int getBottomBound() {
             return coreInterface.getBottomBound();
         }
+    }
 
-        @Override
-        public void in(int column, int row) {
-            TileCoreService.this.in(column, row);
-        }
-
-        @Override
-        public void out(int column, int row) {
-            TileCoreService.this.out(column, row);
-        }
-
-        @Override
-        public void beforeDiff(int colStart, int rowStart, int colEnd, int rowEnd) {
-            if (coreInterface.isDebugMode()) {
-                syncTime = Debug.threadCpuTimeNanos() - startSyncTime;
-                startBindTime = Debug.threadCpuTimeNanos();
-            }
-            if (dyingColStart != colStart || dyingColEnd != colEnd
-                    || dyingRowStart != rowStart || dyingRowEnd != rowEnd) {
-                // 边界变化了
-                diffDying(colStart, rowStart, colEnd, rowEnd);
-            }
-        }
+    public void updateUI() {
+        coreInterface.updateUI();
     }
 
     public boolean isHorizontalScrollEnabled() {
@@ -188,7 +179,7 @@ public class TileCoreService<T extends TileCoreService.BaseTileHolder> {
             if (scrolled) {
                 sync(dx, dy);
             } else {
-                coreInterface.updateUI();
+                updateUI();
             }
         }
     }
@@ -244,7 +235,7 @@ public class TileCoreService<T extends TileCoreService.BaseTileHolder> {
                     layoutService.isHorizontalScrollEnabled() ? Integer.MAX_VALUE : 0,
                     layoutService.isVerticalScrollEnabled() ? Integer.MIN_VALUE : 0,
                     layoutService.isVerticalScrollEnabled() ? Integer.MAX_VALUE : 0);
-            coreInterface.updateUI();
+            updateUI();
             return true;
         }
     }
@@ -353,14 +344,12 @@ public class TileCoreService<T extends TileCoreService.BaseTileHolder> {
 
     public void sync(float dx, float dy) {
         boolean debugMode = coreInterface.isDebugMode();
-        if (debugMode) startSyncTime = Debug.threadCpuTimeNanos();
+        if (debugMode) startSyncTime = System.nanoTime();
         layoutService.sync(dx, dy);
         if (debugMode) {
-            bindTime = Debug.threadCpuTimeNanos() - startBindTime;
-            startLayoutTime = Debug.threadCpuTimeNanos();
+            bindTime = startBindTime == 0 ? 0 : System.nanoTime() - startBindTime;
         }
-        coreInterface.updateUI();
-        if (debugMode) layoutTime = Debug.threadCpuTimeNanos() - startLayoutTime;
+        updateUI();
     }
 
     public void seek(int column, int row, float offsetX, float offsetY) {
@@ -382,7 +371,7 @@ public class TileCoreService<T extends TileCoreService.BaseTileHolder> {
         }
         dyingTiles.clear();
         layoutService.seek(column, row, offsetX, offsetY);
-        coreInterface.updateUI();
+        updateUI();
     }
 
     public void snap() {
@@ -404,7 +393,6 @@ public class TileCoreService<T extends TileCoreService.BaseTileHolder> {
 
         int column = Math.max(left, Math.min(model.colStart, right));
         int row = Math.max(top, Math.min(model.rowStart, bottom));
-
         seek(column, row, 0, 0);
     }
 
@@ -500,7 +488,7 @@ public class TileCoreService<T extends TileCoreService.BaseTileHolder> {
                 if (row == end) break;
                 row++;
             }
-            coreInterface.updateUI();
+            updateUI();
         }
     }
 
@@ -527,7 +515,7 @@ public class TileCoreService<T extends TileCoreService.BaseTileHolder> {
                 if (column == end) break;
                 column++;
             }
-            coreInterface.updateUI();
+            updateUI();
         }
     }
 
@@ -607,7 +595,7 @@ public class TileCoreService<T extends TileCoreService.BaseTileHolder> {
                 row >= getDyingTop() &&
                 row <= getDyingBottom()) {
             rebuildTile(column, row);
-            coreInterface.updateUI();
+            updateUI();
         }
     }
 
@@ -641,7 +629,7 @@ public class TileCoreService<T extends TileCoreService.BaseTileHolder> {
             c++;
         }
     
-        coreInterface.updateUI();
+        updateUI();
     }
 
     public void updateColumn(int column) {
@@ -653,7 +641,7 @@ public class TileCoreService<T extends TileCoreService.BaseTileHolder> {
                 if (row == end) break;
                 row++;
             }
-            coreInterface.updateUI();
+            updateUI();
         }
     }
 
@@ -666,7 +654,7 @@ public class TileCoreService<T extends TileCoreService.BaseTileHolder> {
                 if (column == end) break;
                 column++;
             }
-            coreInterface.updateUI();
+            updateUI();
         }
     }
 
@@ -739,6 +727,8 @@ public class TileCoreService<T extends TileCoreService.BaseTileHolder> {
 
     public void setBounds(int left, int top, int right, int bottom) {
         bounds.set(left, top, right, bottom);
+        layoutService.setWindowWidth(bounds.width());
+        layoutService.setWindowHeight(bounds.height());
     }
 
     public int getDefaultTileWidth() {
@@ -785,10 +775,6 @@ public class TileCoreService<T extends TileCoreService.BaseTileHolder> {
 
     public long getBindTime() {
         return bindTime;
-    }
-
-    public long getLayoutTime() {
-        return layoutTime;
     }
 
     public boolean isEmpty() {

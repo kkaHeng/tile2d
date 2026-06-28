@@ -26,7 +26,9 @@ public class TileView extends View {
         
         @Override
         public void updateUI() {
+            if (debugMode) startLayoutTime = System.nanoTime();
             TileView.this.postInvalidateOnAnimation();
+            if (debugMode) layoutTime = startLayoutTime == 0 ? 0 : System.nanoTime() - startLayoutTime;
         }
 
         @Override
@@ -90,6 +92,8 @@ public class TileView extends View {
 
     private DebugLayer debugLayer;
     private boolean debugMode;
+    private long startLayoutTime;
+    private long layoutTime;
 
     private boolean overrideInitLocation = false;
     private int initLocationColumn;
@@ -546,7 +550,7 @@ public class TileView extends View {
 
                 @Override
                 public long getLayoutTime() {
-                    return coreService.getLayoutTime();
+                    return layoutTime;
                 }
             });
             if (isAttachedToWindow()) {
