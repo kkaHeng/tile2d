@@ -3,6 +3,7 @@ package com.ahheng.tile2d.widget.layout;
 import android.content.Context;
 import android.graphics.Canvas;
 import android.graphics.Rect;
+import android.os.Debug;
 import android.util.AttributeSet;
 import android.util.DisplayMetrics;
 import android.util.LongSparseArray;
@@ -25,10 +26,10 @@ public class TileLayout extends ViewGroup {
     private final TileCoreService.CoreInterface<TileHolder> coreInterface = new TileCoreService.CoreInterface<TileHolder>() {
         @Override
         public void updateUI() {
-            if (debugMode) startLayoutTime = System.nanoTime();
+            if (debugMode) startLayoutTime = Debug.threadCpuTimeNanos();
             layoutTiles();
             TileLayout.this.postInvalidateOnAnimation();
-            if (debugMode) layoutTime = startLayoutTime == 0 ? 0 : System.nanoTime() - startLayoutTime;
+            if (debugMode) layoutTime = startLayoutTime == 0 ? 0 : Debug.threadCpuTimeNanos() - startLayoutTime;
         }
 
         @Override

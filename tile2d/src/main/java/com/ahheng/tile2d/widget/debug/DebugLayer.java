@@ -7,6 +7,7 @@ import android.graphics.Color;
 import android.graphics.Paint;
 import android.graphics.Rect;
 import android.graphics.Typeface;
+import android.os.Debug;
 import android.util.LongSparseArray;
 import android.util.TypedValue;
 import android.view.Choreographer;
@@ -140,7 +141,7 @@ public class DebugLayer {
     }
 
     public void startDraw() {
-        drawStart = System.nanoTime();
+        drawStart = Debug.threadCpuTimeNanos();
     }
 
     private void collectStats() {
@@ -242,7 +243,7 @@ public class DebugLayer {
 
     public void draw(Canvas canvas) {
         // 在这里结束统计，确保结果仅包含非测试数据
-        drawEnd = System.nanoTime();
+        drawEnd = Debug.threadCpuTimeNanos();
         
         TileLayoutModel model = callback.getLayoutModel();
         LongSparseArray<? extends TileCoreService.BaseTileHolder> dyingTiles = callback.getDyingTiles();

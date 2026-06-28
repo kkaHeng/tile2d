@@ -3,6 +3,7 @@ package com.ahheng.tile2d;
 import android.animation.ValueAnimator;
 import android.content.Context;
 import android.graphics.Rect;
+import android.os.Debug;
 import android.util.LongSparseArray;
 import android.util.SparseIntArray;
 import android.view.GestureDetector;
@@ -88,8 +89,8 @@ public class TileCoreService<T extends TileCoreService.BaseTileHolder> {
         @Override
         public void beforeDiff(int colStart, int rowStart, int colEnd, int rowEnd) {
             if (coreInterface.isDebugMode()) {
-                syncTime = startSyncTime == 0 ? 0 : System.nanoTime() - startSyncTime;
-                startBindTime = System.nanoTime();
+                syncTime = startSyncTime == 0 ? 0 : Debug.threadCpuTimeNanos() - startSyncTime;
+                startBindTime = Debug.threadCpuTimeNanos();
             }
             if (dyingColStart != colStart || dyingColEnd != colEnd
                     || dyingRowStart != rowStart || dyingRowEnd != rowEnd) {
@@ -344,10 +345,10 @@ public class TileCoreService<T extends TileCoreService.BaseTileHolder> {
 
     public void sync(float dx, float dy) {
         boolean debugMode = coreInterface.isDebugMode();
-        if (debugMode) startSyncTime = System.nanoTime();
+        if (debugMode) startSyncTime = Debug.threadCpuTimeNanos();
         layoutService.sync(dx, dy);
         if (debugMode) {
-            bindTime = startBindTime == 0 ? 0 : System.nanoTime() - startBindTime;
+            bindTime = startBindTime == 0 ? 0 : Debug.threadCpuTimeNanos() - startBindTime;
         }
         updateUI();
     }
