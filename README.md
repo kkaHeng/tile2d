@@ -352,6 +352,12 @@ tileLayout.setAdapter(new TileLayout.Adapter() {
 
 ![实机截图](screenshots/maze.jpg)
 
+### 伪无限迷宫
+
+区块化的伪无限迷宫，支持完整的`int`全部索引空间。
+
+![实机截图](screenshots/max_maze.jpg)
+
 截图中的数据说明：
 - **实际帧率**：真实的物理帧率（我的测试环境最高支持 120Hz）。
 - **理论帧率**：根据渲染耗时推算的最高可持续帧率，远高于 120Hz 表示有余量。

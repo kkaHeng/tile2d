@@ -346,6 +346,7 @@ public class TileCoreService<T extends TileCoreService.BaseTileHolder> {
     public void sync(float dx, float dy) {
         boolean debugMode = coreInterface.isDebugMode();
         if (debugMode) startSyncTime = Debug.threadCpuTimeNanos();
+        coreInterface.beforeLayout();
         layoutService.sync(dx, dy);
         if (debugMode) {
             bindTime = startBindTime == 0 ? 0 : Debug.threadCpuTimeNanos() - startBindTime;
@@ -371,6 +372,7 @@ public class TileCoreService<T extends TileCoreService.BaseTileHolder> {
             recycle(dyingTiles.valueAt(i));
         }
         dyingTiles.clear();
+        coreInterface.beforeLayout();
         layoutService.seek(column, row, offsetX, offsetY);
         updateUI();
     }
@@ -391,7 +393,6 @@ public class TileCoreService<T extends TileCoreService.BaseTileHolder> {
                 model.rowEnd <= bottom) {
             return;
         }
-
         int column = Math.max(left, Math.min(model.colStart, right));
         int row = Math.max(top, Math.min(model.rowStart, bottom));
         seek(column, row, 0, 0);
@@ -409,7 +410,6 @@ public class TileCoreService<T extends TileCoreService.BaseTileHolder> {
                 ((BaseTileHolder) tile).width = getTileWidth(column);
                 ((BaseTileHolder) tile).height = getTileHeight(row);
                 coreInterface.onBindTileHolder(tile, column, row);
-                coreInterface.onTileBind(tile, column, row);
             }
         } else {
             dyingTiles.remove(id);
@@ -477,6 +477,7 @@ public class TileCoreService<T extends TileCoreService.BaseTileHolder> {
         } else {
             widths.put(column, width);
         }
+        coreInterface.beforeLayout();
         layoutService.updateWidth(column, old, width);
 
         int dyingLeft = getDyingLeft();
@@ -504,6 +505,7 @@ public class TileCoreService<T extends TileCoreService.BaseTileHolder> {
         } else {
             heights.put(row, height);
         }
+        coreInterface.beforeLayout();
         layoutService.updateHeight(row, old, height);
 
         int dyingTop = getDyingTop();
@@ -595,6 +597,7 @@ public class TileCoreService<T extends TileCoreService.BaseTileHolder> {
                 column <= getDyingRight() &&
                 row >= getDyingTop() &&
                 row <= getDyingBottom()) {
+            coreInterface.beforeLayout();
             rebuildTile(column, row);
             updateUI();
         }
@@ -617,7 +620,8 @@ public class TileCoreService<T extends TileCoreService.BaseTileHolder> {
         if (intersectLeft > intersectRight || intersectTop > intersectBottom) {
             return;
         }
-    
+        coreInterface.beforeLayout();
+
         int c = intersectLeft;
         while (c <= intersectRight) {
             int r = intersectTop;
@@ -635,6 +639,7 @@ public class TileCoreService<T extends TileCoreService.BaseTileHolder> {
 
     public void updateColumn(int column) {
         if (column >= getDyingLeft() && column <= getDyingRight()) {
+            coreInterface.beforeLayout();
             int row = getDyingTop();
             int end = getDyingBottom();
             while (row <= end) {
@@ -648,6 +653,7 @@ public class TileCoreService<T extends TileCoreService.BaseTileHolder> {
 
     public void updateRow(int row) {
         if (row >= getDyingTop() && row <= getDyingBottom()) {
+            coreInterface.beforeLayout();
             int column = getDyingLeft();
             int end = getDyingRight();
             while (column <= end) {
@@ -694,7 +700,6 @@ public class TileCoreService<T extends TileCoreService.BaseTileHolder> {
                 ((BaseTileHolder) newTile).width = getTileWidth(column);
                 ((BaseTileHolder) newTile).height = getTileHeight(row);
                 coreInterface.onBindTileHolder(newTile, column, row);
-                coreInterface.onTileBind(newTile, column, row);
                 dyingTiles.put(id, newTile);
             }
         }
@@ -710,7 +715,6 @@ public class TileCoreService<T extends TileCoreService.BaseTileHolder> {
             ((BaseTileHolder) tile).width = getTileWidth(column);
             ((BaseTileHolder) tile).height = getTileHeight(row);
             coreInterface.onBindTileHolder(tile, column, row);
-            coreInterface.onTileBind(tile, column, row);
         }
     }
 
@@ -867,6 +871,8 @@ public class TileCoreService<T extends TileCoreService.BaseTileHolder> {
 
     public interface CoreInterface<T extends BaseTileHolder> {
 
+        void beforeLayout();
+
         void updateUI();
 
         void onTileIn(T holder, int column, int row);
@@ -874,8 +880,6 @@ public class TileCoreService<T extends TileCoreService.BaseTileHolder> {
         void onTileOut(T holder, int column, int row);
 
         void onTileRecycled(T holder, int column, int row);
-
-        void onTileBind(T holder, int column, int row);
 
         int getLeftBound();
 

@@ -22,14 +22,23 @@ public class TileLayout extends ViewGroup {
 
     private TileCoreService<TileHolder> coreService;
     private Adapter adapter;
+    private OnLayoutListener onLayoutListener;
 
     private final TileCoreService.CoreInterface<TileHolder> coreInterface = new TileCoreService.CoreInterface<TileHolder>() {
+        @Override
+        public void beforeLayout() {
+            requestLayoutDepth++;
+            if (onLayoutListener != null) onLayoutListener.onBeforeLayout();
+        }
+
         @Override
         public void updateUI() {
             if (debugMode) startLayoutTime = Debug.threadCpuTimeNanos();
             layoutTiles();
+            requestLayoutDepth--;
             TileLayout.this.postInvalidateOnAnimation();
             if (debugMode) layoutTime = startLayoutTime == 0 ? 0 : Debug.threadCpuTimeNanos() - startLayoutTime;
+            if (onLayoutListener != null) onLayoutListener.onAfterLayout();
         }
 
         @Override
@@ -45,17 +54,6 @@ public class TileLayout extends ViewGroup {
         @Override
         public void onTileRecycled(TileHolder holder, int column, int row) {
             holder.view = null;
-        }
-
-        @Override
-        public void onTileBind(TileHolder holder, int column, int row) {
-            if (holder.itemView.getLayoutParams() == null) {
-                holder.itemView.setLayoutParams(new ViewGroup.LayoutParams(-2, -2));
-            }
-            holder.view = TileLayout.this;
-            holder.itemView.measure(
-                    MeasureSpec.makeMeasureSpec(coreService.getTileWidth(column), MeasureSpec.EXACTLY),
-                    MeasureSpec.makeMeasureSpec(coreService.getTileHeight(row), MeasureSpec.EXACTLY));
         }
 
         @Override
@@ -86,6 +84,13 @@ public class TileLayout extends ViewGroup {
         @Override
         public void onBindTileHolder(TileHolder holder, int column, int row) {
             adapter.onBindTileHolder(holder, column, row);
+            if (holder.itemView.getLayoutParams() == null) {
+                holder.itemView.setLayoutParams(new ViewGroup.LayoutParams(-2, -2));
+            }
+            holder.view = TileLayout.this;
+            holder.itemView.measure(
+                    MeasureSpec.makeMeasureSpec(coreService.getTileWidth(column), MeasureSpec.EXACTLY),
+                    MeasureSpec.makeMeasureSpec(coreService.getTileHeight(row), MeasureSpec.EXACTLY));
         }
 
         @Override
@@ -109,6 +114,8 @@ public class TileLayout extends ViewGroup {
     private int initLocationRow;
     private float initOffsetX;
     private float initOffsetY;
+
+    private int requestLayoutDepth = 0;
 
     public TileLayout(Context context) {
         super(context);
@@ -164,6 +171,7 @@ public class TileLayout extends ViewGroup {
 
     @Override
     public void requestLayout() {
+        if (requestLayoutDepth > 0) return;
         super.requestLayout();
     }
 
@@ -425,7 +433,12 @@ public class TileLayout extends ViewGroup {
             coreService.reset();
         }
         this.adapter = adapter;
+        requestLayoutDepth = 0;
         requestLayout();
+    }
+
+    public void setOnLayoutListener(OnLayoutListener onLayoutListener) {
+        this.onLayoutListener = onLayoutListener;
     }
 
     public int getDefaultTileWidth() {
@@ -497,6 +510,11 @@ public class TileLayout extends ViewGroup {
             if (view != null) view.requestDisallowInterceptTouchEvent(disallowIntercept);
         }
 
+    }
+
+    public interface OnLayoutListener {
+        void onBeforeLayout(); // 布局前
+        void onAfterLayout(); // 布局后
     }
 
 }

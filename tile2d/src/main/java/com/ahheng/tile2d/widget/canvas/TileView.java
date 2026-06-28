@@ -22,14 +22,20 @@ public class TileView extends View {
 
     private TileCoreService<TileHolder> coreService;
     private Adapter adapter;
+    private OnLayoutListener onLayoutListener;
 
     private final TileCoreService.CoreInterface<TileHolder> coreInterface = new TileCoreService.CoreInterface<TileHolder>() {
-        
+        @Override
+        public void beforeLayout() {
+            if (onLayoutListener != null) onLayoutListener.onBeforeLayout();
+        }
+
         @Override
         public void updateUI() {
             if (debugMode) startLayoutTime = Debug.threadCpuTimeNanos();
             TileView.this.postInvalidateOnAnimation();
             if (debugMode) layoutTime = startLayoutTime == 0 ? 0 : Debug.threadCpuTimeNanos() - startLayoutTime;
+            if (onLayoutListener != null) onLayoutListener.onAfterLayout();
         }
 
         @Override
@@ -43,11 +49,6 @@ public class TileView extends View {
         @Override
         public void onTileRecycled(TileHolder holder, int column, int row) {
             holder.view = null;
-        }
-
-        @Override
-        public void onTileBind(TileHolder holder, int column, int row) {
-            holder.view = TileView.this;
         }
 
         @Override
@@ -78,6 +79,7 @@ public class TileView extends View {
         @Override
         public void onBindTileHolder(TileHolder holder, int column, int row) {
             adapter.onBindTileHolder(holder, column, row);
+            holder.view = TileView.this;
         }
 
         @Override
@@ -441,6 +443,10 @@ public class TileView extends View {
         requestLayout();
     }
 
+    public void setOnLayoutListener(OnLayoutListener onLayoutListener) {
+        this.onLayoutListener = onLayoutListener;
+    }
+
     public int getDefaultTileWidth() {
         return coreService.getDefaultTileWidth();
     }
@@ -635,6 +641,11 @@ public class TileView extends View {
             if (view != null) view.requestDisallowInterceptTouchEvent(disallowIntercept);
         }
 
+    }
+
+    public interface OnLayoutListener {
+        void onBeforeLayout(); // 布局前
+        void onAfterLayout(); // 布局后
     }
 
 }
