@@ -487,8 +487,6 @@ public class TileCoreService<T extends TileCoreService.BaseTileHolder> {
                 widths.put(column, width);
             }
         }
-        coreInterface.beforeLayout();
-        layoutService.updateWidth(column, old, width, gravity);
 
         int dyingLeft = getDyingLeft();
         int dyingRight = getDyingRight();
@@ -500,8 +498,11 @@ public class TileCoreService<T extends TileCoreService.BaseTileHolder> {
                 if (row == end) break;
                 row++;
             }
-            updateUI();
         }
+
+        coreInterface.beforeLayout();
+        layoutService.updateWidth(column, old, width, gravity);
+        updateUI();
     }
 
     public void deleteTileHeight(int row, int gravity) {
@@ -527,8 +528,6 @@ public class TileCoreService<T extends TileCoreService.BaseTileHolder> {
                 heights.put(row, height);
             }
         }
-        coreInterface.beforeLayout();
-        layoutService.updateHeight(row, old, height, gravity);
 
         int dyingTop = getDyingTop();
         int dyingBottom = getDyingBottom();
@@ -540,8 +539,11 @@ public class TileCoreService<T extends TileCoreService.BaseTileHolder> {
                 if (column == end) break;
                 column++;
             }
-            updateUI();
         }
+
+        coreInterface.beforeLayout();
+        layoutService.updateHeight(row, old, height, gravity);
+        updateUI();
     }
 
     public float getTileX(int column) {
