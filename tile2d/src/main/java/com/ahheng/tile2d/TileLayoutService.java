@@ -1,6 +1,11 @@
 package com.ahheng.tile2d;
 
+// 跨平台布局服务
 public class TileLayoutService {
+
+    public static final int DIMEN_GRAVITY_CENTER = 0;
+    public static final int DIMEN_GRAVITY_START = -1;
+    public static final int DIMEN_GRAVITY_END = 1;
 
     private final TileLayoutModel layoutModel;
     private final PlatformInterface platform;
@@ -214,28 +219,40 @@ public class TileLayoutService {
         return true;
     }
 
-    public void updateWidth(int column, int oldWidth, int newWidth) {
+    public void updateWidth(int column, int oldWidth, int newWidth, int gravity) {
         if (column >= colStart && column <= colEnd) {
             totalWidth += (newWidth - oldWidth);
-            float dx = 0;
-            if (column == colStart) {
-                dx = offsetX + oldWidth - newWidth;
-                dx = min(0, max(-newWidth, dx));
-                dx -= offsetX;
+            float newOffsetX;
+            if (gravity == DIMEN_GRAVITY_START) {
+                // 左对齐，右扩展或收缩
+                newOffsetX = offsetX;
+            } else if (gravity == DIMEN_GRAVITY_END) {
+                // 右对齐，左扩展或收缩
+                newOffsetX = offsetX + oldWidth - newWidth;
+            } else {
+                // 居中对齐，左右扩展或收缩
+                newOffsetX = offsetX + (oldWidth - newWidth) / 2f;
             }
+            float dx = newOffsetX - offsetX;
             sync(dx, 0);
         }
     }
 
-    public void updateHeight(int row, int oldHeight, int newHeight) {
+    public void updateHeight(int row, int oldHeight, int newHeight, int gravity) {
         if (row >= rowStart && row <= rowEnd) {
             totalHeight += (newHeight - oldHeight);
-            float dy = 0;
-            if (row == rowStart) {
-                dy = offsetY + oldHeight - newHeight;
-                dy = min(0, max(-newHeight, dy));
-                dy -= offsetY;
+            float newOffsetY;
+            if (gravity == DIMEN_GRAVITY_START) {
+                // 上对齐，下扩展或收缩
+                newOffsetY = offsetY;
+            } else if (gravity == DIMEN_GRAVITY_END) {
+                // 下对齐，上扩展或收缩
+                newOffsetY = offsetY + oldHeight - newHeight;
+            } else {
+                // 居中对齐，上下扩展或收缩
+                newOffsetY = offsetY + (oldHeight - newHeight) / 2f;
             }
+            float dy = newOffsetY - offsetY;
             sync(0, dy);
         }
     }

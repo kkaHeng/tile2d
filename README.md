@@ -149,8 +149,26 @@ tileLayout.setAdapter(new TileLayout.Adapter() {
 - `void setTileWidth(int column, int width)`
 设置指定列的宽度。单位：**像素**。
 
+- `void setTileWidth(int column, int width, int gravity)`
+设置指定列的宽度并指定对齐方式。单位：**像素**。
+
+- `void deleteTileWidth(int column)`
+删除指定列的宽度。
+
+- `void deleteTileWidth(int column, int gravity)`
+删除指定列的宽度并指定对齐方式。
+
 - `void setTileHeight(int row, int height)`
 设置指定行的高度。单位：**像素**。
+
+- `void setTileHeight(int row, int height, int gravity)`
+设置指定行的高度并指定对齐方式。单位：**像素**。
+
+- `void deleteTileHeight(int row)`
+删除指定行的高度。
+
+- `void deleteTileHeight(int row, int gravity)`
+删除指定行的高度并指定对齐方式。
 
 - `void updateColumn(int column)`
 更新指定列。

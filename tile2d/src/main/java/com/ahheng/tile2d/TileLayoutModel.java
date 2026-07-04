@@ -31,6 +31,8 @@ public class TileLayoutModel {
         model.rowEnd = rowEnd;
         model.offsetX = offsetX;
         model.offsetY = offsetY;
+        model.totalWidth = totalWidth;
+        model.totalHeight = totalHeight;
         return model;
     }
 

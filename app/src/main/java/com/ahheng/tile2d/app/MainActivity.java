@@ -63,7 +63,7 @@ public class MainActivity extends AppCompatActivity {
         // startActivity(new Intent(this, TableActivity.class));
         // startActivity(new Intent(this, AutoTileActivity.class));
         // startActivity(new Intent(this, MazeActivity.class));
-        startActivity(new Intent(this, MaxMazeActivity.class));
+        // startActivity(new Intent(this, MaxMazeActivity.class));
     }
 
 }

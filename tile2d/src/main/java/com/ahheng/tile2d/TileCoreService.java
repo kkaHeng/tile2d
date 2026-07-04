@@ -155,9 +155,7 @@ public class TileCoreService<T extends TileCoreService.BaseTileHolder> {
             disallowIntercept = false;
             isInteractingWithView = false;
 
-            if (scroller.computeScrollOffset()) {
-                scroller.abortAnimation();
-            }
+            resetAnimator();
         }
 
         if (!disallowIntercept) {
@@ -458,27 +456,39 @@ public class TileCoreService<T extends TileCoreService.BaseTileHolder> {
 
     public int getTileWidth(int column) {
         int i = widths.indexOfKey(column);
-        return i >= 0 ? widths.get(column) : (dimenProvider == null ? defaultTileWidth : dimenProvider.getTileWidth(column));
+        return i >= 0 ? widths.valueAt(i) : (dimenProvider == null ? defaultTileWidth : dimenProvider.getTileWidth(column));
     }
 
     public int getTileHeight(int row) {
         int i = heights.indexOfKey(row);
-        return i >= 0 ? heights.get(row) : (dimenProvider == null ? defaultTileHeight : dimenProvider.getTileHeight(row));
+        return i >= 0 ? heights.valueAt(i) : (dimenProvider == null ? defaultTileHeight : dimenProvider.getTileHeight(row));
     }
 
-    public void setTileWidth(int column, int width) {
+    public void deleteTileWidth(int column, int gravity) {
+        setTileWidth(column, 0, gravity);
+    }
+
+    public void setTileWidth(int column, int width, int gravity) {
         if (isEmpty()) return;
         if (column > coreInterface.getRightBound() || column < coreInterface.getLeftBound())
             throw new IndexOutOfBoundsException("列索引 " + column + " 不在 [" + coreInterface.getLeftBound() + "," + coreInterface.getRightBound() + "] 范围内");
         int old = getTileWidth(column);
         if (width == 0) {
+            if (dimenProvider != null) {
+                dimenProvider.deleteTileWidth(column);
+            } else {
+                widths.delete(column);
+            }
             width = getTileWidth(column);
-            widths.delete(column);
         } else {
-            widths.put(column, width);
+            if (dimenProvider != null) {
+                dimenProvider.setTileWidth(column, width);
+            } else {
+                widths.put(column, width);
+            }
         }
         coreInterface.beforeLayout();
-        layoutService.updateWidth(column, old, width);
+        layoutService.updateWidth(column, old, width, gravity);
 
         int dyingLeft = getDyingLeft();
         int dyingRight = getDyingRight();
@@ -494,19 +504,31 @@ public class TileCoreService<T extends TileCoreService.BaseTileHolder> {
         }
     }
 
-    public void setTileHeight(int row, int height) {
+    public void deleteTileHeight(int row, int gravity) {
+        setTileHeight(row, 0, gravity);
+    }
+
+    public void setTileHeight(int row, int height, int gravity) {
         if (isEmpty()) return;
         if (row > coreInterface.getBottomBound() || row < coreInterface.getTopBound())
             throw new IndexOutOfBoundsException("行索引 " + row + " 不在 [" + coreInterface.getTopBound() + "," + coreInterface.getBottomBound() + "] 范围内");
         int old = getTileHeight(row);
         if (height == 0) {
+            if (dimenProvider != null) {
+                dimenProvider.deleteTileHeight(row);
+            } else {
+                heights.delete(row);
+            }
             height = getTileHeight(row);
-            heights.delete(row);
         } else {
-            heights.put(row, height);
+            if (dimenProvider != null) {
+                dimenProvider.setTileHeight(row, height);
+            } else {
+                heights.put(row, height);
+            }
         }
         coreInterface.beforeLayout();
-        layoutService.updateHeight(row, old, height);
+        layoutService.updateHeight(row, old, height, gravity);
 
         int dyingTop = getDyingTop();
         int dyingBottom = getDyingBottom();

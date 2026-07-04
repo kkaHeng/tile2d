@@ -5,20 +5,25 @@ import android.view.Menu;
 import android.view.MenuItem;
 import android.widget.Toast;
 
+import androidx.annotation.NonNull;
 import androidx.annotation.Nullable;
 import androidx.appcompat.app.ActionBar;
 import androidx.appcompat.app.AppCompatActivity;
 
-public abstract class BaseActivity extends AppCompatActivity {
+import java.util.concurrent.atomic.AtomicInteger;
 
-    private static final int MENU_ID_DEBUG = 1;
-    private static final int MENU_ID_MAX = 2;
-    private static final int MENU_ID_PLAN = 3;
-    private static final int MENU_ID_TO_END = 4;
+public abstract class BaseActivity extends AppCompatActivity implements MenuItem.OnMenuItemClickListener {
+
+    private static final AtomicInteger id = new AtomicInteger(0);
+
+    private static final int MENU_ID_DEBUG = nextId();
+    private static final int MENU_ID_MAX = nextId();
+    private static final int MENU_ID_PLAN = nextId();
+    private static final int MENU_ID_TO_END = nextId();
 
     public final static int PLAN_COLOR = 0;
     public final static int PLAN_TEXT = 1;
-    
+
     private Toast toast;
     private boolean debugMode = true;
     private boolean maxMode = false;
@@ -38,7 +43,7 @@ public abstract class BaseActivity extends AppCompatActivity {
     }
 
     public boolean isMaxMode() {
-    	return maxMode;
+        return maxMode;
     }
 
     public void setDebugMode(boolean enabled) {
@@ -71,21 +76,56 @@ public abstract class BaseActivity extends AppCompatActivity {
     public boolean onCreateOptionsMenu(Menu menu) {
         menu.add(Menu.NONE, MENU_ID_DEBUG, Menu.NONE, "Debug模式")
                 .setCheckable(true)
+                .setOnMenuItemClickListener(this)
                 .setShowAsAction(MenuItem.SHOW_AS_ACTION_NEVER);
         if (hasMaxMode()) {
             menu.add(Menu.NONE, MENU_ID_MAX, Menu.NONE, "伪无限模式")
                     .setCheckable(true)
+                    .setOnMenuItemClickListener(this)
                     .setShowAsAction(MenuItem.SHOW_AS_ACTION_NEVER);
         }
         if (hasPlanMode()) {
             menu.add(Menu.NONE, MENU_ID_PLAN, Menu.NONE, "切换方案")
+                    .setOnMenuItemClickListener(this)
                     .setShowAsAction(MenuItem.SHOW_AS_ACTION_NEVER);
         }
         if (toTheEnd != null) {
             menu.add(Menu.NONE, MENU_ID_TO_END, Menu.NONE, "去边界看看")
+                    .setOnMenuItemClickListener(this)
                     .setShowAsAction(MenuItem.SHOW_AS_ACTION_NEVER);
         }
         return true;
+    }
+
+    @Override
+    public boolean onMenuItemClick(@NonNull MenuItem menuItem) {
+        int id = menuItem.getItemId();
+        if (id == MENU_ID_DEBUG) {
+            setDebugMode(!debugMode);
+            showToast("Debug模式: " + (debugMode ? "开启" : "关闭"));
+            return true;
+        }
+        if (id == MENU_ID_MAX) {
+            setMaxMode(!maxMode);
+            showToast("伪无限模式: " + (maxMode ? "开启" : "关闭"));
+            return true;
+        }
+        if (id == MENU_ID_PLAN) {
+            switch (plan) {
+                case PLAN_COLOR -> plan = PLAN_TEXT;
+                case PLAN_TEXT -> plan = PLAN_COLOR;
+            }
+            showToast("切换方案：" + plan);
+            onPlanChanged(plan);
+            return true;
+        }
+        if (id == MENU_ID_TO_END) {
+            if (toTheEnd != null) {
+                toTheEnd();
+            }
+            return true;
+        }
+        return false;
     }
 
     @Override
@@ -106,33 +146,6 @@ public abstract class BaseActivity extends AppCompatActivity {
             finish();
             return true;
         }
-        switch (id) {
-            case MENU_ID_DEBUG -> {
-                setDebugMode(!debugMode);
-                showToast("Debug模式: " + (debugMode ? "开启" : "关闭"));
-                return true;
-            }
-            case MENU_ID_MAX -> {
-                setMaxMode(!maxMode);
-                showToast("伪无限模式: " + (maxMode ? "开启" : "关闭"));
-                return true;
-            }
-            case MENU_ID_PLAN -> {
-                switch (plan) {
-                    case PLAN_COLOR -> plan = PLAN_TEXT;
-                    case PLAN_TEXT -> plan = PLAN_COLOR;
-                }
-                showToast("切换方案：" + plan);
-                onPlanChanged(plan);
-                return true;
-            }
-            case MENU_ID_TO_END -> {
-                if (toTheEnd != null) {
-                    toTheEnd();
-                }
-                return true;
-            }
-        }
         return super.onOptionsItemSelected(item);
     }
 
@@ -141,7 +154,7 @@ public abstract class BaseActivity extends AppCompatActivity {
         super.onCreate(savedInstanceState);
         ActionBar actionBar = getSupportActionBar();
         if (actionBar != null) actionBar.setDisplayHomeAsUpEnabled(true);
-        
+
         toTheEnd = onInitToTheEnd();
     }
 
@@ -154,14 +167,46 @@ public abstract class BaseActivity extends AppCompatActivity {
         int x;
         int y;
         switch (i) {
-            case 0 -> { x = 0;  y = t; showToast("到达最上边"); }
-            case 1 -> { x = r;  y = t; showToast("到达右上角"); }
-            case 2 -> { x = r;  y = 0; showToast("到达最右边"); }
-            case 3 -> { x = r;  y = b; showToast("到达右下角"); }
-            case 4 -> { x = 0;  y = b; showToast("到达最下边"); }
-            case 5 -> { x = l;  y = b; showToast("到达左下角"); }
-            case 6 -> { x = l;  y = 0; showToast("到达最左边"); }
-            default -> { x = l;  y = t; showToast("到达左上角"); }
+            case 0 -> {
+                x = 0;
+                y = t;
+                showToast("到达最上边");
+            }
+            case 1 -> {
+                x = r;
+                y = t;
+                showToast("到达右上角");
+            }
+            case 2 -> {
+                x = r;
+                y = 0;
+                showToast("到达最右边");
+            }
+            case 3 -> {
+                x = r;
+                y = b;
+                showToast("到达右下角");
+            }
+            case 4 -> {
+                x = 0;
+                y = b;
+                showToast("到达最下边");
+            }
+            case 5 -> {
+                x = l;
+                y = b;
+                showToast("到达左下角");
+            }
+            case 6 -> {
+                x = l;
+                y = 0;
+                showToast("到达最左边");
+            }
+            default -> {
+                x = l;
+                y = t;
+                showToast("到达左上角");
+            }
         }
         toTheEnd.gogogo(x, y);
     }
@@ -176,21 +221,25 @@ public abstract class BaseActivity extends AppCompatActivity {
     }
 
     protected ToTheEnd onInitToTheEnd() {
-    	return null;
+        return null;
     }
 
     public interface ToTheEnd {
-        
+
         int getLeftBound();
-        
+
         int getTopBound();
-        
+
         int getRightBound();
-        
+
         int getBottomBound();
-        
+
         void gogogo(int column, int row);
-        
+
+    }
+
+    public static int nextId() {
+        return id.incrementAndGet(); // 先增加，再返回当前值
     }
 
 }

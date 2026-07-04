@@ -118,12 +118,34 @@ public class MeasurableDimenProvider implements TileDimenProvider {
 
     @Override
     public int getTileWidth(int column) {
-        return widths.indexOfKey(column) >= 0 ? widths.get(column) : defaultTileWidth;
+        int i = widths.indexOfKey(column);
+        return i >= 0 ? widths.valueAt(i) : defaultTileWidth;
     }
 
     @Override
     public int getTileHeight(int row) {
-        return heights.indexOfKey(row) >= 0 ? heights.get(row) : defaultTileHeight;
+        int i = heights.indexOfKey(row);
+        return i >= 0 ? heights.valueAt(i) : defaultTileHeight;
+    }
+
+    @Override
+    public void setTileWidth(int column, int width) {
+        widths.put(column, width);
+    }
+
+    @Override
+    public void setTileHeight(int row, int height) {
+        heights.put(row, height);
+    }
+
+    @Override
+    public void deleteTileWidth(int column) {
+        widths.delete(column);
+    }
+
+    @Override
+    public void deleteTileHeight(int row) {
+        heights.delete(row);
     }
 
 }

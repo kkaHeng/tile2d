@@ -14,15 +14,22 @@ import android.view.ViewConfiguration;
 
 import com.ahheng.tile2d.TileCoreService;
 import com.ahheng.tile2d.TileLayoutModel;
+import com.ahheng.tile2d.TileLayoutService;
+import com.ahheng.tile2d.tile.OnTileLifecycleListener;
 import com.ahheng.tile2d.tile.TileAdapter;
 import com.ahheng.tile2d.dimen.TileDimenProvider;
 import com.ahheng.tile2d.widget.debug.DebugLayer;
 
 public class TileView extends View {
 
+    public static final int DIMEN_GRAVITY_CENTER = TileLayoutService.DIMEN_GRAVITY_CENTER;
+    public static final int DIMEN_GRAVITY_START = TileLayoutService.DIMEN_GRAVITY_START;
+    public static final int DIMEN_GRAVITY_END = TileLayoutService.DIMEN_GRAVITY_END;
+
     private TileCoreService<TileHolder> coreService;
     private Adapter adapter;
     private OnLayoutListener onLayoutListener;
+    private OnTileLifecycleListener<TileHolder> onTileLifecycleListener;
 
     private final TileCoreService.CoreInterface<TileHolder> coreInterface = new TileCoreService.CoreInterface<TileHolder>() {
         @Override
@@ -40,15 +47,18 @@ public class TileView extends View {
 
         @Override
         public void onTileIn(TileHolder holder, int column, int row) {
+            if (onTileLifecycleListener != null) onTileLifecycleListener.onTileIn(holder, column, row);
         }
 
         @Override
         public void onTileOut(TileHolder holder, int column, int row) {
+            if (onTileLifecycleListener != null) onTileLifecycleListener.onTileOut(holder, column, row);
         }
         
         @Override
         public void onTileRecycled(TileHolder holder, int column, int row) {
             holder.view = null;
+            if (onTileLifecycleListener != null) onTileLifecycleListener.onTileRecycled(holder, column, row);
         }
 
         @Override
@@ -402,11 +412,34 @@ public class TileView extends View {
     }
 
     public void setTileWidth(int column, int width) {
-        coreService.setTileWidth(column, width);
+        coreService.setTileWidth(column, width, DIMEN_GRAVITY_START);
+    }
+    public void setTileWidth(int column, int width, int gravity) {
+        coreService.setTileWidth(column, width, gravity);
+    }
+
+    public void deleteTileWidth(int column) {
+        coreService.deleteTileWidth(column, DIMEN_GRAVITY_START);
+    }
+
+    public void deleteTileWidth(int column, int gravity) {
+        coreService.deleteTileWidth(column, gravity);
     }
 
     public void setTileHeight(int row, int height) {
-        coreService.setTileHeight(row, height);
+        coreService.setTileHeight(row, height, DIMEN_GRAVITY_START);
+    }
+
+    public void setTileHeight(int row, int height, int gravity) {
+        coreService.setTileHeight(row, height, gravity);
+    }
+
+    public void deleteTileHeight(int row) {
+        coreService.deleteTileHeight(row, DIMEN_GRAVITY_START);
+    }
+
+    public void deleteTileHeight(int row, int gravity) {
+        coreService.deleteTileHeight(row, gravity);
     }
 
     public void updateColumn(int column) {
@@ -469,6 +502,10 @@ public class TileView extends View {
 
     public void setDimenProvider(TileDimenProvider dimenProvider) {
         coreService.setDimenProvider(dimenProvider);
+    }
+
+    public void setOnTileLifecycleListener(OnTileLifecycleListener<TileHolder> onTileLifecycleListener) {
+        this.onTileLifecycleListener = onTileLifecycleListener;
     }
 
     public TileHolder getActiveTile(int column, int row) {
