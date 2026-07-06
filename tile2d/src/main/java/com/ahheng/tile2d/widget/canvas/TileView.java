@@ -60,6 +60,9 @@ public class TileView extends View {
             holder.view = null;
             if (onTileLifecycleListener != null) onTileLifecycleListener.onTileRecycled(holder, column, row);
         }
+        
+        @Override
+        public void onTileSizeChanged(TileHolder holder, int column, int row, int width, int height) {}
 
         @Override
         public int getLeftBound() {
@@ -242,22 +245,23 @@ public class TileView extends View {
             int column = model.colStart;
             while (column <= model.colEnd) {
                 int width = coreService.getTileWidth(column);
+                canvas.translate(x, 0);
                 float y = 0;
                 int row = model.rowStart;
                 while (row <= model.rowEnd) {
                     int height = coreService.getTileHeight(row);
                     TileHolder tile = coreService.getActiveTile(column, row);
                     if (tile != null) {
-                        canvas.save();
-                        canvas.translate(x, y);
+                        canvas.translate(0, y);
                         tile.draw(canvas);
-                        canvas.restore();
+                        canvas.translate(0, -y);
                     }
 
                     if (row == model.rowEnd) break;
                     row++;
                     y += height;
                 }
+                canvas.translate(-x, 0);
                 if (column == model.colEnd) break;
                 column++;
                 x += width;

@@ -68,6 +68,13 @@ public class TileLayout extends ViewGroup {
             holder.view = null;
             if (onTileLifecycleListener != null) onTileLifecycleListener.onTileRecycled(holder, column, row);
         }
+        
+        @Override
+        public void onTileSizeChanged(TileHolder holder, int column, int row, int width, int height) {
+            holder.itemView.measure(
+                    MeasureSpec.makeMeasureSpec(coreService.getTileWidth(column), MeasureSpec.EXACTLY),
+                    MeasureSpec.makeMeasureSpec(coreService.getTileHeight(row), MeasureSpec.EXACTLY));
+        }
 
         @Override
         public int getLeftBound() {

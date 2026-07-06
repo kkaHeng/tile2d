@@ -4,8 +4,12 @@ import android.animation.ValueAnimator;
 import android.graphics.Canvas;
 import android.graphics.Color;
 import android.graphics.Paint;
+import android.graphics.Picture;
 import android.os.Bundle;
 import android.os.Handler;
+import android.text.Layout;
+import android.text.StaticLayout;
+import android.text.TextPaint;
 import android.view.Menu;
 import android.view.MenuItem;
 import android.view.ViewGroup;
@@ -181,51 +185,110 @@ public class TileViewActivity extends BaseActivity {
     public class ColorTileHolder extends TileView.TileHolder {
         int backgroundColor;
         double noise;
-
+    
+        // 绘制工具
         private final Paint fillPaint = new Paint(Paint.ANTI_ALIAS_FLAG);
         private final Paint borderPaint = new Paint(Paint.ANTI_ALIAS_FLAG);
         private final Paint textPaint = new Paint(Paint.ANTI_ALIAS_FLAG);
-
+    
+        // 文本数据
         private String cachedText;
         private int cachedTextColor;
-        private float cachedTextY;
-        private int lastWidth = -1, lastHeight = -1;
-
+        private float cachedTextY; // 仅用于 drawText 兜底模式
+    
+        // Picture 缓存
+        private Picture picture;
+        private int pictureWidth;  // 上次录制时的宽
+        private int pictureHeight; // 上次录制时的高
+        private boolean needReplay; // 是否需要重新录制（数据或尺寸变化）
+    
         public ColorTileHolder() {
             borderPaint.setStyle(Paint.Style.STROKE);
             borderPaint.setStrokeWidth(3f);
             borderPaint.setColor(Color.GRAY);
             textPaint.setTextAlign(Paint.Align.CENTER);
+            needReplay = true;
         }
 
-        @Override
-        public void onInWindow() {
-            super.onInWindow();
+        public void bind() {
             cachedText = String.format(Locale.getDefault(), "%.2f", noise);
             cachedTextColor = luminance(backgroundColor) > 0.40 ? Color.BLACK : Color.WHITE;
+            textPaint.setColor(cachedTextColor);
+            fillPaint.setColor(backgroundColor);
+            needReplay = true;
+            recordPicture();
         }
-
+    
+        @Override
+        public void onSizeChanged(int width, int height) {
+            super.onSizeChanged(width, height);
+            textPaint.setTextSize(Math.min(width, height) * 0.28f);
+            Paint.FontMetrics fm = textPaint.getFontMetrics();
+            cachedTextY = height / 2f - (fm.ascent + fm.descent) / 2f;
+            needReplay = true;
+            if (cachedText != null && width > 0 && height > 0) {
+                recordPicture();
+            }
+        }
+    
+        private void recordPicture() {
+            if (getWidth() <= 0 || getHeight() <= 0) return;
+            if (!needReplay && picture != null) return;
+    
+            if (picture == null) {
+                picture = new Picture();
+            }
+            Canvas canvas = picture.beginRecording(getWidth(), getHeight());
+            fillPaint.setColor(backgroundColor);
+            canvas.drawRect(0, 0, getWidth(), getHeight(), fillPaint);
+            canvas.drawRect(0, 0, getWidth(), getHeight(), borderPaint);
+            if (displayText && cachedText != null) {
+                textPaint.setColor(cachedTextColor);
+                canvas.drawText(cachedText, getWidth() / 2f, cachedTextY, textPaint);
+            }
+            picture.endRecording();
+            needReplay = false;
+        }
+    
+        public void invalidatePicture() {
+            needReplay = true;
+            if (getWidth() > 0 && getHeight() > 0) {
+                recordPicture();
+            }
+        }
+    
         @Override
         public void draw(Canvas canvas) {
-            int w = getWidth();
-            int h = getHeight();
-
-            fillPaint.setColor(backgroundColor);
-            canvas.drawRect(0, 0, w, h, fillPaint);
-            canvas.drawRect(0, 0, w, h, borderPaint);
-
-            if (!displayText) return;
-            textPaint.setColor(cachedTextColor);
-            if (w != lastWidth || h != lastHeight) {
-                lastWidth = w;
-                lastHeight = h;
-                textPaint.setTextSize(Math.min(w, h) * 0.28f);
-                Paint.FontMetrics fm = textPaint.getFontMetrics();
-                cachedTextY = h / 2f - (fm.ascent + fm.descent) / 2f;
+            if (picture == null || needReplay) {
+                if (getWidth() > 0 && getHeight() > 0) {
+                    recordPicture();
+                } else {
+                    // 未就绪时至少绘制背景（防止空白）
+                    fillPaint.setColor(backgroundColor);
+                    canvas.drawRect(0, 0, getWidth(), getHeight(), fillPaint);
+                    return;
+                }
             }
-            canvas.drawText(cachedText, w / 2f, cachedTextY, textPaint);
+    
+            // 直接回放 Picture
+            if (picture != null) {
+                canvas.drawPicture(picture);
+            }
+    
+            /* ========== 以下是保留的原始 drawText 兜底方案 ==========
+              当 Picture 出现异常或需要调试时，可注释掉上面的 drawPicture，
+              取消注释下面的代码，即可恢复直接绘制。
+            */
+            /*
+            canvas.drawRect(0, 0, getWidth(), getHeight(), fillPaint);
+            canvas.drawRect(0, 0, getWidth(), getHeight(), borderPaint);
+            if (displayText && cachedText != null) {
+                textPaint.setColor(cachedTextColor);
+                canvas.drawText(cachedText, getWidth() / 2f, cachedTextY, textPaint);
+            }
+            */
         }
-
+    
         private static double luminance(int c) {
             double r = Color.red(c) / 255.0;
             double g = Color.green(c) / 255.0;
@@ -235,13 +298,13 @@ public class TileViewActivity extends BaseActivity {
             b = b <= 0.03928 ? b / 12.92 : Math.pow((b + 0.055) / 1.055, 2.4);
             return 0.2126 * r + 0.7152 * g + 0.0722 * b;
         }
-
+    
         @Override
         public boolean onClick() {
             showToast("单击了 " + getColumn() + "," + getRow());
             return false;
         }
-
+    
         @Override
         public void onLongClick() {
             requestDisallowInterceptTouchEvent(true);
@@ -291,6 +354,7 @@ public class TileViewActivity extends BaseActivity {
             double noise = perlinNoise.noiseNormalized(column * 0.03, row * 0.03);
             colorTileHolder.backgroundColor = colorGenerator.getColor((noise - 0.3) / 0.7);
             colorTileHolder.noise = noise / 0.03;
+            colorTileHolder.bind();
         }
     }
 
