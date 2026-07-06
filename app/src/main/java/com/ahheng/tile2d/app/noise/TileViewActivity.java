@@ -6,10 +6,6 @@ import android.graphics.Color;
 import android.graphics.Paint;
 import android.graphics.Picture;
 import android.os.Bundle;
-import android.os.Handler;
-import android.text.Layout;
-import android.text.StaticLayout;
-import android.text.TextPaint;
 import android.view.Menu;
 import android.view.MenuItem;
 import android.view.ViewGroup;
@@ -234,7 +230,7 @@ public class TileViewActivity extends BaseActivity {
         private void recordPicture() {
             if (getWidth() <= 0 || getHeight() <= 0) return;
             if (!needReplay && picture != null) return;
-    
+            
             if (picture == null) {
                 picture = new Picture();
             }
@@ -250,10 +246,11 @@ public class TileViewActivity extends BaseActivity {
             needReplay = false;
         }
     
-        public void invalidatePicture() {
+        public void invalidate() {
             needReplay = true;
             if (getWidth() > 0 && getHeight() > 0) {
                 recordPicture();
+                postInvalidateOnAnimation();
             }
         }
     
