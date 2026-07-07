@@ -1,19 +1,20 @@
 package com.ahheng.tile2d.dimen;
 
-import android.util.SparseIntArray;
 import android.view.View;
 
 import com.ahheng.tile2d.TileCoreService;
 import com.ahheng.tile2d.tile.TileAdapter;
 import com.ahheng.tile2d.tile.TileRecycledPool;
+import com.ahheng.tile2d.util.IntIntMap;
+import com.ahheng.tile2d.util.IntIntMapSparseArray;
 
 // 简易测量工具，不建议在大数据量场景下使用
 public class MeasurableDimenProvider implements TileDimenProvider {
 
     private final TileAdapter<TileCoreService.BaseTileHolder> adapter;
-    private final SparseIntArray widths = new SparseIntArray();
-    private final SparseIntArray heights = new SparseIntArray();
-    private final TileRecycledPool<TileCoreService.BaseTileHolder> recycledTiles = new TileRecycledPool<>();
+    private IntIntMap widths;
+    private IntIntMap heights;
+    private TileRecycledPool<TileCoreService.BaseTileHolder> recycledTiles = new TileRecycledPool<>();
 
     private int defaultTileWidth;
     private int defaultTileHeight;
@@ -27,14 +28,16 @@ public class MeasurableDimenProvider implements TileDimenProvider {
         this.defaultTileWidth = defaultTileWidth;
         this.defaultTileHeight = defaultTileHeight;
         this.adapter = (TileAdapter<TileCoreService.BaseTileHolder>) adapter;
+        this.widths = new IntIntMapSparseArray();
+        this.heights = new IntIntMapSparseArray();
     }
 
     public boolean isMinDefault() {
-    	return minDefault;
+        return minDefault;
     }
 
     public void setMinDefault(boolean minDefault) {
-    	this.minDefault = minDefault;
+        this.minDefault = minDefault;
     }
 
     public void setDefaultTileWidth(int width) {
@@ -82,19 +85,19 @@ public class MeasurableDimenProvider implements TileDimenProvider {
                     width = output[0];
                     height = output[1];
                 }
-                int lastWidth = widths.indexOfKey(column) >= 0 ? widths.get(column) : (minDefault ? defaultTileWidth : width);
-                int lastHeight = heights.indexOfKey(row) >= 0 ? heights.get(row) : (minDefault ? defaultTileHeight : height);
+                int lastWidth = widths.containsKey(column) ? widths.get(column) : (minDefault ? defaultTileWidth : width);
+                int lastHeight = heights.containsKey(row) ? heights.get(row) : (minDefault ? defaultTileHeight : height);
                 lastWidth = Math.max(lastWidth, width);
                 lastHeight = Math.max(lastHeight, height);
                 if (lastWidth != defaultTileWidth) {
                     widths.put(column, lastWidth);
                 } else {
-                    widths.delete(column);
+                    widths.remove(column);
                 }
                 if (lastHeight != defaultTileHeight) {
                     heights.put(row, lastHeight);
                 } else {
-                    heights.delete(row);
+                    heights.remove(row);
                 }
                 if (tile != null) {
                     recycledTiles.recycle(type, tile);
@@ -118,14 +121,12 @@ public class MeasurableDimenProvider implements TileDimenProvider {
 
     @Override
     public int getTileWidth(int column) {
-        int i = widths.indexOfKey(column);
-        return i >= 0 ? widths.valueAt(i) : defaultTileWidth;
+        return widths.containsKey(column) ? widths.get(column) : defaultTileWidth;
     }
 
     @Override
     public int getTileHeight(int row) {
-        int i = heights.indexOfKey(row);
-        return i >= 0 ? heights.valueAt(i) : defaultTileHeight;
+        return heights.containsKey(row) ? heights.get(row) : defaultTileHeight;
     }
 
     @Override
@@ -140,12 +141,42 @@ public class MeasurableDimenProvider implements TileDimenProvider {
 
     @Override
     public void deleteTileWidth(int column) {
-        widths.delete(column);
+        widths.remove(column);
     }
 
     @Override
     public void deleteTileHeight(int row) {
-        heights.delete(row);
+        heights.remove(row);
+    }
+
+    public void setWidths(IntIntMap map) {
+        if (map == null) throw new IllegalArgumentException("widths map cannot be null");
+        if (map == widths) return;
+        map.clear();
+        for (IntIntMap.Iterator it = widths.iterator(); it.next(); ) {
+            map.put(it.key(), it.value());
+        }
+        widths.clear();
+        widths = map;
+    }
+
+    public void setHeights(IntIntMap map) {
+        if (map == null) throw new IllegalArgumentException("heights map cannot be null");
+        if (map == heights) return;
+        map.clear();
+        for (IntIntMap.Iterator it = heights.iterator(); it.next(); ) {
+            map.put(it.key(), it.value());
+        }
+        heights.clear();
+        heights = map;
+    }
+
+    public void setRecycledTiles(TileRecycledPool<TileCoreService.BaseTileHolder> map) {
+        if (map == null) throw new IllegalArgumentException("recycledTiles map cannot be null");
+        if (map == recycledTiles) return;
+        map.reset();
+        recycledTiles.moveTo(map);
+        recycledTiles = map;
     }
 
 }

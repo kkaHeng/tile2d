@@ -86,226 +86,270 @@ tileLayout.setAdapter(new TileLayout.Adapter() {
 ## API 文档
 ### TileView 与 TileLayout
 
-- `void offset(float dx, float dy)`
+- `void offset(float dx, float dy)`  
 滚动一段距离。单位：**像素**。
 
-- `void smoothOffset(float dx, float dy)`
-平滑滚动一段距离。单位：**像素**。
-
-- `void smoothOffset(float dx, float dy, int duration)`
-平滑滚动一段距离并指定耗时。距离单位：**像素**，时间单位：**毫秒**。
-
-- `void seek(int column, int row)`
+- `void seek(int column, int row)`  
 跳转到指定位置。
 
-- `void seek(int column, int row, float offsetX, float offsetY)`
+- `void seek(int column, int row, float offsetX, float offsetY)`  
 跳转到指定位置并微调。单位：**像素**。
 
-- `void snap()`
+- `void snap()`  
 视窗吸附，用于适配器边界变化时使视窗进入合法范围内。
 
-- `float getTileX(int column)`
+- `float getTileX(int column)`  
 获取指定列的横坐标。(基于View原点)
 
-- `float getTileY(int row)`
+- `float getTileY(int row)`  
 获取指定行的纵坐标。(基于View原点)
 
-- `int findColumn(float x)`
+- `int findColumn(float x)`  
 根据横坐标查找列。(基于View原点)
 
-- `int findRow(float y)`
+- `int findRow(float y)`  
 根据纵坐标查找行。(基于View原点)
 
-- `TileLayoutModel getLayoutModel()`
+- `TileLayoutModel getLayoutModel()`  
 获取当前视窗布局模型的快照(如果没有高频访问需求与实时更新需求，建议使用`newInstance`方法拷贝一份)。
 
-- `void requestDisallowInterceptTouchEvent(boolean disallowIntercept)`
+- `void requestDisallowInterceptTouchEvent(boolean disallowIntercept)`  
 请求**TileView**或**TileLayout**放弃当前触摸事件序列，使瓦片获得完整事件序列。
 
-- `long getLongPressTimeout()`
+- `long getLongPressTimeout()`  
 获取长按检测时长(仅**TileView**)。单位：**毫秒**。
 
-- `void setLongPressTimeout(long longPressTimeout)`
+- `void setLongPressTimeout(long longPressTimeout)`  
 设置长按检测时长(仅**TileView**)。单位：**毫秒**。
 
-- `boolean isHorizontalScrollEnabled()`
+- `boolean isHorizontalScrollEnabled()`  
 检查是否开启横向滚动。
 
-- `void setHorizontalScrollEnabled(boolean horizontalScrollEnabled)`
+- `void setHorizontalScrollEnabled(boolean horizontalScrollEnabled)`  
 设置是否开启横向滚动。
 
-- `boolean isVerticalScrollEnabled()`
+- `boolean isVerticalScrollEnabled()`  
 检查是否开启纵向滚动。
 
-- `void setVerticalScrollEnabled(boolean verticalScrollEnabled)`
+- `void setVerticalScrollEnabled(boolean verticalScrollEnabled)`  
 设置是否开启纵向滚动。
 
-- `int getTileWidth(int column)`
+- `int getTileWidth(int column)`  
 获取指定列的宽度。单位：**像素**。
 
-- `int getTileHeight(int row)`
+- `int getTileHeight(int row)`  
 获取指定行的高度。单位：**像素**。
 
-- `void setTileWidth(int column, int width)`
+- `void setTileWidth(int column, int width)`  
 设置指定列的宽度。单位：**像素**。
 
-- `void setTileWidth(int column, int width, int gravity)`
+- `void setTileWidth(int column, int width, int gravity)`  
 设置指定列的宽度并指定对齐方式。单位：**像素**。
 
-- `void deleteTileWidth(int column)`
+- `void deleteTileWidth(int column)`  
 删除指定列的宽度。
 
-- `void deleteTileWidth(int column, int gravity)`
+- `void deleteTileWidth(int column, int gravity)`  
 删除指定列的宽度并指定对齐方式。
 
-- `void setTileHeight(int row, int height)`
+- `void setTileHeight(int row, int height)`  
 设置指定行的高度。单位：**像素**。
 
-- `void setTileHeight(int row, int height, int gravity)`
+- `void setTileHeight(int row, int height, int gravity)`  
 设置指定行的高度并指定对齐方式。单位：**像素**。
 
-- `void deleteTileHeight(int row)`
+- `void deleteTileHeight(int row)`  
 删除指定行的高度。
 
-- `void deleteTileHeight(int row, int gravity)`
+- `void deleteTileHeight(int row, int gravity)`  
 删除指定行的高度并指定对齐方式。
 
-- `void updateColumn(int column)`
+- `void setTileSize(int column, int width, int row, int height)`  
+设置指定瓦片的大小。单位：**像素**。
+
+- `void setTileSize(int column, int width, int hGravity, int row, int height, int vGravity)`  
+设置指定瓦片的大小并指定对齐方式。单位：**像素**。
+
+- `void updateColumn(int column)`  
 更新指定列。
 
-- `void updateRow(int row)`
+- `void updateRow(int row)`  
 更新指定行。
 
-- `void update(int column, int row)`
+- `void update(int column, int row)`  
 更新指定瓦片。
 
-- `void updateRange(int left, int top, int right, int bottom)`
+- `void updateRange(int left, int top, int right, int bottom)`  
 更新指定范围。
 
-- `void updateAll()`
+- `void updateAll()`  
 更新视窗内所有瓦片。
 
-- `Adapter getAdapter()`
+- `Adapter getAdapter()`  
 获取适配器。
 
-- `void setAdapter(Adapter adapter)`
+- `void setAdapter(Adapter adapter)`  
 设置适配器。
 
-- `int getDefaultTileWidth()`
+- `int getDefaultTileWidth()`  
 获取默认瓦片宽度。单位：**像素**。
 
-- `int getDefaultTileHeight()`
+- `int getDefaultTileHeight()`  
 获取默认瓦片高度。单位：**像素**。
 
-- `void setDefaultTileWidth(int width)`
+- `void setDefaultTileWidth(int width)`  
 设置默认瓦片宽度。单位：**像素**。
 
-- `void setDefaultTileHeight(int height)`
+- `void setDefaultTileHeight(int height)`  
 设置默认瓦片高度。单位：**像素**。
 
-- `TileDimenProvider getDimenProvider()`
+- `TileDimenProvider getDimenProvider()`  
 获取瓦片尺寸提供者。
 
-- `void setDimenProvider(TileDimenProvider dimenProvider)`
+- `void setDimenProvider(TileDimenProvider dimenProvider)`  
 设置瓦片尺寸提供者。
 
-- `TileHolder getActiveTile(int column, int row)`
+- `TileHolder getActiveTile(int column, int row)`  
 获取指定位置的瓦片(如果可见)，不可见时返回`null`。
 
-- `boolean isEmpty()`
+- `boolean isEmpty()`  
 检查适配器边界是否为空。
 
-- `boolean isAtLeftBound()`
+- `boolean isAtLeftBound()`  
 检查视窗是否已触及左边界。
 
-- `boolean isAtTopBound()`
+- `boolean isAtTopBound()`  
 检查视窗是否已触及上边界。
 
-- `boolean isAtRightBound()`
+- `boolean isAtRightBound()`  
 检查视窗是否已触及右边界。
 
-- `boolean isAtBottomBound()`
+- `boolean isAtBottomBound()`  
 检查视窗是否已触及下边界。
 
-- `boolean isInteractingWithView()`
+- `boolean isInteractingWithView()`  
 检查用户是否正在和**TileView**或**TileLayout**交互，例如滚动。
 
-- `boolean isDebugMode()`
+- `boolean isDebugMode()`  
 检查是否已开启调试面板。
 
-- `void setDebugMode(boolean enabled)`
+- `void setDebugMode(boolean enabled)`  
 设置是否开启调试面板。
+
+- `void setActiveTiles(LongMap<TileHolder> map)`  
+替换活跃瓦片存储映射。用于自定义底层数据结构，例如替换为 `LongMapHashMap` 以提升删除性能。传入 `null` 会抛出异常，重复设置相同对象无效果。
+
+- `void setDyingTiles(LongMap<TileHolder> map)`  
+替换濒死瓦片存储映射。用于自定义底层数据结构，例如替换为 `LongMapHashMap` 以提升删除性能。传入 `null` 会抛出异常，重复设置相同对象无效果。
+
+- `void setWidths(IntIntMap map)`  
+替换列宽存储映射。传入 `null` 会抛出异常，重复设置相同对象无效果。
+
+- `void setHeights(IntIntMap map)`  
+替换行高存储映射。传入 `null` 会抛出异常，重复设置相同对象无效果。
+
+- `void setRecycledTiles(TileRecycledPool<TileHolder> pool)`  
+替换瓦片回收池。传入 `null` 会抛出异常，重复设置相同对象无效果。
 
 ### TileAdapter
 
-- `int getLeftBound()`
+- `int getLeftBound()`  
 获取左边界。
 
-- `int getTopBound()`
+- `int getTopBound()`  
 获取上边界。
 
-- `int getRightBound()`
+- `int getRightBound()`  
 获取右边界。
 
-- `int getBottomBound()`
+- `int getBottomBound()`  
 获取下边界。
 
-- `T onCreateTileHolder(int type)`
+- `T onCreateTileHolder(int type)`  
 根据**瓦片类型**创建瓦片持有者。
 
-- `void onBindTileHolder(T holder, int column, int row)`
+- `void onBindTileHolder(T holder, int column, int row)`  
 为瓦片持有者**绑定数据**。
 
-- `int getTileType(int column, int row)`
+- `int getTileType(int column, int row)`  
 获取指定瓦片的**瓦片类型**。
 
-- `boolean isEmpty()`
+- `boolean isEmpty()`  
 检查边界是否为空。
 
 ### TileDimenProvider
 
-- `int getTileWidth(int column)`
+- `int getTileWidth(int column)`  
 获取指定列的宽度。单位：**像素**。
 
-- `int getTileHeight(int row)`
+- `int getTileHeight(int row)`  
 获取指定行的高度。单位：**像素**。
 
 ### Measurable
 
-- `void measure(int widthMeasureSpec, int heightMeasureSpec, int[] out)`
+- `void measure(int widthMeasureSpec, int heightMeasureSpec, int[] out)`  
 测量瓦片并将瓦片尺寸写入数组中。
 
 ### MeasurableDimenProvider
 
-- `boolean isMinDefault()`
+- `boolean isMinDefault()`  
 是否使用默认尺寸保底。
 
-- `void setMinDefault(boolean minDefault)`
+- `void setMinDefault(boolean minDefault)`  
 设置是否使用默认尺寸保底，如果开启，测量结果小于默认尺寸时，使用默认尺寸。
 
-- `void setDefaultTileWidth(int width)`
+- `void setDefaultTileWidth(int width)`  
 设置默认瓦片宽度。单位：**像素**。
 
-- `void setDefaultTileHeight(int height)`
+- `void setDefaultTileHeight(int height)`  
 设置默认瓦片高度。单位：**像素**。
 
-- `int getDefaultTileWidth()`
+- `int getDefaultTileWidth()`  
 获取默认瓦片宽度。
 
-- `int getDefaultTileHeight()`
+- `int getDefaultTileHeight()`  
 获取默认瓦片高度。
 
-- `void full()`
+- `void full()`  
 测量**全部瓦片**。不建议在大数据量时使用。
 
-- `void measure(int colStart, int rowStart, int colEnd, int rowEnd)`
+- `void measure(int colStart, int rowStart, int colEnd, int rowEnd)`  
 测量指定范围的瓦片。
 
-- `void reset()`
+- `void reset()`  
 清空已测量的全部结果。
 
-- `void clearRecycledTiles()`
+- `void clearRecycledTiles()`  
 清空回收池。
+
+- `void setWidths(IntIntMap map)`  
+替换列宽存储映射。传入 `null` 会抛出异常，重复设置相同对象无效果。
+
+- `void setHeights(IntIntMap map)`  
+替换行高存储映射。传入 `null` 会抛出异常，重复设置相同对象无效果。
+
+- `setRecycledTiles(TileRecycledPool<TileCoreService.BaseTileHolder> map)`  
+替换瓦片回收池。传入 `null` 会抛出异常，重复设置相同对象无效果。
+
+### TileRecycledPool
+
+- `void reset()`  
+清空回收池中所有瓦片，释放所有缓存实例。
+
+- `T get(int type)`  
+根据瓦片类型从回收池获取一个瓦片实例。若该类型无可用实例，返回 `null`。
+
+- `void recycle(int type, T tile)`  
+将瓦片回收至池中，按类型分组存储，供后续复用。
+
+- `void setRecycledTiles(IntMap<Deque<T>> map)`  
+替换回收池内部的存储映射。用于自定义底层数据结构（例如替换为 `IntMapHashMap` 以提升性能）。  
+传入 `null` 会抛出 `IllegalArgumentException`，重复设置相同对象无效果。  
+调用后，原有数据会自动迁移至新映射，旧映射被清空。
+
+- `void moveTo(TileRecycledPool<T> recycledTiles)`  
+将当前回收池的所有瓦片数据迁移到目标回收池，并清空当前池。  
+传入 `null` 会抛出 `IllegalArgumentException`，重复设置相同对象无效果。
 
 ## 瓦片生命周期
 

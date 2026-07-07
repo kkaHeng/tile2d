@@ -8,12 +8,12 @@ import android.graphics.Paint;
 import android.graphics.Rect;
 import android.graphics.Typeface;
 import android.os.Debug;
-import android.util.LongSparseArray;
 import android.util.TypedValue;
 import android.view.Choreographer;
 
 import com.ahheng.tile2d.TileCoreService;
 import com.ahheng.tile2d.TileLayoutModel;
+import com.ahheng.tile2d.util.LongMap;
 
 import java.util.Locale;
 import java.util.Objects;
@@ -184,7 +184,7 @@ public class DebugLayer {
             recycledTileText = "回收瓦片：" + recycledTileCount;
         }
 
-        LongSparseArray<? extends TileCoreService.BaseTileHolder> dyingTiles = callback.getDyingTiles();
+        LongMap<? extends TileCoreService.BaseTileHolder> dyingTiles = callback.getDyingTiles();
         int dyingTileCount = dyingTiles.size();
         if (dyingTileCount != cachedDyingTileCount) {
             cachedDyingTileCount = dyingTileCount;
@@ -246,15 +246,16 @@ public class DebugLayer {
         drawEnd = Debug.threadCpuTimeNanos();
         
         TileLayoutModel model = callback.getLayoutModel();
-        LongSparseArray<? extends TileCoreService.BaseTileHolder> dyingTiles = callback.getDyingTiles();
+        LongMap<? extends TileCoreService.BaseTileHolder> dyingTiles = callback.getDyingTiles();
         Rect bounds = callback.getBounds();
         
         // 开始绘制濒死区
         canvas.save();
         canvas.translate(bounds.left, bounds.top);
         canvas.translate(model.offsetX, model.offsetY);
-        for (int i = 0; i < dyingTiles.size(); i++) {
-            long id = dyingTiles.keyAt(i);
+        LongMap.Iterator<? extends TileCoreService.BaseTileHolder> it = dyingTiles.iterator();
+        while (it.next()) {
+            long id = it.key();
             int c = TileCoreService.getColumn(id);
             int r = TileCoreService.getRow(id);
 
@@ -275,7 +276,7 @@ public class DebugLayer {
                     y += callback.getTileHeight(j);
                 }
             }
-            TileCoreService.BaseTileHolder tile = dyingTiles.valueAt(i);
+            TileCoreService.BaseTileHolder tile = it.value();
 
             canvas.save();
             canvas.translate(x, y);
@@ -327,7 +328,7 @@ public class DebugLayer {
         
         TileLayoutModel getLayoutModel();
         
-        LongSparseArray<? extends TileCoreService.BaseTileHolder> getDyingTiles();
+        LongMap<? extends TileCoreService.BaseTileHolder> getDyingTiles();
         
         void postInvalidateOnAnimation();
 

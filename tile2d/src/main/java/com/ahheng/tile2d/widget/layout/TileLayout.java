@@ -6,7 +6,6 @@ import android.graphics.Rect;
 import android.os.Debug;
 import android.util.AttributeSet;
 import android.util.DisplayMetrics;
-import android.util.LongSparseArray;
 import android.util.TypedValue;
 import android.view.MotionEvent;
 import android.view.View;
@@ -15,9 +14,12 @@ import android.view.ViewGroup;
 import com.ahheng.tile2d.TileCoreService;
 import com.ahheng.tile2d.TileLayoutModel;
 import com.ahheng.tile2d.TileLayoutService;
+import com.ahheng.tile2d.dimen.TileDimenProvider;
 import com.ahheng.tile2d.tile.OnTileLifecycleListener;
 import com.ahheng.tile2d.tile.TileAdapter;
-import com.ahheng.tile2d.dimen.TileDimenProvider;
+import com.ahheng.tile2d.tile.TileRecycledPool;
+import com.ahheng.tile2d.util.IntIntMap;
+import com.ahheng.tile2d.util.LongMap;
 import com.ahheng.tile2d.widget.debug.DebugLayer;
 
 public class TileLayout extends ViewGroup {
@@ -315,7 +317,7 @@ public class TileLayout extends ViewGroup {
                     return coreService.getLayoutModel();
                 }
                 @Override
-                public LongSparseArray<? extends TileCoreService.BaseTileHolder> getDyingTiles() {
+                public LongMap<? extends TileCoreService.BaseTileHolder> getDyingTiles() {
                     return coreService.getDyingTiles();
                 }
                 @Override
@@ -381,20 +383,6 @@ public class TileLayout extends ViewGroup {
             return;
         }
         coreService.sync(dx, dy);
-    }
-
-    public void smoothOffset(float dx, float dy) {
-    	if (isEmpty()) {
-            return;
-        }
-        coreService.smoothSync(dx, dy);
-    }
-
-    public void smoothOffset(float dx, float dy, int duration) {
-        if (isEmpty()) {
-            return;
-        }
-        coreService.smoothSync(dx, dy, duration);
     }
 
     public void seek(int column, int row) {
@@ -490,6 +478,14 @@ public class TileLayout extends ViewGroup {
         coreService.deleteTileHeight(row, gravity);
     }
 
+    public void setTileSize(int column, int width, int row, int height) {
+        coreService.setTileSize(column, width, DIMEN_GRAVITY_START, row, height, DIMEN_GRAVITY_START);
+    }
+
+    public void setTileSize(int column, int width, int hGravity, int row, int height, int vGravity) {
+        coreService.setTileSize(column, width, hGravity, row, height, vGravity);
+    }
+
     public void updateColumn(int column) {
     	coreService.updateColumn(column);
     }
@@ -549,6 +545,26 @@ public class TileLayout extends ViewGroup {
 
     public void setDimenProvider(TileDimenProvider dimenProvider) {
         coreService.setDimenProvider(dimenProvider);
+    }
+
+    public void setActiveTiles(LongMap<TileHolder> map) {
+        coreService.setActiveTiles(map);
+    }
+    
+    public void setDyingTiles(LongMap<TileHolder> map) {
+        coreService.setDyingTiles(map);
+    }
+    
+    public void setWidths(IntIntMap map) {
+        coreService.setWidths(map);
+    }
+    
+    public void setHeights(IntIntMap map) {
+        coreService.setHeights(map);
+    }
+    
+    public void setRecycledTiles(TileRecycledPool<TileHolder> pool) {
+        coreService.setRecycledTiles(pool);
     }
 
     public void setOnTileLifecycleListener(OnTileLifecycleListener<TileHolder> onTileLifecycleListener) {

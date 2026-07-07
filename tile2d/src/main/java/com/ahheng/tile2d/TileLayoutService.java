@@ -257,6 +257,43 @@ public class TileLayoutService {
         }
     }
 
+    public void updateSize(int column, int oldWidth, int newWidth, int hGravity, 
+                           int row, int oldHeight, int newHeight, int vGravity) {
+        float dx = 0;
+        float dy = 0;
+        if (column >= colStart && column <= colEnd) {
+            totalWidth += (newWidth - oldWidth);
+            float newOffsetX;
+            if (hGravity == DIMEN_GRAVITY_START) {
+                // 左对齐，右扩展或收缩
+                newOffsetX = offsetX;
+            } else if (hGravity == DIMEN_GRAVITY_END) {
+                // 右对齐，左扩展或收缩
+                newOffsetX = offsetX + oldWidth - newWidth;
+            } else {
+                // 居中对齐，左右扩展或收缩
+                newOffsetX = offsetX + (oldWidth - newWidth) / 2f;
+            }
+            dx = newOffsetX - offsetX;
+        }
+        if (row >= rowStart && row <= rowEnd) {
+            totalHeight += (newHeight - oldHeight);
+            float newOffsetY;
+            if (vGravity == DIMEN_GRAVITY_START) {
+                // 上对齐，下扩展或收缩
+                newOffsetY = offsetY;
+            } else if (vGravity == DIMEN_GRAVITY_END) {
+                // 下对齐，上扩展或收缩
+                newOffsetY = offsetY + oldHeight - newHeight;
+            } else {
+                // 居中对齐，上下扩展或收缩
+                newOffsetY = offsetY + (oldHeight - newHeight) / 2f;
+            }
+            dy = newOffsetY - offsetY;
+        }
+        sync(dx, dy);
+    }
+
     private void diff(int oldColStart, int oldRowStart, int oldColEnd, int oldRowEnd, int newColStart, int newRowStart, int newColEnd, int newRowEnd) {
         if (newColStart > oldColEnd || newRowStart > oldRowEnd || newColEnd < oldColStart || newRowEnd < oldRowStart) {
             // 说明 sync 跑了很远，直接兜底

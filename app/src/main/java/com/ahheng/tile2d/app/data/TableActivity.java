@@ -25,6 +25,7 @@ import com.ahheng.tile2d.app.BaseActivity;
 import com.ahheng.tile2d.dimen.DragResizerView;
 import com.ahheng.tile2d.dimen.Measurable;
 import com.ahheng.tile2d.dimen.MeasurableDimenProvider;
+import com.ahheng.tile2d.util.IntIntMapHashMap;
 import com.ahheng.tile2d.widget.canvas.TileView;
 import com.ahheng.tile2d.widget.layout.TileLayout;
 
@@ -681,15 +682,23 @@ public class TableActivity extends BaseActivity {
                 tileLayout.getDefaultTileHeight(),
                 adapter
         )));
+        // 空间换时间
+        // dimenProvider.setWidths(new IntIntMapHashMap());
+        // dimenProvider.setHeights(new IntIntMapHashMap());
+        
+        // 全测量(不建议大数据场景)
         dimenProvider.full();
+        
         dragResizerView = new DragResizerView(this);
         dragResizerView.setCallback(new DragResizerView.Callback() {
             @Override
             public void onDrag(int direction, int width, int height, int gravity) {
                 int column = TileCoreService.getColumn(currTileHolder);
                 int row = TileCoreService.getRow(currTileHolder);
-                tileLayout.setTileWidth(column, Math.max(tileLayout.getDefaultTileWidth(), width), gravity);
-                tileLayout.setTileHeight(row, Math.max(tileLayout.getDefaultTileHeight(), height), gravity);
+                tileLayout.setTileSize(
+                    column, Math.max(tileLayout.getDefaultTileWidth(), width), gravity,
+                    row, Math.max(tileLayout.getDefaultTileHeight(), height), gravity
+                );
             }
 
             @Override
