@@ -164,6 +164,11 @@ public class TileCoreService<T extends TileCoreService.BaseTileHolder> {
         if (!disallowIntercept) {
             gestureDetector.onTouchEvent(event);
         }
+        
+        if (action == MotionEvent.ACTION_CANCEL || action == MotionEvent.ACTION_UP) {
+            disallowIntercept = false;
+            isInteractingWithView = false;
+        }
     }
 
     public void computeScroll() {

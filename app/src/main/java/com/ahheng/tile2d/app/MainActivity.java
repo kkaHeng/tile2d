@@ -10,8 +10,9 @@ import androidx.appcompat.app.AppCompatActivity;
 
 import com.ahheng.tile2d.app.auto.AutoTileActivity;
 import com.ahheng.tile2d.app.data.TableActivity;
-import com.ahheng.tile2d.app.maze.MazeActivity;
 import com.ahheng.tile2d.app.maze.MaxMazeActivity;
+import com.ahheng.tile2d.app.maze.MazeActivity;
+import com.ahheng.tile2d.app.minesweeper.MinesweeperActivity;
 import com.ahheng.tile2d.app.noise.TileLayoutActivity;
 import com.ahheng.tile2d.app.noise.TileViewActivity;
 import com.google.android.material.button.MaterialButton;
@@ -47,6 +48,10 @@ public class MainActivity extends AppCompatActivity {
         MaterialButton maxMazeButton = new MaterialButton(this);
         maxMazeButton.setText("迷宫 Max Demo");
         layout.addView(maxMazeButton, -2, -2);
+        
+        MaterialButton minesweeperButton = new MaterialButton(this);
+        minesweeperButton.setText("扫雷 Demo");
+        layout.addView(minesweeperButton, -2, -2);
 
         setContentView(layout, new ViewGroup.LayoutParams(-1, -1));
 
@@ -56,6 +61,7 @@ public class MainActivity extends AppCompatActivity {
         autoTileButton.setOnClickListener(v -> startActivity(new Intent(this, AutoTileActivity.class)));
         mazeButton.setOnClickListener(v -> startActivity(new Intent(this, MazeActivity.class)));
         maxMazeButton.setOnClickListener(v -> startActivity(new Intent(this, MaxMazeActivity.class)));
+        minesweeperButton.setOnClickListener(v -> startActivity(new Intent(this, MinesweeperActivity.class)));
 
         // 默认启动
         // startActivity(new Intent(this, TileViewActivity.class));

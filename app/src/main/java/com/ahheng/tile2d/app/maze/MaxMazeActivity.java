@@ -39,6 +39,7 @@ public class MaxMazeActivity extends BaseActivity {
     private TextView chunkTextView;
     private MaxMazeAdapter adapter;
     private int tileSize;
+    private Bitmap wallBitmap;
 
     private final long seed = 123456789L;
 
@@ -76,6 +77,14 @@ public class MaxMazeActivity extends BaseActivity {
         root.addView(tileLayout, -1, -1);
         root.addView(chunkTextView, params);
         setContentView(root, new ViewGroup.LayoutParams(-1, -1));
+        
+        try (InputStream is = getAssets().open("bricks.png")) {
+            Bitmap rawBitmap = BitmapFactory.decodeStream(is);
+            wallBitmap = Bitmap.createScaledBitmap(rawBitmap, tileSize, tileSize, false);
+            rawBitmap.recycle(); // 立即释放
+        } catch (IOException e) {
+            e.printStackTrace();
+        }
 
         tileLayout.setAdapter((adapter = new MaxMazeAdapter()));
 
@@ -333,10 +342,7 @@ public class MaxMazeActivity extends BaseActivity {
                 return null;
             }
             ImageView imageView = new ImageView(MaxMazeActivity.this);
-            try (InputStream is = getAssets().open("bricks.png")) {
-                Bitmap bitmap = BitmapFactory.decodeStream(is);
-                imageView.setImageBitmap(Bitmap.createScaledBitmap(bitmap, tileSize, tileSize, false));
-            } catch (IOException ignored) {}
+            imageView.setImageBitmap(wallBitmap);
             imageView.setLayoutParams(new ViewGroup.LayoutParams(-2, -2));
             imageView.setScaleType(ImageView.ScaleType.CENTER);
             return new TileLayout.TileHolder(imageView);
@@ -387,6 +393,7 @@ public class MaxMazeActivity extends BaseActivity {
         chunkPool.clear();
         mainHandler.removeCallbacksAndMessages(null);
         tileLayout.setAdapter(null);
+        wallBitmap.recycle();
     }
 
 }

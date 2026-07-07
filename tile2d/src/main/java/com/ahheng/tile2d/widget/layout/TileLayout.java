@@ -506,6 +506,10 @@ public class TileLayout extends ViewGroup {
         coreService.updateAll();
     }
 
+    public void resetAnimator() {
+    	coreService.resetAnimator();
+    }
+
     public Adapter getAdapter() {
         return adapter;
     }

@@ -32,6 +32,9 @@
         <activity android:name=".maze.MaxMazeActivity"
             android:exported="true"
             android:label="迷宫 Max Demo"/>
+        <activity android:name=".minesweeper.MinesweeperActivity"
+            android:exported="true"
+            android:label="扫雷 Demo"/>
     </application>
     
 </manifest>

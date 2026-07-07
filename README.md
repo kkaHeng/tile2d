@@ -185,6 +185,9 @@ tileLayout.setAdapter(new TileLayout.Adapter() {
 - `void updateAll()`  
 更新视窗内所有瓦片。
 
+- `void resetAnimator()`  
+停止正在运行的动画(如惯性滚动)。
+
 - `Adapter getAdapter()`  
 获取适配器。
 
@@ -381,15 +384,10 @@ tileLayout.setAdapter(new TileLayout.Adapter() {
 ---
 
 ## 性能报告
-### 极端位置
 
-正在贪婪的使用`int`的全部索引空间中：
+正在贪婪的使用`int32`的全部索引空间中：
 
-![实机截图](screenshots/tileview-max.jpg)
-
-![实机截图](screenshots/tilelayout-max.jpg)
-
-### 普通示例
+### 柏林噪声
 
 基于柏林噪声实现，可以提供伪无限的数据源。
 
@@ -420,6 +418,12 @@ tileLayout.setAdapter(new TileLayout.Adapter() {
 区块化的伪无限迷宫，支持完整的`int`全部索引空间。
 
 ![实机截图](screenshots/max_maze.jpg)
+
+### 扫雷
+
+一个简单的扫雷游戏实现，支持 AI 自动探索。
+
+![实机截图](screenshots/minesweeper.jpg)
 
 截图中的数据说明：
 - **实际帧率**：真实的物理帧率（我的测试环境最高支持 120Hz）。
