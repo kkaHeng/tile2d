@@ -40,7 +40,7 @@ dependencyResolutionManagement {
 引入依赖：
 ```gradle
 dependencies {
-    implementation 'com.github.kkaHeng:tile2d:26.6.1'
+    implementation 'com.github.kkaHeng:tile2d:26.7.1'
 }
 ```
 
