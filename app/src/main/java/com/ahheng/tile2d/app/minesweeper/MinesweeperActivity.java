@@ -15,8 +15,8 @@ import android.view.WindowManager;
 
 import androidx.annotation.Nullable;
 
+import com.ahheng.tile2d.LayoutModel;
 import com.ahheng.tile2d.TileCoreService;
-import com.ahheng.tile2d.TileLayoutModel;
 import com.ahheng.tile2d.app.BaseActivity;
 import com.ahheng.tile2d.widget.canvas.TileView;
 
@@ -325,7 +325,7 @@ public class MinesweeperActivity extends BaseActivity {
     }
 
     private void saveGame() {
-        TileLayoutModel model = tileView.getLayoutModel();
+        LayoutModel model = tileView.getLayoutModel();
         lastCenterCol = model.colStart;
         lastCenterRow = model.rowStart;
 

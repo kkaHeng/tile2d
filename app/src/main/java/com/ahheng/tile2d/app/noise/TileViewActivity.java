@@ -14,8 +14,8 @@ import android.view.animation.OvershootInterpolator;
 import androidx.annotation.NonNull;
 import androidx.annotation.Nullable;
 
+import com.ahheng.tile2d.LayoutModel;
 import com.ahheng.tile2d.TileCoreService;
-import com.ahheng.tile2d.TileLayoutModel;
 import com.ahheng.tile2d.app.BaseActivity;
 import com.ahheng.tile2d.widget.canvas.TileView;
 
@@ -56,7 +56,7 @@ public class TileViewActivity extends BaseActivity {
 
     private void initColorPlan() {
         displayText = false;
-        TileLayoutModel model = view.getLayoutModel().newInstance();
+        LayoutModel model = view.getLayoutModel().newInstance();
         int size = dp2px(40);
         view.setDefaultTileWidth(size);
         view.setDefaultTileHeight(size);
@@ -66,7 +66,7 @@ public class TileViewActivity extends BaseActivity {
 
     private void initTextPlan(boolean first) {
         displayText = true;
-        TileLayoutModel model = view.getLayoutModel().newInstance();
+        LayoutModel model = view.getLayoutModel().newInstance();
         view.setDefaultTileWidth(dp2px(80));
         view.setDefaultTileHeight(dp2px(45));
         view.setAdapter((adapter = new RandomAdapter()));

@@ -11,9 +11,9 @@ import android.view.MotionEvent;
 import android.view.View;
 import android.view.ViewGroup;
 
+import com.ahheng.tile2d.LayoutEngine;
+import com.ahheng.tile2d.LayoutModel;
 import com.ahheng.tile2d.TileCoreService;
-import com.ahheng.tile2d.TileLayoutModel;
-import com.ahheng.tile2d.TileLayoutService;
 import com.ahheng.tile2d.dimen.TileDimenProvider;
 import com.ahheng.tile2d.tile.OnTileLifecycleListener;
 import com.ahheng.tile2d.tile.TileAdapter;
@@ -24,9 +24,9 @@ import com.ahheng.tile2d.widget.debug.DebugLayer;
 
 public class TileLayout extends ViewGroup {
 
-    public static final int DIMEN_GRAVITY_CENTER = TileLayoutService.DIMEN_GRAVITY_CENTER;
-    public static final int DIMEN_GRAVITY_START = TileLayoutService.DIMEN_GRAVITY_START;
-    public static final int DIMEN_GRAVITY_END = TileLayoutService.DIMEN_GRAVITY_END;
+    public static final int DIMEN_GRAVITY_CENTER = LayoutEngine.DIMEN_GRAVITY_CENTER;
+    public static final int DIMEN_GRAVITY_START = LayoutEngine.DIMEN_GRAVITY_START;
+    public static final int DIMEN_GRAVITY_END = LayoutEngine.DIMEN_GRAVITY_END;
 
     private TileCoreService<TileHolder> coreService;
     private Adapter adapter;
@@ -43,12 +43,16 @@ public class TileLayout extends ViewGroup {
         @Override
         public void updateUI() {
             if (debugMode) startLayoutTime = Debug.threadCpuTimeNanos();
-            layoutTiles();
-            requestLayoutDepth--;
-            TileLayout.this.postInvalidateOnAnimation();
+            try {
+                layoutTiles();
+                TileLayout.this.postInvalidateOnAnimation();
+            } finally {
+                // 确保层级计数器一定回退,避免 onBindTileHolder 异常或布局异常导致拦截机制卡死
+                requestLayoutDepth--;
+            }
             if (debugMode) layoutTime = startLayoutTime == 0 ? 0 : Debug.threadCpuTimeNanos() - startLayoutTime;
             if (onLayoutListener != null) onLayoutListener.onAfterLayout();
-            if (requestLayoutDepth == 0 && requestLayout) {
+            if (requestLayoutDepth == 0 && pendingLayoutRequest) {
                 requestLayout();
             }
         }
@@ -138,7 +142,7 @@ public class TileLayout extends ViewGroup {
     private float initOffsetY;
 
     private int requestLayoutDepth = 0;
-    private boolean requestLayout = false;
+    private boolean pendingLayoutRequest = false;
 
     public TileLayout(Context context) {
         super(context);
@@ -157,7 +161,7 @@ public class TileLayout extends ViewGroup {
     }
 
     private void layoutTiles() {
-        TileLayoutModel model = coreService.getLayoutModel();
+        LayoutModel model = coreService.getLayoutModel();
 
         int column = model.colStart;
         float x = getPaddingLeft() + model.offsetX;
@@ -181,7 +185,7 @@ public class TileLayout extends ViewGroup {
     }
 
     private void measureTiles() {
-        TileLayoutModel model = coreService.getLayoutModel();
+        LayoutModel model = coreService.getLayoutModel();
         int column = model.colStart;
         int width = MeasureSpec.makeMeasureSpec(coreService.getTileWidth(column), MeasureSpec.EXACTLY);
         while (column <= model.colEnd) {
@@ -215,16 +219,17 @@ public class TileLayout extends ViewGroup {
                 init = true;
             }
         }
-        if (!init) {
+        if (!init && pendingLayoutRequest) {
             layoutTiles();
             postInvalidateOnAnimation();
         }
-        requestLayout = false;
+        pendingLayoutRequest = false;
     }
 
+    // 拦截机制:在同步周期内(requestLayoutDepth > 0)累积布局请求,避免瓦片未就绪时触发无效的 measure/layout
     @Override
     public void requestLayout() {
-        requestLayout = true;
+        pendingLayoutRequest = true;
         if (requestLayoutDepth > 0) {
             return;
         }
@@ -234,7 +239,7 @@ public class TileLayout extends ViewGroup {
     @Override
     protected void onMeasure(int widthMeasureSpec, int heightMeasureSpec) {
         super.onMeasure(widthMeasureSpec, heightMeasureSpec);
-        if (requestLayout) {
+        if (pendingLayoutRequest) {
             measureTiles();
         }
     }
@@ -292,28 +297,33 @@ public class TileLayout extends ViewGroup {
                 public int getActiveTileCount() {
                     return coreService.getActiveTileCount();
                 }
-                
+
                 @Override
                 public int getRecycledTileCount() {
                     return coreService.getRecycledTileCount();
                 }
-                
+
+                @Override
+                public int getDyingTileCount() {
+                    return coreService.getDyingTileCount();
+                }
+
                 @Override
                 public int getTileWidth(int column) {
                     return coreService.getTileWidth(column);
                 }
-                
+
                 @Override
                 public int getTileHeight(int row) {
                     return coreService.getTileHeight(row);
                 }
-                
+
                 @Override
                 public Rect getBounds() {
                     return coreService.getBounds();
                 }
                 @Override
-                public TileLayoutModel getLayoutModel() {
+                public LayoutModel getLayoutModel() {
                     return coreService.getLayoutModel();
                 }
                 @Override
@@ -324,12 +334,6 @@ public class TileLayout extends ViewGroup {
                 public void postInvalidateOnAnimation() {
                     TileLayout.this.postInvalidateOnAnimation();
                 }
-
-                @Override
-                public long getSyncTime() {
-                    return coreService.getSyncTime();
-                }
-
                 @Override
                 public long getBindTime() {
                     return coreService.getBindTime();
@@ -418,7 +422,7 @@ public class TileLayout extends ViewGroup {
         return coreService.findRow(y);
     }
 
-    public TileLayoutModel getLayoutModel() {
+    public LayoutModel getLayoutModel() {
         return coreService.getLayoutModel();
     }
 

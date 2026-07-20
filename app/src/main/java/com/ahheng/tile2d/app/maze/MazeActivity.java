@@ -14,8 +14,8 @@ import android.widget.ImageView;
 
 import androidx.annotation.Nullable;
 
+import com.ahheng.tile2d.LayoutModel;
 import com.ahheng.tile2d.TileCoreService;
-import com.ahheng.tile2d.TileLayoutModel;
 import com.ahheng.tile2d.app.BaseActivity;
 import com.ahheng.tile2d.app.auto.ConnectionRule;
 import com.ahheng.tile2d.app.auto.SimpleConnectionRule;
@@ -68,7 +68,7 @@ public class MazeActivity extends BaseActivity {
             if (!mazeMode || isFinishing()) return;
 
             int tileSize = tileLayout.getDefaultTileWidth();
-            TileLayoutModel model = tileLayout.getLayoutModel();
+            LayoutModel model = tileLayout.getLayoutModel();
 
             float targetPixelX = model.offsetX + (targetFollowCol - model.colStart) * tileSize;
             float targetPixelY = model.offsetY + (targetFollowRow - model.rowStart) * tileSize;

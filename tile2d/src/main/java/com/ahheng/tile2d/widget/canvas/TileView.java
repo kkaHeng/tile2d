@@ -11,9 +11,9 @@ import android.view.MotionEvent;
 import android.view.View;
 import android.view.ViewConfiguration;
 
+import com.ahheng.tile2d.LayoutEngine;
+import com.ahheng.tile2d.LayoutModel;
 import com.ahheng.tile2d.TileCoreService;
-import com.ahheng.tile2d.TileLayoutModel;
-import com.ahheng.tile2d.TileLayoutService;
 import com.ahheng.tile2d.dimen.TileDimenProvider;
 import com.ahheng.tile2d.tile.OnTileLifecycleListener;
 import com.ahheng.tile2d.tile.TileAdapter;
@@ -24,9 +24,9 @@ import com.ahheng.tile2d.widget.debug.DebugLayer;
 
 public class TileView extends View {
 
-    public static final int DIMEN_GRAVITY_CENTER = TileLayoutService.DIMEN_GRAVITY_CENTER;
-    public static final int DIMEN_GRAVITY_START = TileLayoutService.DIMEN_GRAVITY_START;
-    public static final int DIMEN_GRAVITY_END = TileLayoutService.DIMEN_GRAVITY_END;
+    public static final int DIMEN_GRAVITY_CENTER = LayoutEngine.DIMEN_GRAVITY_CENTER;
+    public static final int DIMEN_GRAVITY_START = LayoutEngine.DIMEN_GRAVITY_START;
+    public static final int DIMEN_GRAVITY_END = LayoutEngine.DIMEN_GRAVITY_END;
 
     private TileCoreService<TileHolder> coreService;
     private Adapter adapter;
@@ -191,7 +191,7 @@ public class TileView extends View {
         return coreService.findRow(y);
     }
 
-    public TileLayoutModel getLayoutModel() {
+    public LayoutModel getLayoutModel() {
         return coreService.getLayoutModel();
     }
 
@@ -223,7 +223,7 @@ public class TileView extends View {
     protected void onDraw(Canvas canvas) {
         super.onDraw(canvas);
         if (debugMode && debugLayer != null) debugLayer.startDraw();
-        TileLayoutModel model = coreService.getLayoutModel();
+        LayoutModel model = coreService.getLayoutModel();
         if (model.colStart <= model.colEnd && model.rowStart <= model.rowEnd) {
             canvas.save();
             if (!debugMode) canvas.clipRect(coreService.getBounds());
@@ -580,6 +580,11 @@ public class TileView extends View {
                 }
 
                 @Override
+                public int getDyingTileCount() {
+                    return coreService.getDyingTileCount();
+                }
+
+                @Override
                 public int getTileWidth(int column) {
                     return coreService.getTileWidth(column);
                 }
@@ -594,7 +599,7 @@ public class TileView extends View {
                     return coreService.getBounds();
                 }
                 @Override
-                public TileLayoutModel getLayoutModel() {
+                public LayoutModel getLayoutModel() {
                     return coreService.getLayoutModel();
                 }
                 @Override
@@ -605,12 +610,6 @@ public class TileView extends View {
                 public void postInvalidateOnAnimation() {
                     TileView.this.postInvalidateOnAnimation();
                 }
-
-                @Override
-                public long getSyncTime() {
-                    return coreService.getSyncTime();
-                }
-
                 @Override
                 public long getBindTime() {
                     return coreService.getBindTime();

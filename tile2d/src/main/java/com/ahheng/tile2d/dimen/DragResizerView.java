@@ -8,7 +8,7 @@ import android.util.TypedValue;
 import android.view.MotionEvent;
 import android.view.View;
 
-import com.ahheng.tile2d.TileLayoutService;
+import com.ahheng.tile2d.LayoutEngine;
 
 public class DragResizerView extends View {
 
@@ -108,15 +108,15 @@ public class DragResizerView extends View {
         int dy = (int) (currY - downY);
         int width = callback.getTileWidth();
         int height = callback.getTileHeight();
-        int gravity = TileLayoutService.DIMEN_GRAVITY_CENTER;
+        int gravity = LayoutEngine.DIMEN_GRAVITY_CENTER;
         if (direction == DIRECTION_START) {
             width -= dx;
             height -= dy;
-            gravity = TileLayoutService.DIMEN_GRAVITY_END;
+            gravity = LayoutEngine.DIMEN_GRAVITY_END;
         } else if (direction == DIRECTION_END) {
             width += dx;
             height += dy;
-            gravity = TileLayoutService.DIMEN_GRAVITY_START;
+            gravity = LayoutEngine.DIMEN_GRAVITY_START;
         }
         if (width > 0 && height > 0) {
             callback.onDrag(direction, width, height, gravity);

@@ -11,8 +11,8 @@ import android.os.Debug;
 import android.util.TypedValue;
 import android.view.Choreographer;
 
+import com.ahheng.tile2d.LayoutModel;
 import com.ahheng.tile2d.TileCoreService;
-import com.ahheng.tile2d.TileLayoutModel;
 import com.ahheng.tile2d.util.LongMap;
 
 import java.util.Locale;
@@ -30,8 +30,9 @@ public class DebugLayer {
         @Override
         public void doFrame(long frameTimeNanos) {
             frameCount++;
-            collectStats();
             long now = System.nanoTime();
+            // 每帧只收集一次,避免在 1s 窗口内多次采样导致统计偏移
+            collectStats();
             if (now - lastFpsUpdateTime >= 1_000_000_000L) {
                 actualFps = (int) frameCount;
                 frameCount = 0;
@@ -46,18 +47,27 @@ public class DebugLayer {
     private long frameCount;
     private long lastFpsUpdateTime;
     private int actualFps;
+
+    // 绘制耗时采样:startDraw 标记一帧绘制的开始,drawEnd 标记结束
+    // 使用 drawSamplePending 防止同一帧的耗时被重复统计
     private long drawStart = -1;
     private long drawEnd = -1;
+    private boolean drawSamplePending;
 
+    // 累计采样值(每秒结算一次)
     private long sumDrawTime = 0;
     private long sumSyncTime = 0;
     private long sumBindTime = 0;
     private long sumLayoutTime = 0;
+    private long maxSyncTime = 0;
+    private long maxBindTime = 0;
+    private long maxLayoutTime = 0;
     private long drawSampleCount = 0;
     private long syncSampleCount = 0;
     private long bindSampleCount = 0;
     private long layoutSampleCount = 0;
 
+    // 上次采样值,用于检测变化(避免重复累加同一帧的值)
     private long lastSyncTime = -1;
     private long lastBindTime = -1;
     private long lastLayoutTime = -1;
@@ -104,7 +114,7 @@ public class DebugLayer {
                 setTextSize(dpToPx(r, 12));
                 setShadowLayer(dpToPx(r, 3), 0, 0, 0xff333333);
             }
-        }, 
+        },
         new Paint(Paint.ANTI_ALIAS_FLAG) {
             {
                 Resources r = context.getResources();
@@ -133,6 +143,7 @@ public class DebugLayer {
         lastLayoutTime = -1;
         drawStart = -1;
         drawEnd = -1;
+        drawSamplePending = false;
         choreographer.postFrameCallback(frameCallback);
     }
 
@@ -142,18 +153,24 @@ public class DebugLayer {
 
     public void startDraw() {
         drawStart = Debug.threadCpuTimeNanos();
+        drawSamplePending = true;
     }
 
     private void collectStats() {
-        if (drawEnd > drawStart) {
-            sumDrawTime += (drawEnd - drawStart);
+        // 结算上一帧的绘制耗时(仅一次)
+        if (drawSamplePending && drawEnd > drawStart) {
+            long drawCost = drawEnd - drawStart;
+            sumDrawTime += drawCost;
             drawSampleCount++;
+            drawSamplePending = false;
         }
 
-        TileLayoutModel model = callback.getLayoutModel();
-        long sync = callback.getSyncTime();
+        LayoutModel model = callback.getLayoutModel();
+
+        long sync = model.syncTime;
         if (sync != lastSyncTime) {
             sumSyncTime += sync;
+            if (sync > maxSyncTime) maxSyncTime = sync;
             syncSampleCount++;
             lastSyncTime = sync;
         }
@@ -161,6 +178,7 @@ public class DebugLayer {
         long bind = callback.getBindTime();
         if (bind != lastBindTime) {
             sumBindTime += bind;
+            if (bind > maxBindTime) maxBindTime = bind;
             bindSampleCount++;
             lastBindTime = bind;
         }
@@ -168,6 +186,7 @@ public class DebugLayer {
         long layout = callback.getLayoutTime();
         if (layout != lastLayoutTime) {
             sumLayoutTime += layout;
+            if (layout > maxLayoutTime) maxLayoutTime = layout;
             layoutSampleCount++;
             lastLayoutTime = layout;
         }
@@ -184,14 +203,13 @@ public class DebugLayer {
             recycledTileText = "回收瓦片：" + recycledTileCount;
         }
 
-        LongMap<? extends TileCoreService.BaseTileHolder> dyingTiles = callback.getDyingTiles();
-        int dyingTileCount = dyingTiles.size();
+        int dyingTileCount = callback.getDyingTileCount();
         if (dyingTileCount != cachedDyingTileCount) {
             cachedDyingTileCount = dyingTileCount;
             dyingTileText = "濒死瓦片：" + dyingTileCount;
         }
 
-        if (model.colStart != cachedColStart || model.rowStart != cachedRowStart 
+        if (model.colStart != cachedColStart || model.rowStart != cachedRowStart
                 || model.colEnd != cachedColEnd || model.rowEnd != cachedRowEnd) {
             cachedColStart = model.colStart;
             cachedRowStart = model.rowStart;
@@ -199,13 +217,13 @@ public class DebugLayer {
             cachedRowEnd = model.rowEnd;
             layoutRangeText = "布局范围：" + cachedColStart + "," + cachedRowStart + " " + cachedColEnd + "," + cachedRowEnd;
         }
-        
+
         if (model.offsetX != cachedOffsetX || model.offsetY != cachedOffsetY) {
             cachedOffsetX = model.offsetX;
             cachedOffsetY = model.offsetY;
             offsetText = String.format(Locale.getDefault(), "当前位置：%.2f,%.2f", cachedOffsetX, cachedOffsetY);
         }
-        
+
         if (model.totalWidth != cachedTotalWidth || model.totalHeight != cachedTotalHeight) {
             cachedTotalWidth = model.totalWidth;
             cachedTotalHeight = model.totalHeight;
@@ -225,68 +243,77 @@ public class DebugLayer {
         }
 
         if (syncSampleCount > 0) {
-            syncTimeText = "同步耗时：" + (sumSyncTime / syncSampleCount) + "ns";
+            syncTimeText = "同步耗时：" + (sumSyncTime / syncSampleCount) + "ns (最大 " + maxSyncTime + "ns)";
         }
 
         if (bindSampleCount > 0) {
-            bindTimeText = "业务耗时：" + (sumBindTime / bindSampleCount) + "ns";
+            bindTimeText = "业务耗时：" + (sumBindTime / bindSampleCount) + "ns (最大 " + maxBindTime + "ns)";
         }
 
         if (layoutSampleCount > 0) {
-            layoutTimeText = "布局耗时：" + (sumLayoutTime / layoutSampleCount) + "ns";
+            layoutTimeText = "布局耗时：" + (sumLayoutTime / layoutSampleCount) + "ns (最大 " + maxLayoutTime + "ns)";
         }
 
+        // 重置所有累计器
         sumDrawTime = 0; drawSampleCount = 0;
-        sumSyncTime = 0; syncSampleCount = 0;
-        sumLayoutTime = 0; layoutSampleCount = 0;
+        sumSyncTime = 0; syncSampleCount = 0; maxSyncTime = 0;
+        sumBindTime = 0; bindSampleCount = 0; maxBindTime = 0;
+        sumLayoutTime = 0; layoutSampleCount = 0; maxLayoutTime = 0;
     }
 
     public void draw(Canvas canvas) {
-        // 在这里结束统计，确保结果仅包含非测试数据
+        // 在这里结束统计,确保结果仅包含非调试绘制时间
         drawEnd = Debug.threadCpuTimeNanos();
-        
-        TileLayoutModel model = callback.getLayoutModel();
-        LongMap<? extends TileCoreService.BaseTileHolder> dyingTiles = callback.getDyingTiles();
+
+        LayoutModel model = callback.getLayoutModel();
         Rect bounds = callback.getBounds();
-        
-        // 开始绘制濒死区
-        canvas.save();
-        canvas.translate(bounds.left, bounds.top);
-        canvas.translate(model.offsetX, model.offsetY);
-        LongMap.Iterator<? extends TileCoreService.BaseTileHolder> it = dyingTiles.iterator();
-        while (it.next()) {
-            long id = it.key();
-            int c = TileCoreService.getColumn(id);
-            int r = TileCoreService.getRow(id);
 
-            float x = 0;
-            if (c < model.colStart) {
-                x -= callback.getTileWidth(c);
-            } else {
-                for (int j = model.colStart; j < c; j++) {
-                    x += callback.getTileWidth(j);
-                }
-            }
-
-            float y = 0;
-            if (r < model.rowStart) {
-                y -= callback.getTileHeight(r);
-            } else {
-                for (int j = model.rowStart; j < r; j++) {
-                    y += callback.getTileHeight(j);
-                }
-            }
-            TileCoreService.BaseTileHolder tile = it.value();
-
+        // 绘制濒死区覆盖层
+        LongMap<? extends TileCoreService.BaseTileHolder> dyingTiles = callback.getDyingTiles();
+        if (dyingTiles.size() > 0) {
             canvas.save();
-            canvas.translate(x, y);
-            canvas.drawRect(0, 0, tile.getWidth(), tile.getHeight(), dyingOverlayPaint);
+            canvas.translate(bounds.left, bounds.top);
+            canvas.translate(model.offsetX, model.offsetY);
+            LongMap.Iterator<? extends TileCoreService.BaseTileHolder> it = dyingTiles.iterator();
+            while (it.next()) {
+                long id = it.key();
+                int c = TileCoreService.getColumn(id);
+                int r = TileCoreService.getRow(id);
+
+                // 修复:濒死瓦片在视窗左侧/上方时,需要累加所有跨过的列宽/行高
+                float x = 0;
+                if (c < model.colStart) {
+                    for (int j = c; j < model.colStart; j++) {
+                        x -= callback.getTileWidth(j);
+                    }
+                } else {
+                    for (int j = model.colStart; j < c; j++) {
+                        x += callback.getTileWidth(j);
+                    }
+                }
+
+                float y = 0;
+                if (r < model.rowStart) {
+                    for (int j = r; j < model.rowStart; j++) {
+                        y -= callback.getTileHeight(j);
+                    }
+                } else {
+                    for (int j = model.rowStart; j < r; j++) {
+                        y += callback.getTileHeight(j);
+                    }
+                }
+                TileCoreService.BaseTileHolder tile = it.value();
+
+                canvas.save();
+                canvas.translate(x, y);
+                canvas.drawRect(0, 0, tile.getWidth(), tile.getHeight(), dyingOverlayPaint);
+                canvas.restore();
+            }
             canvas.restore();
         }
-        canvas.restore();
         canvas.drawRect(bounds, boundPaint);
 
-        // 开始绘制数据面板
+        // 绘制数据面板
         float lineHeight = infoPaint.getTextSize() * 1.25f;
         float ix = infoMargin;
         float iy = infoMargin + infoPaint.getTextSize();
@@ -315,29 +342,29 @@ public class DebugLayer {
     }
 
     public interface Callback {
-    
-        int getActiveTileCount();
-        
-        int getRecycledTileCount();
-    
-        int getTileWidth(int column);
-    
-        int getTileHeight(int row);
-        
-        Rect getBounds();
-        
-        TileLayoutModel getLayoutModel();
-        
-        LongMap<? extends TileCoreService.BaseTileHolder> getDyingTiles();
-        
-        void postInvalidateOnAnimation();
 
-        long getSyncTime();
+        int getActiveTileCount();
+
+        int getRecycledTileCount();
+
+        int getDyingTileCount();
+
+        int getTileWidth(int column);
+
+        int getTileHeight(int row);
+
+        Rect getBounds();
+
+        LayoutModel getLayoutModel();
+
+        LongMap<? extends TileCoreService.BaseTileHolder> getDyingTiles();
+
+        void postInvalidateOnAnimation();
 
         long getBindTime();
 
         long getLayoutTime();
-        
+
     }
 
     private static float dpToPx(Resources res, float dp) {

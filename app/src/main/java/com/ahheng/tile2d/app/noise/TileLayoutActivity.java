@@ -16,8 +16,8 @@ import android.widget.TextView;
 import androidx.annotation.NonNull;
 import androidx.annotation.Nullable;
 
+import com.ahheng.tile2d.LayoutModel;
 import com.ahheng.tile2d.TileCoreService;
-import com.ahheng.tile2d.TileLayoutModel;
 import com.ahheng.tile2d.app.BaseActivity;
 import com.ahheng.tile2d.widget.canvas.TileView;
 import com.ahheng.tile2d.widget.layout.TileLayout;
@@ -58,7 +58,7 @@ public class TileLayoutActivity extends BaseActivity {
 
     private void initColorPlan() {
         displayText = false;
-        TileLayoutModel model = layout.getLayoutModel().newInstance();
+        LayoutModel model = layout.getLayoutModel().newInstance();
         int size = dp2px(40);
         layout.setDefaultTileWidth(size);
         layout.setDefaultTileHeight(size);
@@ -68,7 +68,7 @@ public class TileLayoutActivity extends BaseActivity {
 
     private void initTextPlan(boolean first) {
         displayText = true;
-        TileLayoutModel model = layout.getLayoutModel().newInstance();
+        LayoutModel model = layout.getLayoutModel().newInstance();
         layout.setDefaultTileWidth(dp2px(80));
         layout.setDefaultTileHeight(dp2px(45));
         layout.setAdapter((adapter = new RandomAdapter()));
