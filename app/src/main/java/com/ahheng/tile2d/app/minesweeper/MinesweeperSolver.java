@@ -43,6 +43,12 @@ public class MinesweeperSolver {
         Map<Long, Integer> board = snapshot.cells;
         int mineDensity = snapshot.mineDensity;
 
+        // 适配器边界:以 long 存储防止 int32 溢出
+        long left   = snapshot.leftBound;
+        long top    = snapshot.topBound;
+        long right  = snapshot.rightBound;
+        long bottom = snapshot.bottomBound;
+
         // 1. 构建约束网络
         List<Constraint> constraints = new ArrayList<>();
         Set<Long> boundaryUnknowns = new HashSet<>();
@@ -60,7 +66,11 @@ public class MinesweeperSolver {
                 for (int dc = -1; dc <= 1; dc++) {
                     for (int dr = -1; dr <= 1; dr++) {
                         if (dc == 0 && dr == 0) continue;
-                        long nid = TileCoreService.getTileId(c + dc, r + dr);
+                        long nc = (long) c + dc;
+                        long nr = (long) r + dr;
+                        // 以适配器边界为物理边界,用 long 防止 int32 溢出回绕
+                        if (nc < left || nc > right || nr < top || nr > bottom) continue;
+                        long nid = TileCoreService.getTileId((int) nc, (int) nr);
                         Integer nVal = board.get(nid);
                         
                         if (nVal == null) {

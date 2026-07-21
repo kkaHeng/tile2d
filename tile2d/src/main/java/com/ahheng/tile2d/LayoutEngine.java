@@ -336,28 +336,28 @@ public class LayoutEngine {
 
         // 遍历顶部区域
         if (boundTop < inTop) {
-            diffRegion(inLeft, boundRight, boundTop, inTop - 1,
+            diffRegion(boundLeft, inRight, boundTop, inTop - 1,
                     oldColStart, oldRowStart, oldColEnd, oldRowEnd,
                     newColStart, newRowStart, newColEnd, newRowEnd);
         }
 
         // 遍历右边区域
         if (inRight < boundRight) {
-            diffRegion(inRight + 1, boundRight, inTop, boundBottom,
+            diffRegion(inRight + 1, boundRight, boundTop, inBottom,
                     oldColStart, oldRowStart, oldColEnd, oldRowEnd,
                     newColStart, newRowStart, newColEnd, newRowEnd);
         }
 
         // 遍历底部区域
         if (inBottom < boundBottom) {
-            diffRegion(boundLeft, inRight, inBottom + 1, boundBottom,
+            diffRegion(inLeft, boundRight, inBottom + 1, boundBottom,
                     oldColStart, oldRowStart, oldColEnd, oldRowEnd,
                     newColStart, newRowStart, newColEnd, newRowEnd);
         }
 
         // 遍历左边区域
         if (boundLeft < inLeft) {
-            diffRegion(boundLeft, inLeft - 1, inTop, inBottom,
+            diffRegion(boundLeft, inLeft - 1, inTop, boundBottom,
                     oldColStart, oldRowStart, oldColEnd, oldRowEnd,
                     newColStart, newRowStart, newColEnd, newRowEnd);
         }
