@@ -44,7 +44,7 @@ dependencyResolutionManagement {
 引入依赖:
 ```gradle
 dependencies {
-    implementation 'com.github.kkaHeng:tile2d:26.7.1'
+    implementation 'com.github.kkaHeng:tile2d:26.7.2'
 }
 ```
 
@@ -730,14 +730,14 @@ public interface Measurable {
 - **极端边界跳转**: 随机选择 8 个极端方向(左上角/上边/右上角/右边/右下角/下边/左下角/左边),执行单次 seek 并报告耗时和 `in()/out()` 调用次数
 - **统计指标**: 平均值、最小值、最大值、中位数、P95、P99(排序后剔除最大最小值再平均),总耗时和吞吐量(ops/s)。结果可一键复制为纯文本
 
+1. 同步(滚动)测试 — 多次随机偏移后统计耗时分布,展示平均值、P95、P99 和吞吐量
 ![实机截图](screenshots/bench_sync.jpg)
-*同步(滚动)测试 — 多次随机偏移后统计耗时分布,展示平均值、P95、P99 和吞吐量*
 
+2. 定位(跳转)测试 — 全 int32 空间随机 seek,测试远距离跳转性能
 ![实机截图](screenshots/bench_seek.jpg)
-*定位(跳转)测试 — 全 int32 空间随机 seek,测试远距离跳转性能*
 
+3. 极端边界跳转 — 从当前位置单次跳转到 int32 边界,记录耗时与 in/out 调用次数
 ![实机截图](screenshots/bench_end.jpg)
-*极端边界跳转 — 从当前位置单次跳转到 int32 边界,记录耗时与 in/out 调用次数*
 
 截图中的数据说明:
 - **实际帧率**: 真实的物理帧率(`Choreographer.FrameCallback` 每秒统计一次,单位 `Hz`)。
