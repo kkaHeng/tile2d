@@ -568,6 +568,7 @@ public class TileView extends View {
     public void setDebugMode(boolean enabled) {
         if (debugMode == enabled) return;
         debugMode = enabled;
+        coreService.setTimerEnabled(enabled);
         if (debugMode) {
             debugLayer = new DebugLayer(getContext(), new DebugLayer.Callback() {
                 @Override

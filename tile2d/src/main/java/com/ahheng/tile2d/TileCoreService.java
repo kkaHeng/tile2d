@@ -518,6 +518,12 @@ public class TileCoreService<T extends TileCoreService.BaseTileHolder> implement
         return eventHandler;
     }
 
+    // 调试代码，跨平台可删除
+
+    public void setTimerEnabled(boolean enabled) {
+    	layoutEngine.setTimerEnabled(enabled);
+    }
+
     // ========== 静态工具 ==========
 
     public static long getTileId(int column, int row) {

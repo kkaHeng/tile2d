@@ -1,7 +1,7 @@
 package com.ahheng.tile2d;
 
 // 布局状态模型(快照)
-// 支持跨平台移植
+// 支持跨平台移植(可删除调试代码)
 public class LayoutModel {
 
     // 逻辑范围(闭区间)，start > end表示空范围

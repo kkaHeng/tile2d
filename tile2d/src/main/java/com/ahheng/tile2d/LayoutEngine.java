@@ -1,7 +1,7 @@
 package com.ahheng.tile2d;
 
 // 核心布局引擎
-// 支持跨平台移植
+// 支持跨平台移植(可删除调试代码)
 public class LayoutEngine {
 
     public static final int DIMEN_GRAVITY_CENTER = 0;
@@ -18,16 +18,20 @@ public class LayoutEngine {
     private boolean verticalScrollEnabled = true;
     private int windowWidth;
     private int windowHeight;
+    
+    // 调试变量，跨平台可删除
+    private boolean timerEnabled;
+    private long startTime;
 
-    public LayoutEngine(BoundaryInterface boundaryInterface, WindowInterface windowInterface) {
-        this.boundaryInterface = boundaryInterface;
-        this.windowInterface = windowInterface;
+    public LayoutEngine(BoundaryInterface boundaryI, WindowInterface windowI) {
+        boundaryInterface = boundaryI;
+        windowInterface = windowI;
     }
 
     // 同步视窗
     public boolean sync(float dx, float dy) {
         // 调试代码，可丢弃
-        long startTime = System.nanoTime();
+        if (timerEnabled) startTime = System.nanoTime();
         int colStart = original.colStart;
         int rowStart = original.rowStart;
         int colEnd = original.colEnd;
@@ -129,7 +133,7 @@ public class LayoutEngine {
         output.offsetX = original.offsetX = offsetX;
         output.offsetY = original.offsetY = offsetY;
         // 调试代码，可丢弃
-        output.syncTime = original.syncTime = System.nanoTime() - startTime;
+        if (timerEnabled) output.syncTime = original.syncTime = System.nanoTime() - startTime;
 
         int lastColStart = original.colStart;
         int lastRowStart = original.rowStart;
@@ -439,6 +443,16 @@ public class LayoutEngine {
 
     public boolean isVerticalScrollEnabled() {
         return verticalScrollEnabled;
+    }
+
+    // 调试代码，跨平台可删除
+
+    public boolean isTimerEnabled() {
+    	return timerEnabled;
+    }
+
+    public void setTimerEnabled(boolean enabled) {
+    	timerEnabled = enabled;
     }
 
     public int getWindowWidth() {

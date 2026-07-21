@@ -302,6 +302,7 @@ public class TileLayout extends ViewGroup {
     public void setDebugMode(boolean enabled) {
         if (debugMode == enabled) return;
         debugMode = enabled;
+        coreService.setTimerEnabled(enabled);
         if (enabled) {
             debugLayer = new DebugLayer(getContext(), new DebugLayer.Callback() {
                 @Override
