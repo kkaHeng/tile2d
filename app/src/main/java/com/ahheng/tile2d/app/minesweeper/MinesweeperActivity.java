@@ -59,10 +59,10 @@ public class MinesweeperActivity extends BaseActivity {
     private static final int IMG_NUM_7 = 8;
     private static final int IMG_NUM_8 = 9;
     private static final int IMG_FLAG = 10;
-    private static final int IMG_MINE = 11;          // 游戏结束：未插旗的雷
-    private static final int IMG_EXPLODED = 12;      // 游戏结束：踩爆的雷
-    private static final int IMG_FLAG_MINE = 13;     // 游戏结束：正确插旗的雷
-    private static final int IMG_WRONG_FLAG = 14;    // 游戏结束：错误插旗的安全格
+    private static final int IMG_MINE = 11;          // 游戏结束:未插旗的雷
+    private static final int IMG_EXPLODED = 12;      // 游戏结束:踩爆的雷
+    private static final int IMG_FLAG_MINE = 13;     // 游戏结束:正确插旗的雷
+    private static final int IMG_WRONG_FLAG = 14;    // 游戏结束:错误插旗的安全格
 
     private TileView tileView;
     private MineAdapter adapter;
@@ -458,7 +458,7 @@ public class MinesweeperActivity extends BaseActivity {
             revealed.add(id);
             gameOver = true;
             tileView.updateAll();
-            showToast("游戏结束！");
+            showToast("游戏结束!");
             return;
         }
 
@@ -624,26 +624,40 @@ public class MinesweeperActivity extends BaseActivity {
                     aiExploreAttempts++;
                     if (aiExploreAttempts > MAX_EXPLORE_ATTEMPTS) {
                         stopAI();
-                        showToast("AI 走投无路，已投降");
+                        showToast("AI 走投无路,已投降");
                         return;
                     }
 
-                    // 随机选择一个方向，跳出当前区域继续探索
+                    // 随机选择一个方向,跳出当前区域继续探索
                     Random rand = new Random();
                     int[] dir = directions[rand.nextInt(8)];
-                    aiCurrentCol += dir[0] * 20; // 移动20格，确保跳出当前快照
-                    aiCurrentRow += dir[1] * 20;
-
-                    // 边界检查，防止跑出有限地图
-                    aiCurrentCol = Math.max(adapter.getLeftBound(), Math.min(adapter.getRightBound(), aiCurrentCol));
-                    aiCurrentRow = Math.max(adapter.getTopBound(), Math.min(adapter.getBottomBound(), aiCurrentRow));
+                    // 先算余量再移动,避免 int32 溢出
+                    if (dir[0] > 0) {
+                        int remaining = adapter.getRightBound() - aiCurrentCol;
+                        // remaining < 0 但实际有空间 -> int32 溢出,余量充足
+                        if (remaining < 0 && adapter.getRightBound() > aiCurrentCol) remaining = 20;
+                        if (remaining > 0) aiCurrentCol += Math.min(20, remaining);
+                    } else if (dir[0] < 0) {
+                        int remaining = aiCurrentCol - adapter.getLeftBound();
+                        if (remaining < 0 && aiCurrentCol > adapter.getLeftBound()) remaining = 20;
+                        if (remaining > 0) aiCurrentCol -= Math.min(20, remaining);
+                    }
+                    if (dir[1] > 0) {
+                        int remaining = adapter.getBottomBound() - aiCurrentRow;
+                        if (remaining < 0 && adapter.getBottomBound() > aiCurrentRow) remaining = 20;
+                        if (remaining > 0) aiCurrentRow += Math.min(20, remaining);
+                    } else if (dir[1] < 0) {
+                        int remaining = aiCurrentRow - adapter.getTopBound();
+                        if (remaining < 0 && aiCurrentRow > adapter.getTopBound()) remaining = 20;
+                        if (remaining > 0) aiCurrentRow -= Math.min(20, remaining);
+                    }
 
                     startCameraFollow(aiCurrentCol, aiCurrentRow);
                     scheduleNextAIMove();
                     return;
                 }
 
-                // 只要有动作，就重置探索计数
+                // 只要有动作,就重置探索计数
                 aiExploreAttempts = 0;
 
                 Set<Long> updateSet = new HashSet<>();
@@ -694,11 +708,27 @@ public class MinesweeperActivity extends BaseActivity {
 
     private BoardSnapshot getBoardSnapshot(int centerCol, int centerRow) {
         Map<Long, Integer> cells = new HashMap<>();
-        int radius = 15; 
-        
-        for (int c = centerCol - radius; c <= centerCol + radius; c++) {
-            for (int r = centerRow - radius; r <= centerRow + radius; r++) {
-                if (!isValidCoord(c, r)) continue;
+        int radius = 15;
+
+        // 先算余量再扩展,避免 int32 溢出
+        int leftRemaining = centerCol - adapter.getLeftBound();
+        if (leftRemaining < 0 && centerCol > adapter.getLeftBound()) leftRemaining = radius;
+        int startCol = centerCol - (leftRemaining > 0 ? Math.min(radius, leftRemaining) : 0);
+
+        int rightRemaining = adapter.getRightBound() - centerCol;
+        if (rightRemaining < 0 && adapter.getRightBound() > centerCol) rightRemaining = radius;
+        int endCol = centerCol + (rightRemaining > 0 ? Math.min(radius, rightRemaining) : 0);
+
+        int topRemaining = centerRow - adapter.getTopBound();
+        if (topRemaining < 0 && centerRow > adapter.getTopBound()) topRemaining = radius;
+        int startRow = centerRow - (topRemaining > 0 ? Math.min(radius, topRemaining) : 0);
+
+        int bottomRemaining = adapter.getBottomBound() - centerRow;
+        if (bottomRemaining < 0 && adapter.getBottomBound() > centerRow) bottomRemaining = radius;
+        int endRow = centerRow + (bottomRemaining > 0 ? Math.min(radius, bottomRemaining) : 0);
+
+        for (int c = startCol; c <= endCol; c++) {
+            for (int r = startRow; r <= endRow; r++) {
                 long id = TileCoreService.getTileId(c, r);
                 if (flagged.contains(id)) {
                     cells.put(id, -2);
@@ -795,7 +825,7 @@ public class MinesweeperActivity extends BaseActivity {
                 return true;
             }
             flagMode = !flagMode;
-            showToast(flagMode ? "标记模式：开启" : "标记模式：关闭");
+            showToast(flagMode ? "标记模式:开启" : "标记模式:关闭");
             return true;
         }
         if (id == MENU_ID_JUMP_CENTER) {
