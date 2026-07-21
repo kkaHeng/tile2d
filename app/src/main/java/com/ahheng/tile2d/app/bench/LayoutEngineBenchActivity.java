@@ -11,6 +11,7 @@ import android.text.Spanned;
 import android.text.method.ScrollingMovementMethod;
 import android.text.style.ForegroundColorSpan;
 import android.text.style.StyleSpan;
+import android.util.TypedValue;
 import android.view.Gravity;
 import android.view.ViewGroup;
 import android.widget.EditText;
@@ -23,6 +24,7 @@ import android.widget.Toast;
 import androidx.annotation.Nullable;
 import androidx.appcompat.app.ActionBar;
 import androidx.appcompat.app.AppCompatActivity;
+import androidx.core.content.ContextCompat;
 
 import com.ahheng.tile2d.LayoutEngine;
 import com.ahheng.tile2d.LayoutModel;
@@ -45,7 +47,6 @@ public class LayoutEngineBenchActivity extends AppCompatActivity {
     private static final int C_PURPLE = Color.rgb(180, 20, 100);
     private static final int C_ORANGE = Color.rgb(180, 100, 20);
     private static final int C_TITLE = Color.rgb(60, 60, 180);
-    private static final int C_ENV_LABEL = Color.rgb(60, 60, 60);
     private static final int C_ENV_VAL = Color.rgb(20, 130, 60);
     private static final int BOUNDARY_LEFT = Integer.MIN_VALUE;
     private static final int BOUNDARY_TOP = Integer.MIN_VALUE;
@@ -57,6 +58,7 @@ public class LayoutEngineBenchActivity extends AppCompatActivity {
     private EditText countInput;
     private TextView envText;
     private TextView resultText;
+    private int textColor;
 
     private LayoutEngine engine;
     private int tileSizePx;
@@ -75,6 +77,9 @@ public class LayoutEngineBenchActivity extends AppCompatActivity {
     @Override
     protected void onCreate(@Nullable Bundle savedInstanceState) {
         super.onCreate(savedInstanceState);
+        TypedValue colorValue = new TypedValue();
+        getTheme().resolveAttribute(android.R.attr.textColorPrimary, colorValue, true);
+        textColor = ContextCompat.getColor(this, colorValue.resourceId);
 
         ActionBar actionBar = getSupportActionBar();
         if (actionBar != null) actionBar.setDisplayHomeAsUpEnabled(true);
@@ -98,6 +103,7 @@ public class LayoutEngineBenchActivity extends AppCompatActivity {
 
         envText = new TextView(this);
         envText.setTextSize(14);
+        envText.setTextColor(textColor);
         updateEnvText();
         envCard.addView(envText);
         root.addView(envCard);
@@ -111,7 +117,7 @@ public class LayoutEngineBenchActivity extends AppCompatActivity {
         TextView label = new TextView(this);
         label.setText("测试次数");
         label.setTextSize(15);
-        label.setTextColor(getColorRes(com.google.android.material.R.attr.colorOnSurface));
+        label.setTextColor(textColor);
         inputRow.addView(label);
 
         countInput = new EditText(this);
@@ -194,7 +200,7 @@ public class LayoutEngineBenchActivity extends AppCompatActivity {
 
         resultText = new TextView(this);
         resultText.setTextSize(13);
-        resultText.setTextColor(getColorRes(com.google.android.material.R.attr.colorOnSurface));
+        resultText.setTextColor(textColor);
         resultText.setMovementMethod(ScrollingMovementMethod.getInstance());
         resultText.setPadding(dp2px(12), dp2px(12), dp2px(12), dp2px(12));
         resultText.setBackgroundColor(Color.TRANSPARENT);
@@ -249,13 +255,13 @@ public class LayoutEngineBenchActivity extends AppCompatActivity {
         sb.setSpan(new StyleSpan(Typeface.BOLD), t, sb.length(), Spanned.SPAN_EXCLUSIVE_EXCLUSIVE);
         sb.setSpan(new ForegroundColorSpan(C_TITLE), t, sb.length(), Spanned.SPAN_EXCLUSIVE_EXCLUSIVE);
 
-        appendStyled(sb, "屏幕尺寸 ", Typeface.NORMAL, C_ENV_LABEL);
+        appendStyled(sb, "屏幕尺寸 ", Typeface.NORMAL, textColor);
         appendStyled(sb, windowWidth + " x " + windowHeight + " px", Typeface.BOLD, C_ENV_VAL);
         sb.append("\n");
-        appendStyled(sb, "瓦片大小 ", Typeface.NORMAL, C_ENV_LABEL);
+        appendStyled(sb, "瓦片大小 ", Typeface.NORMAL, textColor);
         appendStyled(sb, TILE_SIZE_DP + " dp (" + tileSizePx + " px)", Typeface.BOLD, C_ENV_VAL);
         sb.append("\n");
-        appendStyled(sb, "数据边界 ", Typeface.NORMAL, C_ENV_LABEL);
+        appendStyled(sb, "数据边界 ", Typeface.NORMAL, textColor);
         appendStyled(sb, String.valueOf(BOUNDARY_LEFT) + " ~ " + String.valueOf(BOUNDARY_RIGHT) + " (伪无限)", Typeface.BOLD, C_ENV_VAL);
 
         envText.setText(sb);
@@ -422,7 +428,7 @@ public class LayoutEngineBenchActivity extends AppCompatActivity {
                 sb.append("\n");
                 appendLine(sb, "引擎位置", "col[" + m.colStart + ".." + m.colEnd + "] row[" + m.rowStart + ".." + m.rowEnd + "]", C_GREEN);
                 appendLine(sb, "偏移/总量", "offset(" + formatFloat(m.offsetX) + ", " + formatFloat(m.offsetY)
-                        + ")  total(" + m.totalWidth + ", " + m.totalHeight + ")", C_ENV_LABEL);
+                        + ")  total(" + m.totalWidth + ", " + m.totalHeight + ")", textColor);
                 appendLine(sb, "in() 调用", String.valueOf(inCallCount), C_BLUE);
                 appendLine(sb, "可见瓦片", visible + " (约 " + cols + "x" + rows + " 列行)", C_GREEN);
 
@@ -510,9 +516,9 @@ public class LayoutEngineBenchActivity extends AppCompatActivity {
 
         sb.append("\n");
 
-        appendLine(sb, "引擎位置", "col[" + m.colStart + ".." + m.colEnd + "] row[" + m.rowStart + ".." + m.rowEnd + "]", C_ENV_LABEL);
+        appendLine(sb, "引擎位置", "col[" + m.colStart + ".." + m.colEnd + "] row[" + m.rowStart + ".." + m.rowEnd + "]", textColor);
         appendLine(sb, "偏移/总量", "offset(" + formatFloat(m.offsetX) + ", " + formatFloat(m.offsetY)
-                + ")  total(" + m.totalWidth + ", " + m.totalHeight + ")", C_ENV_LABEL);
+                + ")  total(" + m.totalWidth + ", " + m.totalHeight + ")", textColor);
 
         resultText.setText(sb);
     }
@@ -524,8 +530,7 @@ public class LayoutEngineBenchActivity extends AppCompatActivity {
     private static void appendLine(SpannableStringBuilder sb, String label, String value, int valueColor) {
         int ls = sb.length();
         sb.append(label).append(": ");
-        sb.setSpan(new ForegroundColorSpan(Color.rgb(80, 80, 80)), ls, sb.length(), Spanned.SPAN_EXCLUSIVE_EXCLUSIVE);
-
+        
         int vs = sb.length();
         sb.append(value).append("\n");
         sb.setSpan(new ForegroundColorSpan(valueColor), vs, vs + value.length(), Spanned.SPAN_EXCLUSIVE_EXCLUSIVE);
