@@ -31,7 +31,6 @@ public class DebugLayer {
         public void doFrame(long frameTimeNanos) {
             frameCount++;
             long now = System.nanoTime();
-            // 每帧只收集一次,避免在 1s 窗口内多次采样导致统计偏移
             collectStats();
             if (now - lastFpsUpdateTime >= 1_000_000_000L) {
                 actualFps = (int) frameCount;
@@ -48,26 +47,33 @@ public class DebugLayer {
     private long lastFpsUpdateTime;
     private int actualFps;
 
-    // 绘制耗时采样:startDraw 标记一帧绘制的开始,drawEnd 标记结束
+    // 绘制耗时采样：startDraw 标记一帧绘制的开始，drawEnd 标记结束
     // 使用 drawSamplePending 防止同一帧的耗时被重复统计
     private long drawStart = -1;
     private long drawEnd = -1;
     private boolean drawSamplePending;
 
-    // 累计采样值(每秒结算一次)
+    // 累计采样值（每秒结算一次）
     private long sumDrawTime = 0;
     private long sumSyncTime = 0;
     private long sumBindTime = 0;
     private long sumLayoutTime = 0;
-    private long maxSyncTime = 0;
-    private long maxBindTime = 0;
-    private long maxLayoutTime = 0;
     private long drawSampleCount = 0;
     private long syncSampleCount = 0;
     private long bindSampleCount = 0;
     private long layoutSampleCount = 0;
 
-    // 上次采样值,用于检测变化(避免重复累加同一帧的值)
+    // 极值跟踪：结算时剔除，使平均更接近实际情况
+    private long minDrawTime = Long.MAX_VALUE;
+    private long maxDrawTime = Long.MIN_VALUE;
+    private long minSyncTime = Long.MAX_VALUE;
+    private long maxSyncTime = Long.MIN_VALUE;
+    private long minBindTime = Long.MAX_VALUE;
+    private long maxBindTime = Long.MIN_VALUE;
+    private long minLayoutTime = Long.MAX_VALUE;
+    private long maxLayoutTime = Long.MIN_VALUE;
+
+    // 上次采样值，用于检测变化（避免重复累加同一帧的值）
     private long lastSyncTime = -1;
     private long lastBindTime = -1;
     private long lastLayoutTime = -1;
@@ -144,6 +150,7 @@ public class DebugLayer {
         drawStart = -1;
         drawEnd = -1;
         drawSamplePending = false;
+        resetAccumulators();
         choreographer.postFrameCallback(frameCallback);
     }
 
@@ -157,11 +164,13 @@ public class DebugLayer {
     }
 
     private void collectStats() {
-        // 结算上一帧的绘制耗时(仅一次)
+        // 结算上一帧的绘制耗时（仅一次）
         if (drawSamplePending && drawEnd > drawStart) {
             long drawCost = drawEnd - drawStart;
             sumDrawTime += drawCost;
             drawSampleCount++;
+            if (drawCost < minDrawTime) minDrawTime = drawCost;
+            if (drawCost > maxDrawTime) maxDrawTime = drawCost;
             drawSamplePending = false;
         }
 
@@ -170,24 +179,27 @@ public class DebugLayer {
         long sync = model.syncTime;
         if (sync != lastSyncTime) {
             sumSyncTime += sync;
-            if (sync > maxSyncTime) maxSyncTime = sync;
             syncSampleCount++;
+            if (sync < minSyncTime) minSyncTime = sync;
+            if (sync > maxSyncTime) maxSyncTime = sync;
             lastSyncTime = sync;
         }
 
         long bind = callback.getBindTime();
         if (bind != lastBindTime) {
             sumBindTime += bind;
-            if (bind > maxBindTime) maxBindTime = bind;
             bindSampleCount++;
+            if (bind < minBindTime) minBindTime = bind;
+            if (bind > maxBindTime) maxBindTime = bind;
             lastBindTime = bind;
         }
 
         long layout = callback.getLayoutTime();
         if (layout != lastLayoutTime) {
             sumLayoutTime += layout;
-            if (layout > maxLayoutTime) maxLayoutTime = layout;
             layoutSampleCount++;
+            if (layout < minLayoutTime) minLayoutTime = layout;
+            if (layout > maxLayoutTime) maxLayoutTime = layout;
             lastLayoutTime = layout;
         }
 
@@ -234,8 +246,9 @@ public class DebugLayer {
     private void settleAverages() {
         fpsText = "实际帧率：" + actualFps + "Hz";
 
+        // 绘制耗时不显示，仅用于反推理论帧率
         if (drawSampleCount > 0) {
-            long avgDrawTime = sumDrawTime / drawSampleCount;
+            long avgDrawTime = trimmedAverage(sumDrawTime, drawSampleCount, minDrawTime, maxDrawTime);
             long avgTheoreticalFps = avgDrawTime > 0 ? 1_000_000_000L / avgDrawTime : 0;
             theoreticalFpsText = "理论帧率：" + avgTheoreticalFps + "Hz";
         } else {
@@ -243,26 +256,47 @@ public class DebugLayer {
         }
 
         if (syncSampleCount > 0) {
-            syncTimeText = "同步耗时：" + (sumSyncTime / syncSampleCount) + "ns (最大 " + maxSyncTime + "ns)";
+            syncTimeText = "同步耗时：" + trimmedAverage(sumSyncTime, syncSampleCount, minSyncTime, maxSyncTime) + "ns";
+        } else {
+            syncTimeText = "同步耗时：0ns";
         }
 
         if (bindSampleCount > 0) {
-            bindTimeText = "业务耗时：" + (sumBindTime / bindSampleCount) + "ns (最大 " + maxBindTime + "ns)";
+            bindTimeText = "业务耗时：" + trimmedAverage(sumBindTime, bindSampleCount, minBindTime, maxBindTime) + "ns";
+        } else {
+            bindTimeText = "业务耗时：0ns";
         }
 
         if (layoutSampleCount > 0) {
-            layoutTimeText = "布局耗时：" + (sumLayoutTime / layoutSampleCount) + "ns (最大 " + maxLayoutTime + "ns)";
+            layoutTimeText = "布局耗时：" + trimmedAverage(sumLayoutTime, layoutSampleCount, minLayoutTime, maxLayoutTime) + "ns";
+        } else {
+            layoutTimeText = "布局耗时：0ns";
         }
 
-        // 重置所有累计器
-        sumDrawTime = 0; drawSampleCount = 0;
-        sumSyncTime = 0; syncSampleCount = 0; maxSyncTime = 0;
-        sumBindTime = 0; bindSampleCount = 0; maxBindTime = 0;
-        sumLayoutTime = 0; layoutSampleCount = 0; maxLayoutTime = 0;
+        // 重置所有累计器与极值
+        resetAccumulators();
+    }
+
+    /**
+     * 剔除一个最小值和一个最大值后求平均。
+     * 若样本不足 3 个，无法去极值，退化为普通算术平均。
+     */
+    private static long trimmedAverage(long sum, long count, long min, long max) {
+        if (count >= 3) {
+            return (sum - min - max) / (count - 2);
+        }
+        return count > 0 ? sum / count : 0;
+    }
+
+    private void resetAccumulators() {
+        sumDrawTime = 0; drawSampleCount = 0; minDrawTime = Long.MAX_VALUE; maxDrawTime = Long.MIN_VALUE;
+        sumSyncTime = 0; syncSampleCount = 0; minSyncTime = Long.MAX_VALUE; maxSyncTime = Long.MIN_VALUE;
+        sumBindTime = 0; bindSampleCount = 0; minBindTime = Long.MAX_VALUE; maxBindTime = Long.MIN_VALUE;
+        sumLayoutTime = 0; layoutSampleCount = 0; minLayoutTime = Long.MAX_VALUE; maxLayoutTime = Long.MIN_VALUE;
     }
 
     public void draw(Canvas canvas) {
-        // 在这里结束统计,确保结果仅包含非调试绘制时间
+        // 在这里结束统计，确保结果仅包含非调试绘制时间
         drawEnd = Debug.threadCpuTimeNanos();
 
         LayoutModel model = callback.getLayoutModel();
@@ -280,7 +314,7 @@ public class DebugLayer {
                 int c = TileCoreService.getColumn(id);
                 int r = TileCoreService.getRow(id);
 
-                // 修复:濒死瓦片在视窗左侧/上方时,需要累加所有跨过的列宽/行高
+                // 修复：濒死瓦片在视窗左侧/上方时，需要累加所有跨过的列宽/行高
                 float x = 0;
                 if (c < model.colStart) {
                     for (int j = c; j < model.colStart; j++) {
@@ -342,33 +376,20 @@ public class DebugLayer {
     }
 
     public interface Callback {
-
         int getActiveTileCount();
-
         int getRecycledTileCount();
-
         int getDyingTileCount();
-
         int getTileWidth(int column);
-
         int getTileHeight(int row);
-
         Rect getBounds();
-
         LayoutModel getLayoutModel();
-
         LongMap<? extends TileCoreService.BaseTileHolder> getDyingTiles();
-
         void postInvalidateOnAnimation();
-
         long getBindTime();
-
         long getLayoutTime();
-
     }
 
     private static float dpToPx(Resources res, float dp) {
         return res.getDisplayMetrics().density * dp;
     }
-
 }

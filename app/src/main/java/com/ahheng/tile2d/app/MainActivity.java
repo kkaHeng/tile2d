@@ -14,6 +14,7 @@ import com.ahheng.tile2d.app.maze.MaxMazeActivity;
 import com.ahheng.tile2d.app.maze.MazeActivity;
 import com.ahheng.tile2d.app.minesweeper.MinesweeperActivity;
 import com.ahheng.tile2d.app.noise.TileLayoutActivity;
+import com.ahheng.tile2d.app.bench.LayoutEngineBenchActivity;
 import com.ahheng.tile2d.app.noise.TileViewActivity;
 import com.google.android.material.button.MaterialButton;
 
@@ -53,6 +54,10 @@ public class MainActivity extends AppCompatActivity {
         minesweeperButton.setText("扫雷 Demo");
         layout.addView(minesweeperButton, -2, -2);
 
+        MaterialButton benchButton = new MaterialButton(this);
+        benchButton.setText("布局引擎性能测试");
+        layout.addView(benchButton, -2, -2);
+
         setContentView(layout, new ViewGroup.LayoutParams(-1, -1));
 
         tileViewButton.setOnClickListener(v -> startActivity(new Intent(this, TileViewActivity.class)));
@@ -62,6 +67,7 @@ public class MainActivity extends AppCompatActivity {
         mazeButton.setOnClickListener(v -> startActivity(new Intent(this, MazeActivity.class)));
         maxMazeButton.setOnClickListener(v -> startActivity(new Intent(this, MaxMazeActivity.class)));
         minesweeperButton.setOnClickListener(v -> startActivity(new Intent(this, MinesweeperActivity.class)));
+        benchButton.setOnClickListener(v -> startActivity(new Intent(this, LayoutEngineBenchActivity.class)));
 
         // 默认启动
         // startActivity(new Intent(this, TileViewActivity.class));

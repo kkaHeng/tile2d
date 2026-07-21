@@ -206,6 +206,7 @@ public class LayoutEngine {
         original.totalHeight = totalHeight - (int) offsetY;
         original.colEnd = colEnd;
         original.rowEnd = rowEnd;
+        original.copyTo(output);
         sync(offsetX, offsetY);
         return true;
     }
@@ -225,6 +226,7 @@ public class LayoutEngine {
                 newOffsetX = original.offsetX + (oldWidth - newWidth) / 2f;
             }
             float dx = newOffsetX - original.offsetX;
+            output.totalWidth = original.totalWidth;
             sync(dx, 0);
         }
     }
@@ -244,6 +246,7 @@ public class LayoutEngine {
                 newOffsetY = original.offsetY + (oldHeight - newHeight) / 2f;
             }
             float dy = newOffsetY - original.offsetY;
+            output.totalHeight = original.totalHeight;
             sync(0, dy);
         }
     }
@@ -266,6 +269,7 @@ public class LayoutEngine {
                 newOffsetX = original.offsetX + (oldWidth - newWidth) / 2f;
             }
             dx = newOffsetX - original.offsetX;
+            output.totalWidth = original.totalWidth;
         }
         if (row >= original.rowStart && row <= original.rowEnd) {
             original.totalHeight += (newHeight - oldHeight);
@@ -281,6 +285,7 @@ public class LayoutEngine {
                 newOffsetY = original.offsetY + (oldHeight - newHeight) / 2f;
             }
             dy = newOffsetY - original.offsetY;
+            output.totalHeight = original.totalHeight;
         }
         sync(dx, dy);
     }

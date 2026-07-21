@@ -212,11 +212,13 @@ public class TileView extends View {
     protected void onSizeChanged(int w, int h, int oldw, int oldh) {
         super.onSizeChanged(w, h, oldw, oldh);
         updateBounds();
-        coreService.sync(0, 0);
     }
 
     private void updateBounds() {
         coreService.setBounds(getPaddingLeft(), getPaddingTop(), getWidth() - getPaddingRight(), getHeight() - getPaddingBottom());
+        if (getWidth() != 0 && getHeight() != 0) {
+            coreService.sync(0, 0);
+        }
     }
 
     @Override
@@ -368,7 +370,6 @@ public class TileView extends View {
     public void setPadding(int left, int top, int right, int bottom) {
         super.setPadding(left, top, right, bottom);
         updateBounds();
-        coreService.sync(0, 0);
     }
 
     public long getLongPressTimeout() {

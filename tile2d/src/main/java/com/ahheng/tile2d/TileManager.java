@@ -44,13 +44,7 @@ public class TileManager<T extends TileCoreService.BaseTileHolder> {
                 tile.row = row;
                 tile.width = width;
                 tile.height = height;
-                try {
-                    callback.onBindTileHolder(tile, column, row);
-                } catch (Exception e) {
-                    // 异常时及时回退:回收瓦片并通知上层回退层级计数器
-                    recycle(tile);
-                    throw e;
-                }
+                callback.onBindTileHolder(tile, column, row);
                 tile.onSizeChanged(width, height);
                 callback.onTileSizeChanged(tile, column, row, width, height);
             }
@@ -194,12 +188,7 @@ public class TileManager<T extends TileCoreService.BaseTileHolder> {
                 newTile.row = row;
                 newTile.width = width;
                 newTile.height = height;
-                try {
-                    callback.onBindTileHolder(newTile, column, row);
-                } catch (Exception e) {
-                    recycle(newTile);
-                    throw e;
-                }
+                callback.onBindTileHolder(newTile, column, row);
                 newTile.onSizeChanged(width, height);
                 callback.onTileSizeChanged(newTile, column, row, width, height);
                 dyingTiles.put(id, newTile);

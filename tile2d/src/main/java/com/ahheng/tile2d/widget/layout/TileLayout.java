@@ -3,7 +3,6 @@ package com.ahheng.tile2d.widget.layout;
 import android.content.Context;
 import android.graphics.Canvas;
 import android.graphics.Rect;
-import android.os.Debug;
 import android.util.AttributeSet;
 import android.util.DisplayMetrics;
 import android.util.TypedValue;
@@ -42,15 +41,14 @@ public class TileLayout extends ViewGroup {
 
         @Override
         public void updateUI() {
-            if (debugMode) startLayoutTime = Debug.threadCpuTimeNanos();
+            if (debugMode) startLayoutTime = System.nanoTime();
             try {
                 layoutTiles();
-                TileLayout.this.postInvalidateOnAnimation();
             } finally {
                 // 确保层级计数器一定回退,避免 onBindTileHolder 异常或布局异常导致拦截机制卡死
                 requestLayoutDepth--;
             }
-            if (debugMode) layoutTime = startLayoutTime == 0 ? 0 : Debug.threadCpuTimeNanos() - startLayoutTime;
+            if (debugMode) layoutTime = startLayoutTime == 0 ? 0 : System.nanoTime() - startLayoutTime;
             if (onLayoutListener != null) onLayoutListener.onAfterLayout();
             if (requestLayoutDepth == 0 && pendingLayoutRequest) {
                 requestLayout();
@@ -182,6 +180,8 @@ public class TileLayout extends ViewGroup {
             if (column == model.colEnd) break;
             column++;
         }
+        
+        postInvalidateOnAnimation();
     }
 
     private void measureTiles() {
@@ -221,7 +221,6 @@ public class TileLayout extends ViewGroup {
         }
         if (!init && pendingLayoutRequest) {
             layoutTiles();
-            postInvalidateOnAnimation();
         }
         pendingLayoutRequest = false;
     }
@@ -253,8 +252,20 @@ public class TileLayout extends ViewGroup {
     @Override
     protected void onSizeChanged(int w, int h, int oldw, int oldh) {
         super.onSizeChanged(w, h, oldw, oldh);
+        updateBounds();
+    }
+
+    private void updateBounds() {
         coreService.setBounds(getPaddingLeft(), getPaddingTop(), getWidth() - getPaddingRight(), getHeight() - getPaddingBottom());
-        coreService.sync(0, 0);
+        if (getWidth() != 0 && getHeight() != 0) {
+            coreService.sync(0, 0);
+        }
+    }
+    
+    @Override
+    public void setPadding(int left, int top, int right, int bottom) {
+        super.setPadding(left, top, right, bottom);
+        updateBounds();
     }
 
     @Override
