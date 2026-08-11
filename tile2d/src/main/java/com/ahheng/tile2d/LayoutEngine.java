@@ -48,6 +48,7 @@ public class LayoutEngine {
             // 窗口状态不合法，避免向外传递不合法的坐标，直接短路
             return false;
         }
+        // offset / d 为正，内容向右移动，反之向左移动
         float offsetX = original.offsetX + dx;
         float offsetY = original.offsetY + dy;
 
@@ -301,6 +302,7 @@ public class LayoutEngine {
                       int newColEnd, int newRowEnd) {
         if (newColStart > oldColEnd || newRowStart > oldRowEnd || newColEnd < oldColStart || newRowEnd < oldRowStart) {
             // 说明 sync 跑了很远，直接兜底
+            // 通常是由于 sync 收到异常巨大的 dx/dy 引起的，和 seek 不冲突
             int oldX = oldColStart;
             while (oldX <= oldColEnd) {
                 int oldY = oldRowStart;
@@ -337,6 +339,19 @@ public class LayoutEngine {
         int inRight = min(oldColEnd, newColEnd);
         int inTop = max(oldRowStart, newRowStart);
         int inBottom = min(oldRowEnd, newRowEnd);
+        
+        /*
+        +-----------------------+--------+
+        |   左上        上       |   右上  |
+        +--------+--------------+        |
+        |        |              |        |
+        |   左   |      视窗     |   右   |
+        |        |              |        |
+        |        +--------------+--------+
+        |  左下   |      下          右下  |
+        +--------+-----------------------+
+        +--------+-----------------------+
+        */
 
         // 遍历顶部区域
         if (boundTop < inTop) {
@@ -394,7 +409,7 @@ public class LayoutEngine {
         return output;
     }
 
-    // 检查晶格是否在边界内
+    // 检查是否在边界内
     public boolean checkLocationInBounds(int column, int row) {
         return column >= boundaryInterface.getLeftBound() &&
                 column <= boundaryInterface.getRightBound() &&
