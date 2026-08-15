@@ -507,12 +507,22 @@ TileCoreService.BaseTileHolder
 
 ### 高级 API
 
-#### 瓦片生命周期监听器
+#### 瓦片事件监听器
 
-`OnTileLifecycleListener<T>` 是一个监听接口,用于观察视窗内瓦片的进出与回收事件。通过 `setOnTileLifecycleListener` 设置,TileView 和 TileLayout 均支持。
+`TileEventListener<T>` 是统一的监听接口,用于观察每次布局周期的开始/结束,以及瓦片在视窗内的进出与回收事件。通过 `setTileEventListener` 设置,TileView 和 TileLayout 均支持。
 
 ```java
-tileView.setOnTileLifecycleListener(new OnTileLifecycleListener<TileView.TileHolder>() {
+tileView.setTileEventListener(new TileEventListener<TileView.TileHolder>() {
+    @Override
+    public void onBeforeLayout() {
+        // 布局即将开始,瓦片尚未更新
+    }
+
+    @Override
+    public void onAfterLayout() {
+        // 布局已完成,瓦片已更新与渲染
+    }
+
     @Override
     public void onTileIn(TileView.TileHolder holder, int column, int row) {
         // 瓦片进入视窗
@@ -532,6 +542,12 @@ tileView.setOnTileLifecycleListener(new OnTileLifecycleListener<TileView.TileHol
 
 方法说明:
 
+- `void onBeforeLayout()`  
+  每次布局周期开始前调用,此时瓦片尚未更新。
+
+- `void onAfterLayout()`  
+  布局周期结束后调用,瓦片已完成更新和渲染。
+
 - `void onTileIn(T holder, int column, int row)`  
   瓦片进入视窗并完成布局后调用。适合设置可见状态、启动动画等。
 
@@ -541,31 +557,7 @@ tileView.setOnTileLifecycleListener(new OnTileLifecycleListener<TileView.TileHol
 - `void onTileRecycled(T holder, int column, int row)`  
   瓦片被回收到池中后调用。瓦片已离开濒死区,即将被复用或释放。适合释放大对象、取消订阅等。
 
-三个回调的调用时机可结合 BaseTileHolder 的 `onInWindow`、`onOutWindow`、`onRecycled` 理解,区别在于监听器由视图层提供,而 BaseTileHolder 的方法由瓦片自身实现。
-
-#### 布局监听器
-
-`OnLayoutListener` 用于监听每次布局周期的开始和结束:
-
-```java
-tileView.setOnLayoutListener(new TileView.OnLayoutListener() {
-    @Override
-    public void onBeforeLayout() {
-        // 布局即将开始
-    }
-
-    @Override
-    public void onAfterLayout() {
-        // 布局已完成
-    }
-});
-```
-
-- `void onBeforeLayout()`  
-  每次布局周期开始前调用,此时瓦片尚未更新。
-
-- `void onAfterLayout()`  
-  布局周期结束后调用,瓦片已完成更新和渲染。
+瓦片进出/回收三个回调的调用时机可结合 BaseTileHolder 的 `onInWindow`、`onOutWindow`、`onRecycled` 理解,区别在于监听器由视图层提供,而 BaseTileHolder 的方法由瓦片自身实现。
 
 #### 尺寸提供者
 

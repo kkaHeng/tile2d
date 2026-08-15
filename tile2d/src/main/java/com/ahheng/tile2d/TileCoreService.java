@@ -2,13 +2,13 @@ package com.ahheng.tile2d;
 
 import android.content.Context;
 import android.graphics.Rect;
-import android.os.Debug;
 import android.view.MotionEvent;
 
 import com.ahheng.tile2d.dimen.TileDimenProvider;
 import com.ahheng.tile2d.tile.TileRecycledPool;
 import com.ahheng.tile2d.util.IntIntMap;
 import com.ahheng.tile2d.util.LongMap;
+import com.ahheng.tile2d.util.TimeProvider;
 
 // 核心调度器(轻量中央控制器)
 // 关联布局引擎、瓦片管理器、尺寸管理器、事件处理器、渲染交互端
@@ -28,6 +28,8 @@ public class TileCoreService<T extends TileCoreService.BaseTileHolder> implement
     private final Rect bounds = new Rect();
 
     // 调试统计
+    private boolean isDebugMode;
+    private TimeProvider timeProvider;
     private long startBindTime;
     private long bindTime;
 
@@ -39,7 +41,7 @@ public class TileCoreService<T extends TileCoreService.BaseTileHolder> implement
         this.eventHandler = new EventHandler(context, this);
     }
 
-    // ========== LayoutEngine.BoundaryInterface ==========
+    // 布局引擎的边界接口
 
     @Override
     public int getLeftBound() {
@@ -61,7 +63,7 @@ public class TileCoreService<T extends TileCoreService.BaseTileHolder> implement
         return coreInterface.getBottomBound();
     }
 
-    // ========== LayoutEngine.WindowInterface ==========
+    // 布局引擎的窗口接口
 
     @Override
     public void in(int column, int row) {
@@ -75,8 +77,9 @@ public class TileCoreService<T extends TileCoreService.BaseTileHolder> implement
 
     @Override
     public void onWindowCalculated(int colStart, int rowStart, int colEnd, int rowEnd) {
-        if (coreInterface.isDebugMode()) {
-            startBindTime = Debug.threadCpuTimeNanos();
+        // 核心服务的统计计时仍依赖 debug 开关,时钟来源为时间提供器
+        if (isDebugMode && timeProvider != null) {
+            startBindTime = timeProvider.cpuNanoTime();
         }
         tileManager.diffDying(colStart, rowStart, colEnd, rowEnd);
     }
@@ -91,7 +94,7 @@ public class TileCoreService<T extends TileCoreService.BaseTileHolder> implement
         return dimenManager.getTileHeight(row);
     }
 
-    // ========== TileManager.Callback ==========
+    // 瓦片管理器的回调接口
 
     @Override
     public int getTileType(int column, int row) {
@@ -150,14 +153,14 @@ public class TileCoreService<T extends TileCoreService.BaseTileHolder> implement
 
     @Override
     public void updateUI() {
-        if (coreInterface.isDebugMode() && startBindTime != 0) {
-            bindTime = Debug.threadCpuTimeNanos() - startBindTime;
+        if (isDebugMode && timeProvider != null && startBindTime != 0) {
+            bindTime = timeProvider.cpuNanoTime() - startBindTime;
             startBindTime = 0;
         }
         coreInterface.updateUI();
     }
 
-    // ========== DimenManager.Callback ==========
+    // 尺寸管理器的回调接口
 
     @Override
     public boolean isEmpty() {
@@ -205,7 +208,7 @@ public class TileCoreService<T extends TileCoreService.BaseTileHolder> implement
         layoutEngine.updateSize(column, oldWidth, newWidth, hGravity, row, oldHeight, newHeight, vGravity);
     }
 
-    // ========== EventHandler.Callback / 公共 API sync ==========
+    // 事件处理器的回调接口
 
     @Override
     public boolean isHorizontalScrollEnabled() {
@@ -224,11 +227,7 @@ public class TileCoreService<T extends TileCoreService.BaseTileHolder> implement
         updateUI();
     }
 
-    // ========== 公共 API ==========
-
-    public void updateUIOnly() {
-        coreInterface.updateUI();
-    }
+    // 公共 API
 
     public void setHorizontalScrollEnabled(boolean enabled) {
         layoutEngine.setHorizontalScrollEnabled(enabled);
@@ -328,6 +327,7 @@ public class TileCoreService<T extends TileCoreService.BaseTileHolder> implement
         dimenManager.deleteTileHeight(row, gravity);
     }
 
+    // 从视窗起始锚点开始计算指定列相对于视窗的 X 坐标，包含渲染端的左内边距
     public float getTileX(int column) {
         LayoutModel model = layoutEngine.getLayoutModel();
         float x = bounds.left + model.offsetX;
@@ -343,6 +343,7 @@ public class TileCoreService<T extends TileCoreService.BaseTileHolder> implement
         return x;
     }
 
+    // 从视窗起始锚点开始计算指定行相对于视窗的 Y 坐标，包含渲染端的上内边距
     public float getTileY(int row) {
         LayoutModel model = layoutEngine.getLayoutModel();
         float y = bounds.top + model.offsetY;
@@ -358,6 +359,7 @@ public class TileCoreService<T extends TileCoreService.BaseTileHolder> implement
         return y;
     }
 
+    // 从视窗起始锚点开始查找包含指定 X 坐标的的列索引，参考原点是渲染端的原点
     public int findColumn(float x) {
         LayoutModel model = layoutEngine.getLayoutModel();
         int leftBound = coreInterface.getLeftBound();
@@ -378,6 +380,7 @@ public class TileCoreService<T extends TileCoreService.BaseTileHolder> implement
         return col;
     }
 
+    // 从视窗起始锚点开始查找包含指定 Y 坐标的的行索引，参考原点是渲染端的原点
     public int findRow(float y) {
         LayoutModel model = layoutEngine.getLayoutModel();
         int topBound = coreInterface.getTopBound();
@@ -518,31 +521,42 @@ public class TileCoreService<T extends TileCoreService.BaseTileHolder> implement
         return eventHandler;
     }
 
-    // 调试代码，跨平台可删除
-
-    public void setTimerEnabled(boolean enabled) {
-    	layoutEngine.setTimerEnabled(enabled);
+    public boolean isDebugMode() {
+        return isDebugMode;
     }
 
-    // ========== 静态工具 ==========
+    public void setDebugMode(boolean isDebugMode) {
+        this.isDebugMode = isDebugMode;
+        layoutEngine.setTimeProvider(isDebugMode ? timeProvider : null);
+    }
 
+    public void setTimeProvider(TimeProvider provider) {
+        this.timeProvider = provider;
+        layoutEngine.setTimeProvider(isDebugMode ? provider : null);
+    }
+
+    // 静态工具方法
+
+    // 从瓦片坐标生成唯一瓦片 ID
     public static long getTileId(int column, int row) {
         return ((long) column << 32) | (row & 0xFFFFFFFFL);
     }
 
+    // 从瓦片 ID 提取列索引
     public static int getColumn(long id) {
         return (int) (id >> 32);
     }
 
+    // 从瓦片 ID 提取行索引
     public static int getRow(long id) {
         return (int) (id & 0xFFFFFFFFL);
     }
 
-    // ========== 基础瓦片持有者 ==========
+    // 基础瓦片持有者
 
     public static class BaseTileHolder {
 
-        // 包级私有:供同包的 TileManager 直接访问以设置瓦片坐标与尺寸
+        // 包级私有，供同包的 TileManager 直接访问以设置瓦片坐标与尺寸
         int type;
         int column;
         int row;
@@ -583,7 +597,7 @@ public class TileCoreService<T extends TileCoreService.BaseTileHolder> implement
 
     }
 
-    // ========== 渲染交互端接口 ==========
+    // 渲染交互端接口
 
     public interface CoreInterface<T extends BaseTileHolder> {
 
@@ -612,8 +626,6 @@ public class TileCoreService<T extends TileCoreService.BaseTileHolder> implement
         void onBindTileHolder(T holder, int column, int row);
 
         int getTileType(int column, int row);
-
-        boolean isDebugMode();
 
     }
 

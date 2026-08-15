@@ -103,7 +103,7 @@ public interface CoreInterface<T extends BaseTileHolder> {
 - `int getActiveTileCount()` / `getRecycledTileCount()` / `getDyingTileCount()`
 - `LongMap<T> getDyingTiles()`
 - `void setActiveTiles(LongMap<T> map)` 等映射替换方法
-- `void setTimerEnabled(boolean enabled)` — 开启 LayoutEngine 的同步耗时统计(调试用)
+- `void setTimeProvider(TimeProvider provider)` — 设置时间提供器,布局引擎据此开启同步耗时统计(调试用)
 
 #### 静态工具方法
 
@@ -715,11 +715,8 @@ DebugLayer debugLayer = new DebugLayer(getContext(), new DebugLayer.Callback() {
     @Override public int getActiveTileCount() { return coreService.getActiveTileCount(); }
     @Override public int getRecycledTileCount() { return coreService.getRecycledTileCount(); }
     @Override public int getDyingTileCount() { return coreService.getDyingTileCount(); }
-    @Override public int getTileWidth(int column) { return coreService.getTileWidth(column); }
-    @Override public int getTileHeight(int row) { return coreService.getTileHeight(row); }
     @Override public Rect getBounds() { return coreService.getBounds(); }
     @Override public LayoutModel getLayoutModel() { return coreService.getLayoutModel(); }
-    @Override public LongMap<? extends BaseTileHolder> getDyingTiles() { return coreService.getDyingTiles(); }
     @Override public void postInvalidateOnAnimation() { CustomTileView.this.postInvalidateOnAnimation(); }
     @Override public long getBindTime() { return coreService.getBindTime(); }
     @Override public long getLayoutTime() { return layoutTime; }

@@ -1,18 +1,20 @@
 package com.ahheng.tile2d;
 
+import com.ahheng.tile2d.util.TimeProvider;
+
 // 核心布局引擎
 // 支持跨平台移植(可删除调试代码)
 public class LayoutEngine {
 
-    public static final int DIMEN_GRAVITY_CENTER = 0;
-    public static final int DIMEN_GRAVITY_START = -1;
-    public static final int DIMEN_GRAVITY_END = 1;
+    public static final int DIMEN_GRAVITY_CENTER = 0; // 居中对齐
+    public static final int DIMEN_GRAVITY_START = -1; // 左对齐
+    public static final int DIMEN_GRAVITY_END = 1; // 右对齐
 
     private final BoundaryInterface boundaryInterface;
     private final WindowInterface windowInterface;
 
-    private final LayoutModel original = new LayoutModel();
-    private final LayoutModel output = new LayoutModel();
+    private final LayoutModel original = new LayoutModel(); // 原始布局模型
+    private final LayoutModel output = new LayoutModel(); // 输出布局模型
 
     private boolean horizontalScrollEnabled = true;
     private boolean verticalScrollEnabled = true;
@@ -20,7 +22,7 @@ public class LayoutEngine {
     private int windowHeight;
     
     // 调试变量，跨平台可删除
-    private boolean timerEnabled;
+    private TimeProvider timeProvider;
     private long startTime;
 
     public LayoutEngine(BoundaryInterface boundaryI, WindowInterface windowI) {
@@ -31,7 +33,7 @@ public class LayoutEngine {
     // 同步视窗
     public boolean sync(float dx, float dy) {
         // 调试代码，可丢弃
-        if (timerEnabled) startTime = System.nanoTime();
+        if (timeProvider != null) startTime = timeProvider.cpuNanoTime();
         int colStart = original.colStart;
         int rowStart = original.rowStart;
         int colEnd = original.colEnd;
@@ -44,7 +46,9 @@ public class LayoutEngine {
         if (colStart > rightBound ||
             rowStart > bottomBound ||
             colEnd < leftBound ||
-            rowEnd < topBound) {
+            rowEnd < topBound ||
+            windowWidth <= 0 ||
+            windowHeight <= 0) {
             // 窗口状态不合法，避免向外传递不合法的坐标，直接短路
             return false;
         }
@@ -134,7 +138,7 @@ public class LayoutEngine {
         output.offsetX = original.offsetX = offsetX;
         output.offsetY = original.offsetY = offsetY;
         // 调试代码，可丢弃
-        if (timerEnabled) output.syncTime = original.syncTime = System.nanoTime() - startTime;
+        if (timeProvider != null) output.syncTime = original.syncTime = timeProvider.cpuNanoTime() - startTime;
 
         int lastColStart = original.colStart;
         int lastRowStart = original.rowStart;
@@ -350,7 +354,6 @@ public class LayoutEngine {
         |        +--------------+--------+
         |  左下   |      下          右下  |
         +--------+-----------------------+
-        +--------+-----------------------+
         */
 
         // 遍历顶部区域
@@ -462,12 +465,8 @@ public class LayoutEngine {
 
     // 调试代码，跨平台可删除
 
-    public boolean isTimerEnabled() {
-    	return timerEnabled;
-    }
-
-    public void setTimerEnabled(boolean enabled) {
-    	timerEnabled = enabled;
+    public void setTimeProvider(TimeProvider timeProvider) {
+        this.timeProvider = timeProvider;
     }
 
     public int getWindowWidth() {

@@ -3,17 +3,13 @@ package com.ahheng.tile2d.widget.debug;
 import android.content.Context;
 import android.content.res.Resources;
 import android.graphics.Canvas;
-import android.graphics.Color;
 import android.graphics.Paint;
 import android.graphics.Rect;
 import android.graphics.Typeface;
 import android.os.Debug;
-import android.util.TypedValue;
 import android.view.Choreographer;
 
 import com.ahheng.tile2d.LayoutModel;
-import com.ahheng.tile2d.TileCoreService;
-import com.ahheng.tile2d.util.LongMap;
 
 import java.util.Locale;
 import java.util.Objects;
@@ -23,7 +19,6 @@ public class DebugLayer {
     private final Callback callback;
     private final Paint infoPaint;
     private final Paint boundPaint;
-    private final Paint dyingOverlayPaint;
     private final float infoMargin;
     private final Choreographer choreographer;
     private final Choreographer.FrameCallback frameCallback = new Choreographer.FrameCallback() {
@@ -120,23 +115,12 @@ public class DebugLayer {
                 setTextSize(dpToPx(r, 12));
                 setShadowLayer(dpToPx(r, 3), 0, 0, 0xff333333);
             }
-        },
-        new Paint(Paint.ANTI_ALIAS_FLAG) {
-            {
-                Resources r = context.getResources();
-                TypedValue v = new TypedValue();
-                Resources.Theme t = context.getTheme();
-                t.resolveAttribute(android.R.attr.colorPrimary, v, true);
-                int c = r.getColor(v.resourceId);
-                setColor(Color.argb(128, Color.red(c), Color.green(c), Color.blue(c)));
-            }
         }, dpToPx(context.getResources(), 4), callback);
     }
 
-    public DebugLayer(Paint boundPaint, Paint infoPaint, Paint dyingOverlayPaint, float infoMargin, Callback callback) {
+    public DebugLayer(Paint boundPaint, Paint infoPaint, float infoMargin, Callback callback) {
         this.boundPaint = Objects.requireNonNull(boundPaint);
         this.infoPaint = Objects.requireNonNull(infoPaint);
-        this.dyingOverlayPaint = Objects.requireNonNull(dyingOverlayPaint);
         this.callback = Objects.requireNonNull(callback);
         this.infoMargin = infoMargin;
         this.choreographer = Choreographer.getInstance();
@@ -299,52 +283,7 @@ public class DebugLayer {
         // 在这里结束统计，确保结果仅包含非调试绘制时间
         drawEnd = Debug.threadCpuTimeNanos();
 
-        LayoutModel model = callback.getLayoutModel();
         Rect bounds = callback.getBounds();
-
-        // 绘制濒死区覆盖层
-        LongMap<? extends TileCoreService.BaseTileHolder> dyingTiles = callback.getDyingTiles();
-        if (dyingTiles.size() > 0) {
-            canvas.save();
-            canvas.translate(bounds.left, bounds.top);
-            canvas.translate(model.offsetX, model.offsetY);
-            LongMap.Iterator<? extends TileCoreService.BaseTileHolder> it = dyingTiles.iterator();
-            while (it.next()) {
-                long id = it.key();
-                int c = TileCoreService.getColumn(id);
-                int r = TileCoreService.getRow(id);
-
-                // 修复：濒死瓦片在视窗左侧/上方时，需要累加所有跨过的列宽/行高
-                float x = 0;
-                if (c < model.colStart) {
-                    for (int j = c; j < model.colStart; j++) {
-                        x -= callback.getTileWidth(j);
-                    }
-                } else {
-                    for (int j = model.colStart; j < c; j++) {
-                        x += callback.getTileWidth(j);
-                    }
-                }
-
-                float y = 0;
-                if (r < model.rowStart) {
-                    for (int j = r; j < model.rowStart; j++) {
-                        y -= callback.getTileHeight(j);
-                    }
-                } else {
-                    for (int j = model.rowStart; j < r; j++) {
-                        y += callback.getTileHeight(j);
-                    }
-                }
-                TileCoreService.BaseTileHolder tile = it.value();
-
-                canvas.save();
-                canvas.translate(x, y);
-                canvas.drawRect(0, 0, tile.getWidth(), tile.getHeight(), dyingOverlayPaint);
-                canvas.restore();
-            }
-            canvas.restore();
-        }
         canvas.drawRect(bounds, boundPaint);
 
         // 绘制数据面板
@@ -379,11 +318,8 @@ public class DebugLayer {
         int getActiveTileCount();
         int getRecycledTileCount();
         int getDyingTileCount();
-        int getTileWidth(int column);
-        int getTileHeight(int row);
         Rect getBounds();
         LayoutModel getLayoutModel();
-        LongMap<? extends TileCoreService.BaseTileHolder> getDyingTiles();
         void postInvalidateOnAnimation();
         long getBindTime();
         long getLayoutTime();

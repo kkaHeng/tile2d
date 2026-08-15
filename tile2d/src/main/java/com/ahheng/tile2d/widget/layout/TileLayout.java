@@ -14,9 +14,10 @@ import com.ahheng.tile2d.LayoutEngine;
 import com.ahheng.tile2d.LayoutModel;
 import com.ahheng.tile2d.TileCoreService;
 import com.ahheng.tile2d.dimen.TileDimenProvider;
-import com.ahheng.tile2d.tile.OnTileLifecycleListener;
+import com.ahheng.tile2d.tile.TileEventListener;
 import com.ahheng.tile2d.tile.TileAdapter;
 import com.ahheng.tile2d.tile.TileRecycledPool;
+import com.ahheng.tile2d.util.DefaultTimeProvider;
 import com.ahheng.tile2d.util.IntIntMap;
 import com.ahheng.tile2d.util.LongMap;
 import com.ahheng.tile2d.widget.debug.DebugLayer;
@@ -29,14 +30,13 @@ public class TileLayout extends ViewGroup {
 
     private TileCoreService<TileHolder> coreService;
     private Adapter adapter;
-    private OnLayoutListener onLayoutListener;
-    private OnTileLifecycleListener<TileHolder> onTileLifecycleListener;
+    private TileEventListener<TileHolder> tileEventListener;
 
     private final TileCoreService.CoreInterface<TileHolder> coreInterface = new TileCoreService.CoreInterface<TileHolder>() {
         @Override
         public void beforeLayout() {
             requestLayoutDepth++;
-            if (onLayoutListener != null) onLayoutListener.onBeforeLayout();
+            if (tileEventListener != null) tileEventListener.onBeforeLayout();
         }
 
         @Override
@@ -49,7 +49,7 @@ public class TileLayout extends ViewGroup {
                 requestLayoutDepth--;
             }
             if (debugMode) layoutTime = startLayoutTime == 0 ? 0 : System.nanoTime() - startLayoutTime;
-            if (onLayoutListener != null) onLayoutListener.onAfterLayout();
+            if (tileEventListener != null) tileEventListener.onAfterLayout();
             if (requestLayoutDepth == 0 && pendingLayoutRequest) {
                 requestLayout();
             }
@@ -58,19 +58,19 @@ public class TileLayout extends ViewGroup {
         @Override
         public void onTileIn(TileHolder holder, int column, int row) {
             addViewInLayout(holder.itemView, -1, holder.itemView.getLayoutParams(), false);
-            if (onTileLifecycleListener != null) onTileLifecycleListener.onTileIn(holder, column, row);
+            if (tileEventListener != null) tileEventListener.onTileIn(holder, column, row);
         }
 
         @Override
         public void onTileOut(TileHolder holder, int column, int row) {
             removeViewInLayout(holder.itemView);
-            if (onTileLifecycleListener != null) onTileLifecycleListener.onTileOut(holder, column, row);
+            if (tileEventListener != null) tileEventListener.onTileOut(holder, column, row);
         }
         
         @Override
         public void onTileRecycled(TileHolder holder, int column, int row) {
             holder.view = null;
-            if (onTileLifecycleListener != null) onTileLifecycleListener.onTileRecycled(holder, column, row);
+            if (tileEventListener != null) tileEventListener.onTileRecycled(holder, column, row);
         }
         
         @Override
@@ -121,11 +121,6 @@ public class TileLayout extends ViewGroup {
         public int getTileType(int column, int row) {
             return adapter.getTileType(column, row);
         }
-
-        @Override
-        public boolean isDebugMode() {
-            return debugMode;
-        }
     };
 
     private DebugLayer debugLayer;
@@ -155,6 +150,7 @@ public class TileLayout extends ViewGroup {
         DisplayMetrics displayMetrics = getResources().getDisplayMetrics();
         coreService.setDefaultTileWidth((int) TypedValue.applyDimension(TypedValue.COMPLEX_UNIT_DIP, 80, displayMetrics));
         coreService.setDefaultTileHeight((int) TypedValue.applyDimension(TypedValue.COMPLEX_UNIT_DIP, 45, displayMetrics));
+        coreService.setTimeProvider(new DefaultTimeProvider());
         setWillNotDraw(false);
     }
 
@@ -302,7 +298,7 @@ public class TileLayout extends ViewGroup {
     public void setDebugMode(boolean enabled) {
         if (debugMode == enabled) return;
         debugMode = enabled;
-        coreService.setTimerEnabled(enabled);
+        coreService.setDebugMode(enabled);
         if (enabled) {
             debugLayer = new DebugLayer(getContext(), new DebugLayer.Callback() {
                 @Override
@@ -321,26 +317,12 @@ public class TileLayout extends ViewGroup {
                 }
 
                 @Override
-                public int getTileWidth(int column) {
-                    return coreService.getTileWidth(column);
-                }
-
-                @Override
-                public int getTileHeight(int row) {
-                    return coreService.getTileHeight(row);
-                }
-
-                @Override
                 public Rect getBounds() {
                     return coreService.getBounds();
                 }
                 @Override
                 public LayoutModel getLayoutModel() {
                     return coreService.getLayoutModel();
-                }
-                @Override
-                public LongMap<? extends TileCoreService.BaseTileHolder> getDyingTiles() {
-                    return coreService.getDyingTiles();
                 }
                 @Override
                 public void postInvalidateOnAnimation() {
@@ -539,8 +521,8 @@ public class TileLayout extends ViewGroup {
         requestLayout();
     }
 
-    public void setOnLayoutListener(OnLayoutListener onLayoutListener) {
-        this.onLayoutListener = onLayoutListener;
+    public void setTileEventListener(TileEventListener<TileHolder> tileEventListener) {
+        this.tileEventListener = tileEventListener;
     }
 
     public int getDefaultTileWidth() {
@@ -585,10 +567,6 @@ public class TileLayout extends ViewGroup {
     
     public void setRecycledTiles(TileRecycledPool<TileHolder> pool) {
         coreService.setRecycledTiles(pool);
-    }
-
-    public void setOnTileLifecycleListener(OnTileLifecycleListener<TileHolder> onTileLifecycleListener) {
-        this.onTileLifecycleListener = onTileLifecycleListener;
     }
 
     public TileHolder getActiveTile(int column, int row) {
@@ -636,11 +614,6 @@ public class TileLayout extends ViewGroup {
             if (view != null) view.requestDisallowInterceptTouchEvent(disallowIntercept);
         }
 
-    }
-
-    public interface OnLayoutListener {
-        void onBeforeLayout(); // 布局前
-        void onAfterLayout(); // 布局后
     }
 
 }

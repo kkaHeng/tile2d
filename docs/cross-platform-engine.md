@@ -353,7 +353,7 @@ int type;          // 瓦片类型
 按照上文算法,用目标语言实现 `LayoutEngine`。注意:
 
 - `min`/`max` 函数不要用标准库泛型版本,用专门处理 int 和 float 的重载版本,避免装箱开销
-- 调试代码(`timerEnabled`、`syncTime`)可以全部丢弃
+- 调试代码(`timeProvider`、`syncTime`)可以全部丢弃,计时只依赖时间提供器是否存在
 - `BoundaryInterface` 和 `WindowInterface` 用目标语言的接口/协议 trait 表达
 
 ### 3. 实现 TileManager
