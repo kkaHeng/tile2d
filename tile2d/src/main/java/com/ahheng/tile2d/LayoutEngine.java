@@ -382,7 +382,7 @@ public class LayoutEngine {
         }
     }
 
-    // 处理区域内的晶格进出
+    // 处理区域内的瓦片进出
     private void diffRegion(int xStart, int xEnd, int yStart, int yEnd,
                             int oldColStart, int oldRowStart, int oldColEnd, int oldRowEnd,
                             int newColStart, int newRowStart, int newColEnd, int newRowEnd) {
@@ -506,10 +506,10 @@ public class LayoutEngine {
     // 视窗交互接口
     public interface WindowInterface {
 
-        // 使指定晶格加载并进入视窗
+        // 使指定瓦片加载并进入视窗
         void in(int column, int row);
 
-        // 使指定晶格离开视窗
+        // 使指定瓦片离开视窗
         void out(int column, int row);
 
         // 新视窗计算完毕，即将进行边界处理
