@@ -25,7 +25,8 @@ import android.widget.TextView;
 import androidx.appcompat.app.AppCompatActivity;
 
 import com.ahheng.tile2d.app.auto.AutoTileActivity;
-import com.ahheng.tile2d.app.bench.LayoutEngineBenchActivity;
+import com.ahheng.tile2d.app.engine.LayoutEngineBenchActivity;
+import com.ahheng.tile2d.app.engine.WindowParadigmActivity;
 import com.ahheng.tile2d.app.data.TableActivity;
 import com.ahheng.tile2d.app.maze.MaxMazeActivity;
 import com.ahheng.tile2d.app.maze.MazeActivity;
@@ -98,6 +99,8 @@ public class MainActivity extends AppCompatActivity {
                         MinesweeperActivity.class, C_ERROR, "minesweeper"),
                 new DemoInfo("性能测试", "LayoutEngine 纯算法基准测试,统计同步滚动/随机跳转场景下的纳秒级 " +
                         "耗时分布与吞吐量", LayoutEngineBenchActivity.class, C_SECONDARY, "bench"),
+                new DemoInfo("视窗范式", "对比绝对坐标(放大镜)与逻辑坐标+偏移(摄像机)两种视窗定位范式",
+                        WindowParadigmActivity.class, C_SECONDARY, "paradigm"),
         };
 
         // ===== Root ScrollView (no padding — cards use margins for shadows) =====
