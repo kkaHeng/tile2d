@@ -1,10 +1,8 @@
 package com.ahheng.tile2d.tile;
 
-import android.util.SparseArray;
-
 import com.ahheng.tile2d.TileCoreService;
-import com.ahheng.tile2d.util.IntMap;
-import com.ahheng.tile2d.util.IntMapSparseArray;
+import com.ahheng.tile2d.util.intmap.IntMap;
+import com.ahheng.tile2d.util.intmap.IntMapOpenHashMap;
 
 import java.util.ArrayDeque;
 import java.util.Deque;
@@ -14,7 +12,7 @@ public class TileRecycledPool <T extends TileCoreService.BaseTileHolder> {
     private IntMap<Deque<T>> recycledTiles;
 
     public TileRecycledPool() {
-        this.recycledTiles = new IntMapSparseArray<>();
+        this.recycledTiles = new IntMapOpenHashMap<>();
     }
 
     public void reset() {

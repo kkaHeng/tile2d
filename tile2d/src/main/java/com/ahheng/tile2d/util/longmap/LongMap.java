@@ -1,4 +1,4 @@
-package com.ahheng.tile2d.util;
+package com.ahheng.tile2d.util.longmap;
 
 public interface LongMap<V> {
 

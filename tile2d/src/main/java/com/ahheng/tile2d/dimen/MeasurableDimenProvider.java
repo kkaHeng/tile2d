@@ -5,8 +5,8 @@ import android.view.View;
 import com.ahheng.tile2d.TileCoreService;
 import com.ahheng.tile2d.tile.TileAdapter;
 import com.ahheng.tile2d.tile.TileRecycledPool;
-import com.ahheng.tile2d.util.IntIntMap;
-import com.ahheng.tile2d.util.IntIntMapSparseArray;
+import com.ahheng.tile2d.util.intintmap.IntIntMap;
+import com.ahheng.tile2d.util.intintmap.IntIntMapOpenHashMap;
 
 // 简易测量工具，不建议在大数据量场景下使用
 public class MeasurableDimenProvider implements TileDimenProvider {
@@ -28,8 +28,8 @@ public class MeasurableDimenProvider implements TileDimenProvider {
         this.defaultTileWidth = defaultTileWidth;
         this.defaultTileHeight = defaultTileHeight;
         this.adapter = (TileAdapter<TileCoreService.BaseTileHolder>) adapter;
-        this.widths = new IntIntMapSparseArray();
-        this.heights = new IntIntMapSparseArray();
+        this.widths = new IntIntMapOpenHashMap();
+        this.heights = new IntIntMapOpenHashMap();
     }
 
     public boolean isMinDefault() {

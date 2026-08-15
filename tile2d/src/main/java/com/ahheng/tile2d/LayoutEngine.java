@@ -1,6 +1,6 @@
 package com.ahheng.tile2d;
 
-import com.ahheng.tile2d.util.TimeProvider;
+import com.ahheng.tile2d.util.time.TimeProvider;
 
 // 核心布局引擎
 // 支持跨平台移植(可删除调试代码)

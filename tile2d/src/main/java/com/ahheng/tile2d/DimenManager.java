@@ -1,8 +1,8 @@
 package com.ahheng.tile2d;
 
 import com.ahheng.tile2d.dimen.TileDimenProvider;
-import com.ahheng.tile2d.util.IntIntMap;
-import com.ahheng.tile2d.util.IntIntMapSparseArray;
+import com.ahheng.tile2d.util.intintmap.IntIntMap;
+import com.ahheng.tile2d.util.intintmap.IntIntMapOpenHashMap;
 
 // 尺寸管理器(跨平台)
 // 负责管理尺寸相关的修改、存储、测量
@@ -18,8 +18,8 @@ public class DimenManager {
 
     public DimenManager(Callback callback) {
         this.callback = callback;
-        this.widths = new IntIntMapSparseArray();
-        this.heights = new IntIntMapSparseArray();
+        this.widths = new IntIntMapOpenHashMap();
+        this.heights = new IntIntMapOpenHashMap();
     }
 
     // ========== 查询 ==========

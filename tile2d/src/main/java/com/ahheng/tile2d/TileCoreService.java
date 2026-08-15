@@ -6,9 +6,9 @@ import android.view.MotionEvent;
 
 import com.ahheng.tile2d.dimen.TileDimenProvider;
 import com.ahheng.tile2d.tile.TileRecycledPool;
-import com.ahheng.tile2d.util.IntIntMap;
-import com.ahheng.tile2d.util.LongMap;
-import com.ahheng.tile2d.util.TimeProvider;
+import com.ahheng.tile2d.util.intintmap.IntIntMap;
+import com.ahheng.tile2d.util.longmap.LongMap;
+import com.ahheng.tile2d.util.time.TimeProvider;
 
 // 核心调度器(轻量中央控制器)
 // 关联布局引擎、瓦片管理器、尺寸管理器、事件处理器、渲染交互端

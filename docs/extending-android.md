@@ -326,7 +326,8 @@ public interface LongMap<T> {
 ```
 
 内置实现:
-- `LongMapSparseArray`(默认) — 基于 `LongSparseArray`,插入有序,适合小数据量
+- `LongMapOpenHashMap`(默认) — 开地址哈希表,复刻 fastutil,无装箱,读写 O(1)
+- `LongMapSparseArray` — 基于 `LongSparseArray`,插入有序,适合小数据量
 - `LongMapHashMap` — 基于 `HashMap<Long, T>`,插入无序,大批量删除时性能更好
 
 **列宽/行高**使用 `IntIntMap`:
@@ -351,7 +352,8 @@ public interface IntIntMap {
 ```
 
 内置实现:
-- `IntIntMapSparseArray`(默认) — 基于 `SparseIntArray`
+- `IntIntMapOpenHashMap`(默认) — 开地址哈希表,复刻 fastutil,无装箱,读写 O(1)
+- `IntIntMapSparseArray` — 基于 `SparseIntArray`
 - `IntIntMapHashMap` — 基于 `HashMap<Integer, Integer>`
 
 **回收池**使用 `TileRecycledPool<T>`,内部存储为 `IntMap<Deque<T>>`。

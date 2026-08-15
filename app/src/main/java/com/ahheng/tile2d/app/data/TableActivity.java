@@ -25,7 +25,6 @@ import com.ahheng.tile2d.app.BaseActivity;
 import com.ahheng.tile2d.dimen.DragResizerView;
 import com.ahheng.tile2d.dimen.Measurable;
 import com.ahheng.tile2d.dimen.MeasurableDimenProvider;
-import com.ahheng.tile2d.util.IntIntMapHashMap;
 import com.ahheng.tile2d.widget.canvas.TileView;
 import com.ahheng.tile2d.widget.layout.TileLayout;
 

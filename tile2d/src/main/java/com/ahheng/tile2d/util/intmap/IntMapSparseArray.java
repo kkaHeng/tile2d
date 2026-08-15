@@ -1,24 +1,24 @@
-package com.ahheng.tile2d.util;
+package com.ahheng.tile2d.util.intmap;
 
-import android.util.LongSparseArray;
+import android.util.SparseArray;
 
-public class LongMapSparseArray<V> implements LongMap<V> {
+public class IntMapSparseArray<V> implements IntMap<V> {
 
-    private final LongSparseArray<V> sparseArray;
+    private final SparseArray<V> sparseArray;
 
-    private long mLastKey = 0;
-    private int mLastIndex = -2;
+    private int mLastKey = 0;
+    private int mLastIndex = -2;  // -2 表示无效
     private boolean mCacheValid = false;
 
-    public LongMapSparseArray() {
-        this.sparseArray = new LongSparseArray<>();
+    public IntMapSparseArray() {
+        this.sparseArray = new SparseArray<>();
     }
 
-    public LongMapSparseArray(int initialCapacity) {
-        this.sparseArray = new LongSparseArray<>(initialCapacity);
+    public IntMapSparseArray(int initialCapacity) {
+        this.sparseArray = new SparseArray<>(initialCapacity);
     }
 
-    private int findIndex(long key) {
+    private int findIndex(int key) {
         if (mCacheValid && mLastKey == key) {
             return mLastIndex;
         }
@@ -35,13 +35,13 @@ public class LongMapSparseArray<V> implements LongMap<V> {
     }
 
     @Override
-    public V get(long key) {
+    public V get(int key) {
         int index = findIndex(key);
         return index >= 0 ? sparseArray.valueAt(index) : null;
     }
 
     @Override
-    public void put(long key, V value) {
+    public void put(int key, V value) {
         int index = findIndex(key);
         if (index >= 0) {
             sparseArray.setValueAt(index, value);
@@ -52,7 +52,7 @@ public class LongMapSparseArray<V> implements LongMap<V> {
     }
 
     @Override
-    public V remove(long key) {
+    public V remove(int key) {
         int index = findIndex(key);
         if (index >= 0) {
             V old = sparseArray.valueAt(index);
@@ -69,7 +69,7 @@ public class LongMapSparseArray<V> implements LongMap<V> {
     }
 
     @Override
-    public boolean containsKey(long key) {
+    public boolean containsKey(int key) {
         return findIndex(key) >= 0;
     }
 
@@ -80,8 +80,8 @@ public class LongMapSparseArray<V> implements LongMap<V> {
     }
 
     @Override
-    public LongMap.Iterator<V> iterator(boolean deleteMode) {
-        return new LongMap.Iterator<V>() {
+    public IntMap.Iterator<V> iterator(boolean deleteMode) {
+        return new IntMap.Iterator<V>() {
             private final int size = sparseArray.size();
             private int pos = deleteMode ? size : -1;
             @Override
@@ -97,7 +97,7 @@ public class LongMapSparseArray<V> implements LongMap<V> {
                 return false;
             }
             @Override
-            public long key() {
+            public int key() {
                 if (pos < 0 || pos >= size) throw new IllegalStateException();
                 return sparseArray.keyAt(pos);
             }

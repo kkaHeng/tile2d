@@ -1,8 +1,8 @@
 package com.ahheng.tile2d;
 
 import com.ahheng.tile2d.tile.TileRecycledPool;
-import com.ahheng.tile2d.util.LongMap;
-import com.ahheng.tile2d.util.LongMapSparseArray;
+import com.ahheng.tile2d.util.longmap.LongMap;
+import com.ahheng.tile2d.util.longmap.LongMapOpenHashMap;
 
 // 瓦片管理器(跨平台)
 // 负责瓦片相关的生命周期、存储、交互
@@ -24,8 +24,8 @@ public class TileManager<T extends TileCoreService.BaseTileHolder> {
 
     public TileManager(Callback<T> callback) {
         this.callback = callback;
-        this.activeTiles = new LongMapSparseArray<>();
-        this.dyingTiles = new LongMapSparseArray<>();
+        this.activeTiles = new LongMapOpenHashMap<>();
+        this.dyingTiles = new LongMapOpenHashMap<>();
         this.recycledTiles = new TileRecycledPool<>();
     }
 
@@ -173,25 +173,25 @@ public class TileManager<T extends TileCoreService.BaseTileHolder> {
             }
             in(column, row);
         } else {
-            // 在濒死区
-            tile = dyingTiles.get(id);
+            // 在濒死区，仅刷新已缓存的瓦片数据,不为 update 预建新瓦片,
+            // 否则 updateRange 覆盖整个濒死区时会被填满,导致每帧遍历删除退化为 O(n^2)
+            tile = dyingTiles.remove(id);
             if (tile != null) {
-                dyingTiles.remove(id);
                 recycle(tile);
-            }
-            int type = callback.getTileType(column, row);
-            T newTile = obtain(type);
-            if (newTile != null) {
-                int width = callback.getTileWidth(column);
-                int height = callback.getTileHeight(row);
-                newTile.column = column;
-                newTile.row = row;
-                newTile.width = width;
-                newTile.height = height;
-                callback.onBindTileHolder(newTile, column, row);
-                newTile.onSizeChanged(width, height);
-                callback.onTileSizeChanged(newTile, column, row, width, height);
-                dyingTiles.put(id, newTile);
+                int type = callback.getTileType(column, row);
+                T newTile = obtain(type);
+                if (newTile != null) {
+                    int width = callback.getTileWidth(column);
+                    int height = callback.getTileHeight(row);
+                    newTile.column = column;
+                    newTile.row = row;
+                    newTile.width = width;
+                    newTile.height = height;
+                    callback.onBindTileHolder(newTile, column, row);
+                    newTile.onSizeChanged(width, height);
+                    callback.onTileSizeChanged(newTile, column, row, width, height);
+                    dyingTiles.put(id, newTile);
+                }
             }
         }
     }

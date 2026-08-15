@@ -300,6 +300,7 @@ interface Callback {
 - 建议用哈希表实现,O(1) 读写
 
 Java 参考实现:
+- `LongMapOpenHashMap`:开地址哈希表,复刻 fastutil,无装箱,默认实现
 - `LongMapSparseArray`:基于 `LongSparseArray`,有序存储,适合小数据量
 - `LongMapHashMap`:基于 `HashMap<Long, T>`,无序,大批量删除时性能更优
 
@@ -311,6 +312,7 @@ Java 参考实现:
 - `iterator()` 遍历
 
 Java 参考实现:
+- `IntIntMapOpenHashMap`:开地址哈希表,复刻 fastutil,无装箱,默认实现
 - `IntIntMapSparseArray`:基于 `SparseIntArray`
 - `IntIntMapHashMap`:基于 `HashMap<Integer, Integer>`
 

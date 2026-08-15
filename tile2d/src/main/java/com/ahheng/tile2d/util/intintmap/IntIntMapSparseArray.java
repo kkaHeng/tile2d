@@ -1,4 +1,4 @@
-package com.ahheng.tile2d.util;
+package com.ahheng.tile2d.util.intintmap;
 
 import android.util.SparseIntArray;
 

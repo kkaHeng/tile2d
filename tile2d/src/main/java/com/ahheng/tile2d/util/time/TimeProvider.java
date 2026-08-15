@@ -1,4 +1,4 @@
-package com.ahheng.tile2d.util;
+package com.ahheng.tile2d.util.time;
 
 // 时间提供器接口
 // 提供墙钟与 CPU 时间两种计量，由调用点按语义自行选择

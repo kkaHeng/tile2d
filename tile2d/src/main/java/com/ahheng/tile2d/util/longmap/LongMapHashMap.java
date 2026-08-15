@@ -1,41 +1,33 @@
-package com.ahheng.tile2d.util;
+package com.ahheng.tile2d.util.longmap;
 
 import java.util.HashMap;
 import java.util.Map;
 
-public class IntIntMapHashMap implements IntIntMap {
+public class LongMapHashMap<V> implements LongMap<V> {
 
-    private final Map<Integer, Integer> map;
+    private final Map<Long, V> map;
 
-    public IntIntMapHashMap() {
+    public LongMapHashMap() {
         this.map = new HashMap<>();
     }
 
-    public IntIntMapHashMap(int initialCapacity) {
+    public LongMapHashMap(int initialCapacity) {
         this.map = new HashMap<>(initialCapacity);
     }
 
     @Override
-    public int get(int key) {
-        Integer v = map.get(key);
-        return v != null ? v : 0;
+    public V get(long key) {
+        return map.get(key);
     }
 
     @Override
-    public int get(int key, int defaultValue) {
-        Integer v = map.get(key);
-        return v != null ? v : defaultValue;
-    }
-
-    @Override
-    public void put(int key, int value) {
+    public void put(long key, V value) {
         map.put(key, value);
     }
 
     @Override
-    public int remove(int key) {
-        Integer removed = map.remove(key);
-        return removed != null ? removed : 0;
+    public V remove(long key) {
+        return map.remove(key);
     }
 
     @Override
@@ -44,7 +36,7 @@ public class IntIntMapHashMap implements IntIntMap {
     }
 
     @Override
-    public boolean containsKey(int key) {
+    public boolean containsKey(long key) {
         return map.containsKey(key);
     }
 
@@ -54,25 +46,26 @@ public class IntIntMapHashMap implements IntIntMap {
     }
 
     @Override
-    public IntIntMap.Iterator iterator(boolean deleteMode) {
-        java.util.Iterator<Map.Entry<Integer, Integer>> i = map.entrySet().iterator();
-        return new IntIntMap.Iterator() {
-            private Map.Entry<Integer, Integer> e;
+    public LongMap.Iterator<V> iterator(boolean deleteMode) {
+        java.util.Iterator<Map.Entry<Long, V>> i = map.entrySet().iterator();
+        return new LongMap.Iterator<V>() {
+            private Map.Entry<Long, V> e;
             @Override
             public boolean next() {
                 if (i.hasNext()) {
                     e = i.next();
                     return true;
                 }
+                e = null;
                 return false;
             }
             @Override
-            public int key() {
+            public long key() {
                 if (e == null) throw new IllegalStateException();
                 return e.getKey();
             }
             @Override
-            public int value() {
+            public V value() {
                 if (e == null) throw new IllegalStateException();
                 return e.getValue();
             }

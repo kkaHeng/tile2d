@@ -18,9 +18,9 @@ import com.ahheng.tile2d.dimen.TileDimenProvider;
 import com.ahheng.tile2d.tile.TileEventListener;
 import com.ahheng.tile2d.tile.TileAdapter;
 import com.ahheng.tile2d.tile.TileRecycledPool;
-import com.ahheng.tile2d.util.DefaultTimeProvider;
-import com.ahheng.tile2d.util.IntIntMap;
-import com.ahheng.tile2d.util.LongMap;
+import com.ahheng.tile2d.util.time.DefaultTimeProvider;
+import com.ahheng.tile2d.util.intintmap.IntIntMap;
+import com.ahheng.tile2d.util.longmap.LongMap;
 import com.ahheng.tile2d.widget.debug.DebugLayer;
 
 public class TileView extends View {
