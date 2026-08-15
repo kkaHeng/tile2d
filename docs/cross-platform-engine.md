@@ -174,14 +174,18 @@ port 时可以直接用 `column + "," + row` 作为字符串 key,但 long 编码
 
 #### 濒死区策略
 
-濒死区 = 当前视窗向外扩展一圈:
+濒死区 = 当前视窗向外扩展 `dyingExpand` 圈(默认 1,可配置;`setDyingExpand` 传入 ≤ 0 时抛出 `IllegalArgumentException`)。瓦片滚出视窗后先进入濒死区缓冲,短时间内滚回可直接复用。`setDyingEnabled(false)` 可整体关闭,关闭后瓦片离开视窗立即回收,并立即清空濒死区内已缓存的瓦片。
+
+边界计算(闭区间语义,右/下边界是合法坐标,不越出适配器边界):
 
 ```
-getDyingLeft()   = colStart > leftBound ? colStart - 1 : leftBound
-getDyingTop()    = rowStart > topBound  ? rowStart - 1 : topBound
-getDyingRight()  = colEnd   < rightBound ? colEnd   + 1 : rightBound
-getDyingBottom() = rowEnd   < bottomBound ? rowEnd   + 1 : bottomBound
+getDyingLeft()   = colStart   - min(colStart   - leftBound,  dyingExpand)
+getDyingTop()    = rowStart   - min(rowStart   - topBound,   dyingExpand)
+getDyingRight()  = colEnd     + min(rightBound - colEnd,      dyingExpand)
+getDyingBottom() = rowEnd     + min(bottomBound - rowEnd,     dyingExpand)
 ```
+
+边界为 `Integer.MIN_VALUE` / `Integer.MAX_VALUE` 极值时,减法溢出的信号等价于真实距离 ≥ 2³¹,必然 ≥ 扩展量,直接按扩展满处理。
 
 `diffDying(colStart, rowStart, colEnd, rowEnd)` 在每次视窗计算后被调用。它清理所有超出濒死区的瓦片到回收池。
 

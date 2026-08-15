@@ -337,6 +337,17 @@ TileView 和 TileLayout 都定义了三个对齐常量,用于 `setTileWidth`、`
   如果同时使用 `setTileWidth` 单独设置了某列的宽度,`setTileWidth` 的设置值优先。  
   传入 `null` 会清除提供者,回退到默认尺寸。
 
+#### 濒死区
+
+- `int getDyingExpand()`  
+  `void setDyingExpand(int expand)`  
+  获取或设置濒死区扩展范围。濒死区是视窗外围的缓存带,瓦片滚出视窗后先进入濒死区缓冲,短时间内滚回可直接复用,避免频繁创建销毁。  
+  扩展范围是每个方向的圈数,默认 1。传入的值必须大于 0,否则抛出 `IllegalArgumentException`。
+
+- `boolean isDyingEnabled()`  
+  `void setDyingEnabled(boolean enabled)`  
+  获取或设置濒死区开关。默认开启。关闭后瓦片离开视窗立即回收,并立即清空濒死区内已缓存的瓦片,不做缓冲。
+
 #### 更新瓦片
 
 - `void update(int column, int row)`  

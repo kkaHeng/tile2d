@@ -524,7 +524,7 @@ public class LayoutEngine {
 
     // 跨平台跨语言兼容方法
 
-    private static int min(int a, int b) {
+    public static int min(int a, int b) {
         if (a <= b) {
             return a;
         } else {
@@ -532,7 +532,7 @@ public class LayoutEngine {
         }
     }
 
-    private static int max(int a, int b) {
+    public static int max(int a, int b) {
         if (a >= b) {
             return a;
         } else {
@@ -540,7 +540,7 @@ public class LayoutEngine {
         }
     }
 
-    private static float min(float a, float b) {
+    public static float min(float a, float b) {
         if (a != a) {
             return a;
         }
@@ -554,7 +554,7 @@ public class LayoutEngine {
         }
     }
 
-    private static float max(float a, float b) {
+    public static float max(float a, float b) {
         if (a != a) {
             return a;
         }

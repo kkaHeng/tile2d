@@ -17,6 +17,8 @@ public class TileManager<T extends TileCoreService.BaseTileHolder> {
     private int dyingColEnd = -1;
     private int dyingRowStart;
     private int dyingRowEnd = -1;
+    private int dyingExpand = 1; // 濒死区域扩展范围
+    private boolean dyingEnabled = true; // 是否启用濒死区
 
     private int recycledCount;
 
@@ -29,7 +31,7 @@ public class TileManager<T extends TileCoreService.BaseTileHolder> {
         this.recycledTiles = new TileRecycledPool<>();
     }
 
-    // ========== 生命周期 ==========
+    // 生命周期
 
     public void in(int column, int row) {
         long id = TileCoreService.getTileId(column, row);
@@ -62,7 +64,12 @@ public class TileManager<T extends TileCoreService.BaseTileHolder> {
         if (tile != null) {
             tile.onOutWindow();
             callback.onTileOut(tile, column, row);
-            dyingTiles.put(id, tile);
+            if (dyingEnabled) {
+                dyingTiles.put(id, tile);
+            } else {
+                // 濒死区关闭,离开视窗直接回收
+                recycle(tile);
+            }
         }
     }
 
@@ -87,7 +94,7 @@ public class TileManager<T extends TileCoreService.BaseTileHolder> {
         recycledCount++;
     }
 
-    // ========== 更新操作 ==========
+    // 更新操作
 
     public void update(int column, int row) {
         if (column >= getDyingLeft() &&
@@ -215,7 +222,7 @@ public class TileManager<T extends TileCoreService.BaseTileHolder> {
         }
     }
 
-    // ========== 濒死区域 ==========
+    // 濒死区域
 
     // 视窗计算完毕后,清理超出扩展濒死区的瓦片
     public void diffDying(int colStart, int rowStart, int colEnd, int rowEnd) {
@@ -247,22 +254,68 @@ public class TileManager<T extends TileCoreService.BaseTileHolder> {
     }
 
     public int getDyingLeft() {
-        return dyingColStart > callback.getLeftBound() ? dyingColStart - 1 : callback.getLeftBound();
+        if (!dyingEnabled) return dyingColStart; // 关闭时退化为视窗边界
+        int leftBound = callback.getLeftBound();
+        int distance = dyingColStart - leftBound;
+        int expand = LayoutEngine.min(distance, dyingExpand);
+        if (expand < 0) expand = dyingExpand;
+        return dyingColStart - expand;
     }
 
     public int getDyingTop() {
-        return dyingRowStart > callback.getTopBound() ? dyingRowStart - 1 : callback.getTopBound();
+        if (!dyingEnabled) return dyingRowStart; // 关闭时退化为视窗边界
+        int topBound = callback.getTopBound();
+        int distance = dyingRowStart - topBound;
+        int expand = LayoutEngine.min(distance, dyingExpand);
+        if (expand < 0) expand = dyingExpand;
+        return dyingRowStart - expand;
     }
 
     public int getDyingRight() {
-        return dyingColEnd < callback.getRightBound() ? dyingColEnd + 1 : callback.getRightBound();
+        if (!dyingEnabled) return dyingColEnd; // 关闭时退化为视窗边界
+        int rightBound = callback.getRightBound();
+        int distance = rightBound - dyingColEnd;
+        int expand = LayoutEngine.min(distance, dyingExpand);
+        if (expand < 0) expand = dyingExpand;
+        return dyingColEnd + expand;
     }
 
     public int getDyingBottom() {
-        return dyingRowEnd < callback.getBottomBound() ? dyingRowEnd + 1 : callback.getBottomBound();
+        if (!dyingEnabled) return dyingRowEnd; // 关闭时退化为视窗边界
+        int bottomBound = callback.getBottomBound();
+        int distance = bottomBound - dyingRowEnd;
+        int expand = LayoutEngine.min(distance, dyingExpand);
+        if (expand < 0) expand = dyingExpand;
+        return dyingRowEnd + expand;
     }
 
-    // ========== 查询 ==========
+    public int getDyingExpand() {
+        return dyingExpand;
+    }
+
+    public void setDyingExpand(int expand) {
+        if (expand <= 0) throw new IllegalArgumentException("濒死区扩展范围必须大于 0: " + expand);
+        dyingExpand = expand;
+    }
+
+    public boolean isDyingEnabled() {
+        return dyingEnabled;
+    }
+
+    public void setDyingEnabled(boolean enabled) {
+        dyingEnabled = enabled;
+        if (!enabled) {
+            // 关闭时立即回收濒死区内全部瓦片,不留缓冲
+            LongMap.Iterator<T> it = dyingTiles.iterator(true);
+            while (it.next()) {
+                T tile = it.value();
+                it.remove();
+                recycle(tile);
+            }
+        }
+    }
+
+    // 查询
 
     public T getActiveTile(int column, int row) {
         return activeTiles.get(TileCoreService.getTileId(column, row));
@@ -284,7 +337,7 @@ public class TileManager<T extends TileCoreService.BaseTileHolder> {
         return dyingTiles;
     }
 
-    // ========== 存储替换 ==========
+    // 存储替换
 
     public void setActiveTiles(LongMap<T> map) {
         if (map == null) throw new IllegalArgumentException("activeTiles map cannot be null");
@@ -316,7 +369,7 @@ public class TileManager<T extends TileCoreService.BaseTileHolder> {
         recycledTiles = map;
     }
 
-    // ========== 清理 ==========
+    // 清理
 
     public void clearAll() {
         // 清理活跃瓦片
@@ -365,7 +418,7 @@ public class TileManager<T extends TileCoreService.BaseTileHolder> {
         dyingTiles.clear();
     }
 
-    // ========== 回调接口 ==========
+    // 回调接口
 
     public interface Callback<T extends TileCoreService.BaseTileHolder> {
 

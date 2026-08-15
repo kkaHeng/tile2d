@@ -134,14 +134,21 @@ TileManager<MyHolder> manager = coreService.getTileManager();
 
 #### 濒死区策略
 
-`TileManager` 维护一个濒死区域,范围是当前视窗向外扩展一圈。当 LayoutEngine 计算出新视窗后,`diffDying` 方法清理超出扩展区的濒死瓦片。
+`TileManager` 维护一个濒死区域,范围是当前视窗向外扩展 `dyingExpand` 圈。瓦片滚出视窗后先进入濒死区缓冲,短时间内滚回可直接复用,避免频繁创建销毁。当 LayoutEngine 计算出新视窗后,`diffDying` 方法清理超出扩展区的濒死瓦片。
 
-濒死区边界计算方法:
+濒死区扩展可配置、可开关:
 
-- `getDyingLeft()` = `colStart - 1`(不越出左边界)
-- `getDyingTop()` = `rowStart - 1`(不越出上边界)
-- `getDyingRight()` = `colEnd + 1`(不越出右边界)
-- `getDyingBottom()` = `rowEnd + 1`(不越出下边界)
+- `int getDyingExpand()` / `void setDyingExpand(int expand)` — 获取/设置扩展范围(圈数,默认 1)。传入的值必须大于 0,否则抛出 `IllegalArgumentException`。
+- `boolean isDyingEnabled()` / `void setDyingEnabled(boolean enabled)` — 获取/设置开关(默认开启)。关闭后瓦片离开视窗立即回收,并立即清空濒死区内已缓存的瓦片,不做缓冲。
+
+濒死区边界计算方法(闭区间语义,右/下边界是合法坐标,不越出适配器边界):
+
+- `getDyingLeft()` = `colStart - min(colStart - leftBound, dyingExpand)`(不越出左边界)
+- `getDyingTop()` = `rowStart - min(rowStart - topBound, dyingExpand)`(不越出上边界)
+- `getDyingRight()` = `colEnd + min(rightBound - colEnd, dyingExpand)`(不越出右边界)
+- `getDyingBottom()` = `rowEnd + min(bottomBound - rowEnd, dyingExpand)`(不越出下边界)
+
+边界极值场景(如边界为 `Integer.MIN_VALUE`)下,减法的溢出信号等价于真实距离 ≥ 2³¹,必然 ≥ 扩展量,直接按扩展满处理。
 
 #### 核心方法
 
@@ -300,7 +307,7 @@ public interface Callback {
 
 ## 自定义存储容器
 
-框架内部使用稀疏映射存储活跃瓦片、濒死瓦片、列宽和行高。默认实现基于 `SparseArray`,你可以替换为自己的实现。
+框架内部使用哈希映射存储活跃瓦片、濒死瓦片、列宽和行高。默认实现基于 fastutil 原理的开地址哈希表(`LongMapOpenHashMap` / `IntMapOpenHashMap` / `IntIntMapOpenHashMap`),你也可以替换为自己的实现(如 SparseArray 包装实现)。
 
 ### 存储接口说明
 

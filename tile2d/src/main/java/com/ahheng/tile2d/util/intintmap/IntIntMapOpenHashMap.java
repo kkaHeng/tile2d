@@ -4,27 +4,17 @@ package com.ahheng.tile2d.util.intintmap;
 // 复刻 fastutil 的 Int2IntOpenHashMap, 原理同 LongMapOpenHashMap
 public class IntIntMapOpenHashMap implements IntIntMap {
 
-    /** 默认初始容量(2 的幂) */
-    private static final int DEFAULT_INITIAL_SIZE = 16;
-    /** 默认负载因子 */
-    private static final float DEFAULT_LOAD_FACTOR = 0.75f;
+    private static final int DEFAULT_INITIAL_SIZE = 16; // 默认初始容量(2 的幂)
+    private static final float DEFAULT_LOAD_FACTOR = 0.75f; // 默认负载因子
 
-    /** 键数组, 0 表示空槽 */
-    private int[] key;
-    /** 值数组 */
-    private int[] value;
-    /** 当前元素个数(含 0 键) */
-    private int size;
-    /** 容量掩码 = 容量 - 1 */
-    private int mask;
-    /** 容量(2 的幂) */
-    private int n;
-    /** 是否存储了 0 键 */
-    private boolean containsNullKey;
-    /** 0 键对应的值(哨兵) */
-    private int nullValue;
-    /** 触发扩容的元素个数上限 */
-    private int maxFill;
+    private int[] key; // 键数组, 0 表示空槽
+    private int[] value; // 值数组
+    private int size; // 当前元素个数(含 0 键)
+    private int mask; // 容量掩码 = 容量 - 1
+    private int n; // 容量(2 的幂)
+    private boolean containsNullKey; // 是否存储了 0 键
+    private int nullValue; // 0 键对应的值(哨兵)
+    private int maxFill; // 触发扩容的元素个数上限
 
     public IntIntMapOpenHashMap() {
         this(DEFAULT_INITIAL_SIZE);
@@ -209,10 +199,8 @@ public class IntIntMapOpenHashMap implements IntIntMap {
     @Override
     public Iterator iterator(boolean deleteMode) {
         return new Iterator() {
-            /** 当前访问槽位(-1 表示尚未开始); 数组遍历完后为 n(进入 0 键阶段) */
-            private int pos = -1;
-            /** 0 键是否已返回 */
-            private boolean nullKeyDone;
+            private int pos = -1; // 当前访问槽位(-1 表示尚未开始); 数组遍历完后为 n(进入 0 键阶段)
+            private boolean nullKeyDone; // 0 键是否已返回
 
             @Override
             public boolean next() {
@@ -267,7 +255,7 @@ public class IntIntMapOpenHashMap implements IntIntMap {
         };
     }
 
-    // ===== fastutil HashCommon 复刻 =====
+    // fastutil HashCommon 复刻
 
     // 黄金比例快速混合(fastutil HashCommon.mix(int), Koloboke 风格)
     private static int mix(int x) {

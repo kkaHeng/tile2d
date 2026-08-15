@@ -187,6 +187,22 @@ public class TileCoreService<T extends TileCoreService.BaseTileHolder> implement
         return tileManager.getDyingBottom();
     }
 
+    public int getDyingExpand() {
+        return tileManager.getDyingExpand();
+    }
+
+    public void setDyingExpand(int expand) {
+        tileManager.setDyingExpand(expand);
+    }
+
+    public boolean isDyingEnabled() {
+        return tileManager.isDyingEnabled();
+    }
+
+    public void setDyingEnabled(boolean enabled) {
+        tileManager.setDyingEnabled(enabled);
+    }
+
     @Override
     public void resizeTile(int column, int row, int width, int height) {
         tileManager.resizeTile(column, row, width, height);

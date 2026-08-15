@@ -514,6 +514,22 @@ public class TileView extends View {
         coreService.setDyingTiles(map);
     }
     
+    public int getDyingExpand() {
+        return coreService.getDyingExpand();
+    }
+
+    public void setDyingExpand(int expand) {
+        coreService.setDyingExpand(expand);
+    }
+
+    public boolean isDyingEnabled() {
+        return coreService.isDyingEnabled();
+    }
+
+    public void setDyingEnabled(boolean enabled) {
+        coreService.setDyingEnabled(enabled);
+    }
+    
     public void setWidths(IntIntMap map) {
         coreService.setWidths(map);
     }

@@ -261,10 +261,7 @@ public class DebugLayer {
         resetAccumulators();
     }
 
-    /**
-     * 剔除一个最小值和一个最大值后求平均。
-     * 若样本不足 3 个，无法去极值，退化为普通算术平均。
-     */
+    // 剔除一个最小值和一个最大值后求平均;样本不足 3 个时退化为普通算术平均
     private static long trimmedAverage(long sum, long count, long min, long max) {
         if (count >= 3) {
             return (sum - min - max) / (count - 2);

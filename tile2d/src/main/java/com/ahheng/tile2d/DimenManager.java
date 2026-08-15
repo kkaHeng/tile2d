@@ -22,7 +22,7 @@ public class DimenManager {
         this.heights = new IntIntMapOpenHashMap();
     }
 
-    // ========== 查询 ==========
+    // 查询
 
     public int getTileWidth(int column) {
         if (widths.containsKey(column)) {
@@ -44,7 +44,7 @@ public class DimenManager {
         return defaultTileHeight;
     }
 
-    // ========== 修改 ==========
+    // 修改
 
     public void setTileWidth(int column, int width, int gravity) {
         if (callback.isEmpty()) return;
@@ -177,7 +177,7 @@ public class DimenManager {
         setTileHeight(row, 0, gravity);
     }
 
-    // ========== 默认尺寸 ==========
+    // 默认尺寸
 
     public int getDefaultTileWidth() {
         return defaultTileWidth;
@@ -197,7 +197,7 @@ public class DimenManager {
         this.defaultTileHeight = height;
     }
 
-    // ========== 尺寸提供者 ==========
+    // 尺寸提供者
 
     public TileDimenProvider getDimenProvider() {
         return dimenProvider;
@@ -207,7 +207,7 @@ public class DimenManager {
         this.dimenProvider = dimenProvider;
     }
 
-    // ========== 存储替换 ==========
+    // 存储替换
 
     public void setWidths(IntIntMap map) {
         if (map == null) throw new IllegalArgumentException("widths map cannot be null");
@@ -231,14 +231,14 @@ public class DimenManager {
         heights = map;
     }
 
-    // ========== 清理 ==========
+    // 清理
 
     public void clear() {
         widths.clear();
         heights.clear();
     }
 
-    // ========== 回调接口 ==========
+    // 回调接口
 
     public interface Callback {
 
