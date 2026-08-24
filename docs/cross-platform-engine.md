@@ -185,7 +185,7 @@ getDyingRight()  = colEnd     + min(rightBound - colEnd,      dyingExpand)
 getDyingBottom() = rowEnd     + min(bottomBound - rowEnd,     dyingExpand)
 ```
 
-边界为 `Integer.MIN_VALUE` / `Integer.MAX_VALUE` 极值时,减法溢出的信号等价于真实距离 ≥ 2³¹,必然 ≥ 扩展量,直接按扩展满处理。
+实现不直接计算 `colStart - leftBound` 这类距离(其数学值可能超出 int32),而是用 while 逐格行走:从视窗边界出发,向扩展方向最多走 `dyingExpand` 步(左/上边界用 `i--`,右/下边界用 `i++`),每步判断是否已到达适配器边界,到达即停。循环条件保证结果永不越出边界,既不依赖 int32 减法溢出,也不需要 64 位整数,跨语言行为一致。
 
 `diffDying(colStart, rowStart, colEnd, rowEnd)` 在每次视窗计算后被调用。它清理所有超出濒死区的瓦片到回收池。
 

@@ -256,37 +256,49 @@ public class TileManager<T extends TileCoreService.BaseTileHolder> {
     public int getDyingLeft() {
         if (!dyingEnabled) return dyingColStart; // 关闭时退化为视窗边界
         int leftBound = callback.getLeftBound();
-        int distance = dyingColStart - leftBound;
-        int expand = LayoutEngine.min(distance, dyingExpand);
-        if (expand < 0) expand = dyingExpand;
-        return dyingColStart - expand;
+        int left = dyingColStart;
+        int expand = dyingExpand;
+        while (expand > 0 && left > leftBound) {
+            left--;
+            expand--;
+        }
+        return left;
     }
 
     public int getDyingTop() {
         if (!dyingEnabled) return dyingRowStart; // 关闭时退化为视窗边界
         int topBound = callback.getTopBound();
-        int distance = dyingRowStart - topBound;
-        int expand = LayoutEngine.min(distance, dyingExpand);
-        if (expand < 0) expand = dyingExpand;
-        return dyingRowStart - expand;
+        int top = dyingRowStart;
+        int expand = dyingExpand;
+        while (expand > 0 && top > topBound) {
+            top--;
+            expand--;
+        }
+        return top;
     }
 
     public int getDyingRight() {
         if (!dyingEnabled) return dyingColEnd; // 关闭时退化为视窗边界
         int rightBound = callback.getRightBound();
-        int distance = rightBound - dyingColEnd;
-        int expand = LayoutEngine.min(distance, dyingExpand);
-        if (expand < 0) expand = dyingExpand;
-        return dyingColEnd + expand;
+        int right = dyingColEnd;
+        int expand = dyingExpand;
+        while (expand > 0 && right < rightBound) {
+            right++;
+            expand--;
+        }
+        return right;
     }
 
     public int getDyingBottom() {
         if (!dyingEnabled) return dyingRowEnd; // 关闭时退化为视窗边界
         int bottomBound = callback.getBottomBound();
-        int distance = bottomBound - dyingRowEnd;
-        int expand = LayoutEngine.min(distance, dyingExpand);
-        if (expand < 0) expand = dyingExpand;
-        return dyingRowEnd + expand;
+        int bottom = dyingRowEnd;
+        int expand = dyingExpand;
+        while (expand > 0 && bottom < bottomBound) {
+            bottom++;
+            expand--;
+        }
+        return bottom;
     }
 
     public int getDyingExpand() {
