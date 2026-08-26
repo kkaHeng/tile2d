@@ -93,3 +93,7 @@ lint/tmp/
 
 # Android Code Studio
 .acside/
+# Agent 工具备份（对话状态、对象存储等临时数据）
+.backup/
+# 编辑器本地状态
+.linecode/

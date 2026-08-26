@@ -1,0 +1,49 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Tile2D H5 移植示例（DOM）</title>
+<style>
+    body { margin: 0; padding: 16px; background: #222; color: #eee; font-family: system-ui, sans-serif; }
+    h1 { font-size: 16px; margin: 0 0 8px; }
+    #view {
+        position: relative;
+        width: 800px;
+        height: 450px;
+        max-width: 100%;
+        background: #111;
+        overflow: hidden;
+        border: 1px solid #444;
+        border-radius: 4px;
+        touch-action: none;
+        user-select: none;
+        cursor: grab;
+    }
+    #status { margin: 8px 0; font: 12px monospace; color: #8cf; }
+    #tip { margin: 4px 0; font-size: 12px; color: #f90; min-height: 16px; }
+    button { margin: 0 8px 8px 0; padding: 6px 12px; font-size: 13px; cursor: pointer; }
+    .hint { color: #999; font-size: 12px; margin-top: 8px; }
+</style>
+</head>
+<body>
+<h1>Tile2D H5 移植示例（基于 DOM）</h1>
+<div>
+    <button id="btn-max">伪无限模式</button>
+    <button id="btn-end">去边界看看</button>
+    <button id="btn-tl">左上角</button>
+    <button id="btn-br">右下角</button>
+    <button id="btn-rand">随机跳转</button>
+    <button id="btn-text">切换文本/颜色</button>
+    <button id="btn-update">更新 (10,10)</button>
+    <button id="btn-dimen">加宽/还原第0列</button>
+</div>
+<div id="status"></div>
+<div id="tip"></div>
+<div id="view"></div>
+<div class="hint">拖拽或滚轮滚动；瓦片为真实 DOM 元素。柏林噪声纹理 + 伪无限模式 + 去边界看看，与 app 瓦片画板 demo 同款玩法。</div>
+<script src="noise.js"></script>
+<script src="tile2d.js"></script>
+<script src="main.js"></script>
+</body>
+</html>
