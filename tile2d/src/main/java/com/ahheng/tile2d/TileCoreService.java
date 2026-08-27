@@ -8,6 +8,7 @@ import com.ahheng.tile2d.dimen.TileDimenProvider;
 import com.ahheng.tile2d.tile.TileRecycledPool;
 import com.ahheng.tile2d.util.intintmap.IntIntMap;
 import com.ahheng.tile2d.util.longmap.LongMap;
+import com.ahheng.tile2d.util.longqueue.LongQueue;
 import com.ahheng.tile2d.util.time.TimeProvider;
 
 // 核心调度器(轻量中央控制器)
@@ -82,6 +83,9 @@ public class TileCoreService<T extends TileCoreService.BaseTileHolder> implement
             startBindTime = timeProvider.cpuNanoTime();
         }
         tileManager.diffDying(colStart, rowStart, colEnd, rowEnd);
+        // 预取规划:仅淘汰越界瓦片并把环带坐标入队,不在此处创建瓦片,
+        // 真正的创建绑定由渲染端调 drainPrefetch 分摊到帧空闲
+        tileManager.diffPrefetch(colStart, rowStart, colEnd, rowEnd);
     }
 
     @Override
@@ -129,6 +133,11 @@ public class TileCoreService<T extends TileCoreService.BaseTileHolder> implement
     @Override
     public void onTileSizeChanged(T holder, int column, int row, int width, int height) {
         coreInterface.onTileSizeChanged(holder, column, row, width, height);
+    }
+
+    @Override
+    public void onTilePrefetched(T holder, int column, int row) {
+        coreInterface.onTilePrefetched(holder, column, row);
     }
 
     @Override
@@ -201,6 +210,37 @@ public class TileCoreService<T extends TileCoreService.BaseTileHolder> implement
 
     public void setDyingEnabled(boolean enabled) {
         tileManager.setDyingEnabled(enabled);
+    }
+
+    // 预取区 API
+
+    public int getPrefetchExpand() {
+        return tileManager.getPrefetchExpand();
+    }
+
+    public void setPrefetchExpand(int expand) {
+        tileManager.setPrefetchExpand(expand);
+    }
+
+    public int getPrefetchLimit() {
+        return tileManager.getPrefetchLimit();
+    }
+
+    public void setPrefetchLimit(int limit) {
+        tileManager.setPrefetchLimit(limit);
+    }
+
+    public boolean isPrefetchEnabled() {
+        return tileManager.isPrefetchEnabled();
+    }
+
+    public void setPrefetchEnabled(boolean enabled) {
+        tileManager.setPrefetchEnabled(enabled);
+    }
+
+    // 消费预取队列,由渲染端在帧空闲时驱动,返回队列是否仍有剩余
+    public boolean drainPrefetch(int maxCount) {
+        return tileManager.drainPrefetch(maxCount);
     }
 
     @Override
@@ -476,6 +516,14 @@ public class TileCoreService<T extends TileCoreService.BaseTileHolder> implement
         return tileManager.getDyingTileCount();
     }
 
+    public int getPrefetchTileCount() {
+        return tileManager.getPrefetchTileCount();
+    }
+
+    public LongMap<T> getPrefetchTiles() {
+        return tileManager.getPrefetchTiles();
+    }
+
     public T getActiveTile(int column, int row) {
         return tileManager.getActiveTile(column, row);
     }
@@ -506,6 +554,14 @@ public class TileCoreService<T extends TileCoreService.BaseTileHolder> implement
 
     public void setDyingTiles(LongMap<T> map) {
         tileManager.setDyingTiles(map);
+    }
+
+    public void setPrefetchTiles(LongMap<T> map) {
+        tileManager.setPrefetchTiles(map);
+    }
+
+    public void setPrefetchQueue(LongQueue queue) {
+        tileManager.setPrefetchQueue(queue);
     }
 
     public void setWidths(IntIntMap map) {
@@ -624,10 +680,12 @@ public class TileCoreService<T extends TileCoreService.BaseTileHolder> implement
         void onTileIn(T holder, int column, int row);
 
         void onTileOut(T holder, int column, int row);
-
         void onTileRecycled(T holder, int column, int row);
 
         void onTileSizeChanged(T holder, int column, int row, int width, int height);
+
+        void onTilePrefetched(T holder, int column, int row);
+
 
         int getLeftBound();
 

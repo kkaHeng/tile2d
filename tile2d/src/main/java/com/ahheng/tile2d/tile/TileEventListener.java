@@ -21,4 +21,8 @@ public interface TileEventListener<T extends TileCoreService.BaseTileHolder> {
     // 瓦片被回收到池中,即将被复用或释放
     void onTileRecycled(T holder, int column, int row);
 
+    // 瓦片被预取(已创建绑定,尚未进入视窗),适合在此提前完成进窗前的重活
+    default void onTilePrefetched(T holder, int column, int row) {
+    }
+
 }

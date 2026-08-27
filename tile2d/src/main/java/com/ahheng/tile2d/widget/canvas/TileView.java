@@ -7,6 +7,7 @@ import android.os.Debug;
 import android.util.AttributeSet;
 import android.util.DisplayMetrics;
 import android.util.TypedValue;
+import android.view.Choreographer;
 import android.view.MotionEvent;
 import android.view.View;
 import android.view.ViewConfiguration;
@@ -45,6 +46,7 @@ public class TileView extends View {
             TileView.this.postInvalidateOnAnimation();
             if (debugMode) layoutTime = startLayoutTime == 0 ? 0 : Debug.threadCpuTimeNanos() - startLayoutTime;
             if (tileEventListener != null) tileEventListener.onAfterLayout();
+            schedulePrefetch();
         }
 
         @Override
@@ -65,6 +67,11 @@ public class TileView extends View {
         
         @Override
         public void onTileSizeChanged(TileHolder holder, int column, int row, int width, int height) {}
+
+        @Override
+        public void onTilePrefetched(TileHolder holder, int column, int row) {
+            if (tileEventListener != null) tileEventListener.onTilePrefetched(holder, column, row);
+        }
 
         @Override
         public int getLeftBound() {
@@ -119,6 +126,19 @@ public class TileView extends View {
     private final int[] touchTargetPos = new int[2];
     private final float[] touchTargetLoc = new float[2];
     private boolean disallowIntercept;
+
+    // 预取帧驱动:每帧最多创建 PREFETCH_PER_FRAME 个瓦片,把成本分摊到多帧
+    private static final int PREFETCH_PER_FRAME = 4;
+    private boolean prefetchScheduled;
+    private final Choreographer.FrameCallback prefetchCallback = new Choreographer.FrameCallback() {
+        @Override
+        public void doFrame(long frameTimeNanos) {
+            prefetchScheduled = false;
+            if (coreService.drainPrefetch(PREFETCH_PER_FRAME)) {
+                schedulePrefetch();
+            }
+        }
+    };
 
     private float touchDownX;
     private float touchDownY;
@@ -361,6 +381,10 @@ public class TileView extends View {
         removeLongPress();
         resetTouchTarget();
         coreService.resetAnimator();
+        if (prefetchScheduled) {
+            prefetchScheduled = false;
+            Choreographer.getInstance().removeFrameCallback(prefetchCallback);
+        }
     }
 
     @Override
@@ -529,7 +553,35 @@ public class TileView extends View {
     public void setDyingEnabled(boolean enabled) {
         coreService.setDyingEnabled(enabled);
     }
-    
+
+    public int getPrefetchExpand() {
+        return coreService.getPrefetchExpand();
+    }
+
+    public void setPrefetchExpand(int expand) {
+        coreService.setPrefetchExpand(expand);
+    }
+
+    public int getPrefetchLimit() {
+        return coreService.getPrefetchLimit();
+    }
+
+    public void setPrefetchLimit(int limit) {
+        coreService.setPrefetchLimit(limit);
+    }
+
+    public boolean isPrefetchEnabled() {
+        return coreService.isPrefetchEnabled();
+    }
+
+    public void setPrefetchEnabled(boolean enabled) {
+        coreService.setPrefetchEnabled(enabled);
+    }
+
+    public void setPrefetchTiles(LongMap<TileHolder> map) {
+        coreService.setPrefetchTiles(map);
+    }
+
     public void setWidths(IntIntMap map) {
         coreService.setWidths(map);
     }
@@ -593,6 +645,11 @@ public class TileView extends View {
                 @Override
                 public int getDyingTileCount() {
                     return coreService.getDyingTileCount();
+                }
+
+                @Override
+                public int getPrefetchTileCount() {
+                    return coreService.getPrefetchTileCount();
                 }
 
                 @Override
@@ -663,6 +720,13 @@ public class TileView extends View {
             removeCallbacks(longPressRunnable);
             longPressRunnable = null;
         }
+    }
+
+    // 预取仅在开启时挂帧;已挂则不重复挂,避免同一帧多次驱动
+    private void schedulePrefetch() {
+        if (prefetchScheduled || !coreService.isPrefetchEnabled()) return;
+        prefetchScheduled = true;
+        Choreographer.getInstance().postFrameCallback(prefetchCallback);
     }
 
     public static abstract class Adapter extends TileAdapter<TileHolder> {

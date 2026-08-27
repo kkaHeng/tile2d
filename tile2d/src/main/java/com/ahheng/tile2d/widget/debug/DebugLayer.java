@@ -81,6 +81,7 @@ public class DebugLayer {
     private String activeTileText = "活跃瓦片：0";
     private String recycledTileText = "回收瓦片：0";
     private String dyingTileText = "濒死瓦片：0";
+    private String prefetchTileText = "预取瓦片：0";
     private String layoutRangeText = "布局范围：0,0 0,0";
     private String offsetText = "当前位置：0,0";
     private String dimensionText = "内容尺寸：0/0";
@@ -88,6 +89,7 @@ public class DebugLayer {
     private int cachedActiveTileCount = -1;
     private int cachedRecycledTileCount = -1;
     private int cachedDyingTileCount = -1;
+    private int cachedPrefetchTileCount = -1;
     private int cachedColStart;
     private int cachedRowStart;
     private int cachedColEnd;
@@ -205,6 +207,12 @@ public class DebugLayer {
             dyingTileText = "濒死瓦片：" + dyingTileCount;
         }
 
+        int prefetchTileCount = callback.getPrefetchTileCount();
+        if (prefetchTileCount != cachedPrefetchTileCount) {
+            cachedPrefetchTileCount = prefetchTileCount;
+            prefetchTileText = "预取瓦片：" + prefetchTileCount;
+        }
+
         if (model.colStart != cachedColStart || model.rowStart != cachedRowStart
                 || model.colEnd != cachedColEnd || model.rowEnd != cachedRowEnd) {
             cachedColStart = model.colStart;
@@ -304,6 +312,8 @@ public class DebugLayer {
         iy += lineHeight;
         canvas.drawText(dyingTileText, ix, iy, infoPaint);
         iy += lineHeight;
+        canvas.drawText(prefetchTileText, ix, iy, infoPaint);
+        iy += lineHeight;
         canvas.drawText(layoutRangeText, ix, iy, infoPaint);
         iy += lineHeight;
         canvas.drawText(offsetText, ix, iy, infoPaint);
@@ -315,6 +325,7 @@ public class DebugLayer {
         int getActiveTileCount();
         int getRecycledTileCount();
         int getDyingTileCount();
+        int getPrefetchTileCount();
         Rect getBounds();
         LayoutModel getLayoutModel();
         void postInvalidateOnAnimation();
