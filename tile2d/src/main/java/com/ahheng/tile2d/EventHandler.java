@@ -7,18 +7,18 @@ import android.view.ViewConfiguration;
 import android.widget.Scroller;
 
 // 事件处理器(安卓相关)
-// 负责处理安卓相关的事件与动画输入，并通知核心调度器进行布局扰动操作
+// 负责处理安卓相关的事件与动画输入,并通知核心调度器进行布局扰动操作
 public class EventHandler {
 
-    private final Scroller scroller;
-    private final GestureDetector gestureDetector;
-    private final int minVelocity;
-    private final int maxVelocity;
+    private final Scroller scroller; // 惯性滚动器
+    private final GestureDetector gestureDetector; // 手势识别器
+    private final int minVelocity; // 触发甩动的最小速度
+    private final int maxVelocity; // 甩动速度上限(压缩到系统上限的 80%)
     private final Callback callback;
 
-    private boolean disallowIntercept;
-    private boolean isInteractingWithView;
-    private int lastScrollerX;
+    private boolean disallowIntercept; // 是否禁止父容器拦截触摸
+    private boolean isInteractingWithView; // 是否正在与视图交互
+    private int lastScrollerX; // 上次滚动位置(用于计算增量)
     private int lastScrollerY;
 
     public EventHandler(Context context, Callback callback) {
@@ -31,14 +31,17 @@ public class EventHandler {
         gestureDetector.setIsLongpressEnabled(false);
     }
 
+    // 是否正在与视图交互(拖动/甩动中)
     public boolean isInteractingWithView() {
         return isInteractingWithView;
     }
 
+    // 设置禁止拦截标志,由父容器在触摸开始时调用
     public void requestDisallowInterceptTouchEvent(boolean disallowIntercept) {
         this.disallowIntercept = disallowIntercept;
     }
 
+    // 分发触摸事件:DOWN 重置状态,其余交给手势识别器
     public void handleTouchEvent(MotionEvent event) {
         int action = event.getActionMasked();
 
@@ -58,6 +61,7 @@ public class EventHandler {
         }
     }
 
+    // 驱动惯性滚动:有位移则同步布局,否则仅刷新 UI
     public void computeScroll() {
         if (scroller.computeScrollOffset()) {
             int currX = scroller.getCurrX();
@@ -78,10 +82,12 @@ public class EventHandler {
         }
     }
 
+    // 中止进行中的惯性滚动
     public void resetAnimator() {
         if (!scroller.isFinished()) scroller.abortAnimation();
     }
 
+    // 重置全部交互状态
     public void reset() {
         disallowIntercept = false;
         isInteractingWithView = false;
@@ -91,6 +97,7 @@ public class EventHandler {
 
     private class GestureListener extends GestureDetector.SimpleOnGestureListener {
 
+        // 拖动:位移取反后同步布局(内容跟随手指)
         @Override
         public boolean onScroll(MotionEvent e1, MotionEvent e2, float distanceX, float distanceY) {
             boolean scrolled = false;
@@ -111,6 +118,7 @@ public class EventHandler {
             return false;
         }
 
+        // 甩动:按轴独立校验速度并限幅,启动惯性滚动
         @Override
         public boolean onFling(MotionEvent e1, MotionEvent e2, float velocityX, float velocityY) {
             boolean flingX = false, flingY = false;
@@ -145,15 +153,16 @@ public class EventHandler {
         }
     }
 
+    // 调度回调(由宿主实现)
     public interface Callback {
 
-        boolean isHorizontalScrollEnabled();
+        boolean isHorizontalScrollEnabled(); // 水平滚动是否启用
 
-        boolean isVerticalScrollEnabled();
+        boolean isVerticalScrollEnabled(); // 垂直滚动是否启用
 
-        void sync(float dx, float dy);
+        void sync(float dx, float dy); // 同步布局
 
-        void updateUI();
+        void updateUI(); // 刷新 UI
 
     }
 

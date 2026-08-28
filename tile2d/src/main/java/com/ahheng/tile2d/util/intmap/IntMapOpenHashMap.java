@@ -1,13 +1,13 @@
 package com.ahheng.tile2d.util.intmap;
 
 // 基于 fastutil 开地址法(open addressing)的 int->V 哈希表默认实现
-// 复刻 fastutil 的 Int2ObjectOpenHashMap, 原理同 LongMapOpenHashMap
+// 复刻 fastutil 的 Int2ObjectOpenHashMap,原理同 LongMapOpenHashMap
 public class IntMapOpenHashMap<V> implements IntMap<V> {
 
     private static final int DEFAULT_INITIAL_SIZE = 16; // 默认初始容量(2 的幂)
     private static final float DEFAULT_LOAD_FACTOR = 0.75f; // 默认负载因子
 
-    private int[] key; // 键数组, 0 表示空槽
+    private int[] key; // 键数组,0 表示空槽
     private V[] value; // 值数组
     private int size; // 当前元素个数(含 0 键)
     private int mask; // 容量掩码 = 容量 - 1
@@ -29,6 +29,7 @@ public class IntMapOpenHashMap<V> implements IntMap<V> {
         maxFill = maxFill(n, DEFAULT_LOAD_FACTOR);
     }
 
+    // 按键取值:0 键走哨兵,其余线性探测
     @Override
     public V get(int k) {
         if (k == 0) return containsNullKey ? nullValue : null;
@@ -42,6 +43,7 @@ public class IntMapOpenHashMap<V> implements IntMap<V> {
         }
     }
 
+    // 写入键值对:已存在则覆盖,否则占新槽;达到负载上限触发扩容
     @Override
     public void put(int k, V v) {
         if (k == 0) {
@@ -83,6 +85,7 @@ public class IntMapOpenHashMap<V> implements IntMap<V> {
         }
     }
 
+    // 按键删除:命中后移除并前移探测链,保持探测连续性
     @Override
     public V remove(int k) {
         if (k == 0) {
@@ -110,7 +113,7 @@ public class IntMapOpenHashMap<V> implements IntMap<V> {
         return old;
     }
 
-    // 删除 pos 后, 把探测链上后续元素前移填补空洞
+    // 删除 pos 后,把探测链上后续元素前移填补空洞
     private void shiftKeys(int pos) {
         int curr;
         int last, slot;
@@ -149,6 +152,7 @@ public class IntMapOpenHashMap<V> implements IntMap<V> {
         }
     }
 
+    // 清空全部元素(保留容量)
     @Override
     public void clear() {
         java.util.Arrays.fill(key, 0);
@@ -181,13 +185,14 @@ public class IntMapOpenHashMap<V> implements IntMap<V> {
         }
         key = newKey;
         value = newValue;
-        // 0 键值保存在 nullValue 字段, 无需迁移
+        // 0 键值保存在 nullValue 字段,无需迁移
     }
 
+    // 迭代器:先遍历数组槽位,再单独返回 0 键;deleteMode 下删除安全
     @Override
     public Iterator<V> iterator(boolean deleteMode) {
         return new Iterator<V>() {
-            private int pos = -1; // 当前访问槽位(-1 表示尚未开始); 数组遍历完后为 n(进入 0 键阶段)
+            private int pos = -1; // 当前访问槽位(-1 表示尚未开始);数组遍历完后为 n(进入 0 键阶段)
             private boolean nullKeyDone; // 0 键是否已返回
 
             @Override
@@ -199,7 +204,7 @@ public class IntMapOpenHashMap<V> implements IntMap<V> {
                 if (!nullKeyDone) {
                     nullKeyDone = true;
                     if (containsNullKey) {
-                        pos = n; // 数组遍历完, 进入 0 键阶段
+                        pos = n; // 数组遍历完,进入 0 键阶段
                         return true;
                     }
                 }
@@ -232,7 +237,7 @@ public class IntMapOpenHashMap<V> implements IntMap<V> {
                     if (pos < 0 || key[pos] == 0) throw new IllegalStateException();
                     size--;
                     shiftKeys(pos);
-                    pos--; // 回退一格: shiftKeys 可能前移元素到本槽, 下次 next 重新检查
+                    pos--; // 回退一格:shiftKeys 可能前移元素到本槽,下次 next 重新检查
                 } else {
                     if (!containsNullKey) throw new IllegalStateException();
                     containsNullKey = false;
@@ -245,13 +250,13 @@ public class IntMapOpenHashMap<V> implements IntMap<V> {
 
     // fastutil HashCommon 复刻
 
-    // 黄金比例快速混合(fastutil HashCommon.mix(int), Koloboke 风格)
+    // 黄金比例快速混合(fastutil HashCommon.mix(int),Koloboke 风格)
     private static int mix(int x) {
         int h = x * 0x9E3779B9;
         return h ^ (h >>> 16);
     }
 
-    // 最小 2 的幂, 不小于 x(fastutil HashCommon.nextPowerOfTwo)
+    // 最小 2 的幂,不小于 x(fastutil HashCommon.nextPowerOfTwo)
     private static long nextPowerOfTwo(long x) {
         return 1L << (64 - Long.numberOfLeadingZeros(x - 1));
     }

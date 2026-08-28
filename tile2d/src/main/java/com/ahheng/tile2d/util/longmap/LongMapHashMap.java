@@ -3,6 +3,8 @@ package com.ahheng.tile2d.util.longmap;
 import java.util.HashMap;
 import java.util.Map;
 
+// long 键对象值映射表:基于 java.util.HashMap 的包装实现
+// 键装箱为 Long,适用于对性能不敏感或键较稀疏的场景
 public class LongMapHashMap<V> implements LongMap<V> {
 
     private final Map<Long, V> map;
@@ -45,6 +47,7 @@ public class LongMapHashMap<V> implements LongMap<V> {
         map.clear();
     }
 
+    // 迭代器包装:deleteMode 由底层迭代器支持,语义等价
     @Override
     public LongMap.Iterator<V> iterator(boolean deleteMode) {
         java.util.Iterator<Map.Entry<Long, V>> i = map.entrySet().iterator();

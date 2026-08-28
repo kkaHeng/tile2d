@@ -10,18 +10,20 @@ import android.view.View;
 
 import com.ahheng.tile2d.LayoutEngine;
 
+// 拖拽调整尺寸视图
+// 在角落提供两个拖拽手柄,拖动后通过回调更新瓦片宽高与对齐方向
 public class DragResizerView extends View {
 
-    public static final int DIRECTION_NONE = -1;
-    public static final int DIRECTION_START = 0;
-    public static final int DIRECTION_END = 1;
+    public static final int DIRECTION_NONE = -1; // 未激活
+    public static final int DIRECTION_START = 0; // 左上手柄
+    public static final int DIRECTION_END = 1; // 右下手柄
 
-    private Paint paint;
-    private int indicatorSize;
-    private int direction = DIRECTION_NONE;
-    private float downX;
+    private Paint paint; // 边框与手柄画笔
+    private int indicatorSize; // 手柄边长
+    private int direction = DIRECTION_NONE; // 当前激活的拖拽方向
+    private float downX; // 按下位置(用于计算增量)
     private float downY;
-    private float currX;
+    private float currX; // 当前位置
     private float currY;
     private Callback callback;
 
@@ -60,6 +62,7 @@ public class DragResizerView extends View {
         return direction;
     }
 
+    // 绘制边框与左上/右下两个拖拽手柄
     @Override
     protected void onDraw(Canvas canvas) {
         super.onDraw(canvas);
@@ -70,6 +73,7 @@ public class DragResizerView extends View {
         canvas.drawRect(getWidth() - indicatorSize, getHeight() - indicatorSize, getWidth(), getHeight(), paint);
     }
 
+    // 触摸命中手柄后激活对应方向,拖动期间持续回调
     @Override
     public boolean onTouchEvent(MotionEvent event) {
         currX = event.getRawX();
@@ -103,6 +107,7 @@ public class DragResizerView extends View {
         return super.onTouchEvent(event);
     }
 
+    // 计算本次位移并回调:左上手柄缩小,右下手柄放大
     private void drag() {
         int dx = (int) (currX - downX);
         int dy = (int) (currY - downY);
@@ -125,14 +130,15 @@ public class DragResizerView extends View {
         downY = currY;
     }
 
+    // 设置拖拽回调
     public void setCallback(Callback callback) {
         this.callback = callback;
     }
 
     public interface Callback {
-        void onDrag(int direction, int width, int height, int gravity);
-        int getTileWidth();
-        int getTileHeight();
+        void onDrag(int direction, int width, int height, int gravity); // 拖拽产生的新尺寸与对齐方向
+        int getTileWidth(); // 当前瓦片宽
+        int getTileHeight(); // 当前瓦片高
     }
 
 }

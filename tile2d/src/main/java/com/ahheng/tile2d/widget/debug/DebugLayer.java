@@ -14,6 +14,8 @@ import com.ahheng.tile2d.LayoutModel;
 import java.util.Locale;
 import java.util.Objects;
 
+// 调试叠层
+// 帧驱动采集性能与瓦片统计,以文本面板形式叠加绘制在视窗上
 public class DebugLayer {
 
     private final Callback callback;
@@ -21,6 +23,8 @@ public class DebugLayer {
     private final Paint boundPaint;
     private final float infoMargin;
     private final Choreographer choreographer;
+
+    // 帧回调:每帧采集统计,每秒结算一次平均值并请求重绘
     private final Choreographer.FrameCallback frameCallback = new Choreographer.FrameCallback() {
         @Override
         public void doFrame(long frameTimeNanos) {
@@ -38,9 +42,9 @@ public class DebugLayer {
         }
     };
 
-    private long frameCount;
-    private long lastFpsUpdateTime;
-    private int actualFps;
+    private long frameCount; // 帧计数(用于每秒帧率)
+    private long lastFpsUpdateTime; // 上次帧率结算时间
+    private int actualFps; // 实测帧率
 
     // 绘制耗时采样：startDraw 标记一帧绘制的开始，drawEnd 标记结束
     // 使用 drawSamplePending 防止同一帧的耗时被重复统计
@@ -73,6 +77,7 @@ public class DebugLayer {
     private long lastBindTime = -1;
     private long lastLayoutTime = -1;
 
+    // 面板文本(值变化时才重建,避免每帧字符串分配)
     private String fpsText = "实际帧率：0Hz";
     private String theoreticalFpsText = "理论帧率：0Hz";
     private String syncTimeText = "同步耗时：0ns";
@@ -82,14 +87,17 @@ public class DebugLayer {
     private String recycledTileText = "回收瓦片：0";
     private String dyingTileText = "濒死瓦片：0";
     private String prefetchTileText = "预取瓦片：0";
+    private String prefetchPeakText = "预取峰值：0";
     private String layoutRangeText = "布局范围：0,0 0,0";
     private String offsetText = "当前位置：0,0";
     private String dimensionText = "内容尺寸：0/0";
 
+    // 上次显示值缓存(变化检测)
     private int cachedActiveTileCount = -1;
     private int cachedRecycledTileCount = -1;
     private int cachedDyingTileCount = -1;
     private int cachedPrefetchTileCount = -1;
+    private int cachedPrefetchQueuePeak = -1;
     private int cachedColStart;
     private int cachedRowStart;
     private int cachedColEnd;
@@ -99,6 +107,7 @@ public class DebugLayer {
     private int cachedTotalWidth;
     private int cachedTotalHeight;
 
+    // 便捷构造:使用默认画笔样式
     public DebugLayer(Context context, Callback callback) {
         this(new Paint(Paint.ANTI_ALIAS_FLAG) {
             {
@@ -120,6 +129,7 @@ public class DebugLayer {
         }, dpToPx(context.getResources(), 4), callback);
     }
 
+    // 完整构造:自定义画笔与边距
     public DebugLayer(Paint boundPaint, Paint infoPaint, float infoMargin, Callback callback) {
         this.boundPaint = Objects.requireNonNull(boundPaint);
         this.infoPaint = Objects.requireNonNull(infoPaint);
@@ -128,6 +138,7 @@ public class DebugLayer {
         this.choreographer = Choreographer.getInstance();
     }
 
+    // 启动帧驱动采集
     public void start() {
         lastFpsUpdateTime = System.nanoTime();
         lastSyncTime = -1;
@@ -140,15 +151,18 @@ public class DebugLayer {
         choreographer.postFrameCallback(frameCallback);
     }
 
+    // 停止帧驱动采集
     public void end() {
         choreographer.removeFrameCallback(frameCallback);
     }
 
+    // 标记一帧绘制的开始(由宿主在绘制前调用)
     public void startDraw() {
         drawStart = Debug.threadCpuTimeNanos();
         drawSamplePending = true;
     }
 
+    // 采集一帧的统计数据:耗时采样与瓦片计数
     private void collectStats() {
         // 结算上一帧的绘制耗时（仅一次）
         if (drawSamplePending && drawEnd > drawStart) {
@@ -213,6 +227,15 @@ public class DebugLayer {
             prefetchTileText = "预取瓦片：" + prefetchTileCount;
         }
 
+        // 只显示队列历史峰值（高水位，单调不减）：瞬时长度刷新过快既难以肉眼捕捉，
+        // 又会导致每帧重建文本累积 GC。峰值只增不减，能稳定停在最大值上供观察，
+        // 且极少变化，几乎不产生字符串分配。
+        int prefetchQueuePeak = callback.getPrefetchQueuePeak();
+        if (prefetchQueuePeak != cachedPrefetchQueuePeak) {
+            cachedPrefetchQueuePeak = prefetchQueuePeak;
+            prefetchPeakText = "预取峰值：" + prefetchQueuePeak;
+        }
+
         if (model.colStart != cachedColStart || model.rowStart != cachedRowStart
                 || model.colEnd != cachedColEnd || model.rowEnd != cachedRowEnd) {
             cachedColStart = model.colStart;
@@ -235,6 +258,7 @@ public class DebugLayer {
         }
     }
 
+    // 每秒结算:将累计采样转为平均耗时文本,随后重置累计器
     private void settleAverages() {
         fpsText = "实际帧率：" + actualFps + "Hz";
 
@@ -269,7 +293,7 @@ public class DebugLayer {
         resetAccumulators();
     }
 
-    // 剔除一个最小值和一个最大值后求平均;样本不足 3 个时退化为普通算术平均
+    // 剔除一个最小值和一个最大值后求平均；样本不足 3 个时退化为普通算术平均
     private static long trimmedAverage(long sum, long count, long min, long max) {
         if (count >= 3) {
             return (sum - min - max) / (count - 2);
@@ -277,6 +301,7 @@ public class DebugLayer {
         return count > 0 ? sum / count : 0;
     }
 
+    // 重置全部累计器与极值
     private void resetAccumulators() {
         sumDrawTime = 0; drawSampleCount = 0; minDrawTime = Long.MAX_VALUE; maxDrawTime = Long.MIN_VALUE;
         sumSyncTime = 0; syncSampleCount = 0; minSyncTime = Long.MAX_VALUE; maxSyncTime = Long.MIN_VALUE;
@@ -284,6 +309,7 @@ public class DebugLayer {
         sumLayoutTime = 0; layoutSampleCount = 0; minLayoutTime = Long.MAX_VALUE; maxLayoutTime = Long.MIN_VALUE;
     }
 
+    // 绘制调试面板
     public void draw(Canvas canvas) {
         // 在这里结束统计，确保结果仅包含非调试绘制时间
         drawEnd = Debug.threadCpuTimeNanos();
@@ -314,6 +340,8 @@ public class DebugLayer {
         iy += lineHeight;
         canvas.drawText(prefetchTileText, ix, iy, infoPaint);
         iy += lineHeight;
+        canvas.drawText(prefetchPeakText, ix, iy, infoPaint);
+        iy += lineHeight;
         canvas.drawText(layoutRangeText, ix, iy, infoPaint);
         iy += lineHeight;
         canvas.drawText(offsetText, ix, iy, infoPaint);
@@ -321,18 +349,21 @@ public class DebugLayer {
         canvas.drawText(dimensionText, ix, iy, infoPaint);
     }
 
+    // 数据源回调(由宿主实现)
     public interface Callback {
-        int getActiveTileCount();
-        int getRecycledTileCount();
-        int getDyingTileCount();
-        int getPrefetchTileCount();
-        Rect getBounds();
-        LayoutModel getLayoutModel();
-        void postInvalidateOnAnimation();
-        long getBindTime();
-        long getLayoutTime();
+        int getActiveTileCount(); // 活跃瓦片数
+        int getRecycledTileCount(); // 回收瓦片数
+        int getDyingTileCount(); // 濒死瓦片数
+        int getPrefetchTileCount(); // 预取瓦片数
+        int getPrefetchQueuePeak(); // 预取队列历史峰值
+        Rect getBounds(); // 视窗边界
+        LayoutModel getLayoutModel(); // 布局模型
+        void postInvalidateOnAnimation(); // 请求下一帧重绘
+        long getBindTime(); // 业务绑定耗时
+        long getLayoutTime(); // 布局耗时
     }
 
+    // dp 转 px
     private static float dpToPx(Resources res, float dp) {
         return res.getDisplayMetrics().density * dp;
     }

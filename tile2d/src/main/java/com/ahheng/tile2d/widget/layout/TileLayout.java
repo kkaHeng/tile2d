@@ -23,16 +23,19 @@ import com.ahheng.tile2d.util.intintmap.IntIntMap;
 import com.ahheng.tile2d.util.longmap.LongMap;
 import com.ahheng.tile2d.widget.debug.DebugLayer;
 
+// 瓦片布局视图(ViewGroup 渲染端)
+// 以真实子 View 承载瓦片,配合核心调度器完成滚动、触摸与调试叠层
 public class TileLayout extends ViewGroup {
 
     public static final int DIMEN_GRAVITY_CENTER = LayoutEngine.DIMEN_GRAVITY_CENTER;
     public static final int DIMEN_GRAVITY_START = LayoutEngine.DIMEN_GRAVITY_START;
     public static final int DIMEN_GRAVITY_END = LayoutEngine.DIMEN_GRAVITY_END;
 
-    private TileCoreService<TileHolder> coreService;
-    private Adapter adapter;
-    private TileEventListener<TileHolder> tileEventListener;
+    private TileCoreService<TileHolder> coreService; // 核心调度器
+    private Adapter adapter; // 内容适配器
+    private TileEventListener<TileHolder> tileEventListener; // 事件监听器
 
+    // 核心调度器回调:桥接适配器与事件监听器,驱动子 View 布局与预取
     private final TileCoreService.CoreInterface<TileHolder> coreInterface = new TileCoreService.CoreInterface<TileHolder>() {
         @Override
         public void beforeLayout() {
@@ -130,41 +133,51 @@ public class TileLayout extends ViewGroup {
         }
     };
 
+    // 调试叠层相关
     private DebugLayer debugLayer;
     private boolean debugMode;
     private long startLayoutTime;
     private long layoutTime;
 
+    // 初始化定位覆盖(seek 时暂存目标,等待下次布局生效)
     private boolean overrideInitLocation = false;
     private int initLocationColumn;
     private int initLocationRow;
     private float initOffsetX;
     private float initOffsetY;
 
+    // 布局拦截机制
     private int requestLayoutDepth = 0;
     private boolean pendingLayoutRequest = false;
 
-    // 预取帧驱动:每帧最多创建 PREFETCH_PER_FRAME 个瓦片,把成本分摊到多帧
-    private static final int PREFETCH_PER_FRAME = 4;
+    // 预取帧驱动：每帧最多创建 prefetchPerFrame 个瓦片（瓦片管理器内部持有，可调），把成本分摊到多帧
+    // 默认 8 而非 RV 的 4:RV 是一维列表，二维网格同帧预算只覆盖一条边的 4 格，翻倍匹配二维吞吐
     private boolean prefetchScheduled;
+    // 帧回调铁律：debug 模式已开启或预取队列非空，二者任一成立即启动并继续；
+    // 二者皆不成立时不挂帧，自然停止
     private final Choreographer.FrameCallback prefetchCallback = new Choreographer.FrameCallback() {
         @Override
         public void doFrame(long frameTimeNanos) {
             prefetchScheduled = false;
-            if (coreService.drainPrefetch(PREFETCH_PER_FRAME)) {
-                schedulePrefetch();
-            }
+            coreService.drainPrefetch();
+            // 是否继续由 schedulePrefetch 按铁律判断
+            schedulePrefetch();
         }
     };
 
+    // 构造:基础构造
     public TileLayout(Context context) {
         super(context);
         init();
     }
+
+    // 构造:XML 属性构造
     public TileLayout(Context context, AttributeSet attrs) {
         super(context, attrs);
         init();
     }
+
+    // 初始化核心调度器与默认尺寸
     private void init() {
         this.coreService = new TileCoreService<>(getContext(), coreInterface);
         DisplayMetrics displayMetrics = getResources().getDisplayMetrics();
@@ -174,6 +187,7 @@ public class TileLayout extends ViewGroup {
         setWillNotDraw(false);
     }
 
+    // 布局全部活跃瓦片的子 View 位置
     private void layoutTiles() {
         LayoutModel model = coreService.getLayoutModel();
 
@@ -200,6 +214,7 @@ public class TileLayout extends ViewGroup {
         postInvalidateOnAnimation();
     }
 
+    // 测量全部活跃瓦片的子 View
     private void measureTiles() {
         LayoutModel model = coreService.getLayoutModel();
         int column = model.colStart;
@@ -222,6 +237,7 @@ public class TileLayout extends ViewGroup {
         }
     }
 
+    // 布局回调:首次或 seek 时建立视窗锚点
     @Override
     protected void onLayout(boolean changed, int left, int top, int right, int bottom) {
         boolean init = false;
@@ -241,7 +257,7 @@ public class TileLayout extends ViewGroup {
         pendingLayoutRequest = false;
     }
 
-    // 拦截机制:在同步周期内(requestLayoutDepth > 0)累积布局请求,避免瓦片未就绪时触发无效的 measure/layout
+    // 拦截机制：在同步周期内(requestLayoutDepth > 0)累积布局请求，避免瓦片未就绪时触发无效的 measure/layout
     @Override
     public void requestLayout() {
         pendingLayoutRequest = true;
@@ -251,6 +267,7 @@ public class TileLayout extends ViewGroup {
         super.requestLayout();
     }
 
+    // 测量回调:有待处理布局请求时先测量瓦片
     @Override
     protected void onMeasure(int widthMeasureSpec, int heightMeasureSpec) {
         super.onMeasure(widthMeasureSpec, heightMeasureSpec);
@@ -259,18 +276,21 @@ public class TileLayout extends ViewGroup {
         }
     }
 
+    // 驱动惯性滚动
     @Override
     public void computeScroll() {
         super.computeScroll();
         coreService.computeScroll();
     }
 
+    // 尺寸变化回调:刷新视窗边界
     @Override
     protected void onSizeChanged(int w, int h, int oldw, int oldh) {
         super.onSizeChanged(w, h, oldw, oldh);
         updateBounds();
     }
 
+    // 更新核心调度器视窗边界并触发一次同步
     private void updateBounds() {
         coreService.setBounds(getPaddingLeft(), getPaddingTop(), getWidth() - getPaddingRight(), getHeight() - getPaddingBottom());
         if (getWidth() != 0 && getHeight() != 0) {
@@ -278,12 +298,14 @@ public class TileLayout extends ViewGroup {
         }
     }
     
+    // 内边距变化时同步刷新视窗边界
     @Override
     public void setPadding(int left, int top, int right, int bottom) {
         super.setPadding(left, top, right, bottom);
         updateBounds();
     }
 
+    // 触摸分发:先交给核心调度器处理手势
     @Override
     public boolean dispatchTouchEvent(MotionEvent event) {
         if (!coreService.isEmpty()) {
@@ -292,6 +314,7 @@ public class TileLayout extends ViewGroup {
         return super.dispatchTouchEvent(event);
     }
 
+    // 拦截策略:DOWN 不拦截,滚动中拦截子 View 事件
     @Override
     public boolean onInterceptTouchEvent(MotionEvent event) {
         if (event.getActionMasked() == MotionEvent.ACTION_DOWN) {
@@ -300,11 +323,13 @@ public class TileLayout extends ViewGroup {
         return !coreService.isEmpty() && coreService.isInteractingWithView();
     }
 
+    // 触摸事件:内容非空即消费
     @Override
     public boolean onTouchEvent(MotionEvent event) {
         return !coreService.isEmpty();
     }
 
+    // 父容器拦截开关(透传核心调度器)
     @Override
     public void requestDisallowInterceptTouchEvent(boolean disallowIntercept) {
         super.requestDisallowInterceptTouchEvent(disallowIntercept);
@@ -315,6 +340,7 @@ public class TileLayout extends ViewGroup {
         return debugMode;
     }
 
+    // 开关调试模式:创建/销毁调试叠层并同步核心调度器
     public void setDebugMode(boolean enabled) {
         if (debugMode == enabled) return;
         debugMode = enabled;
@@ -339,6 +365,11 @@ public class TileLayout extends ViewGroup {
                 @Override
                 public int getPrefetchTileCount() {
                     return coreService.getPrefetchTileCount();
+                }
+
+                @Override
+                public int getPrefetchQueuePeak() {
+                    return coreService.getPrefetchQueuePeak();
                 }
 
                 @Override
@@ -373,16 +404,22 @@ public class TileLayout extends ViewGroup {
             setClipToPadding(true);
         }
         postInvalidateOnAnimation();
+        // 铁律：debug 开启即启动帧回调；关闭时若队列也为空，下一帧自然停止
+        schedulePrefetch();
     }
 
+    // 进入窗口:启动调试采集并按铁律检查预取帧回调
     @Override
     protected void onAttachedToWindow() {
         super.onAttachedToWindow();
         if (debugLayer != null) {
             debugLayer.start();
         }
+        // 铁律：进入窗口时按条件检查是否启动帧回调（debug 开启或预取队列非空）
+        schedulePrefetch();
     }
 
+    // 移出窗口:停止调试采集与帧回调
     @Override
     protected void onDetachedFromWindow() {
         super.onDetachedFromWindow();
@@ -390,12 +427,12 @@ public class TileLayout extends ViewGroup {
             debugLayer.end();
         }
         coreService.resetAnimator();
-        if (prefetchScheduled) {
-            prefetchScheduled = false;
-            Choreographer.getInstance().removeFrameCallback(prefetchCallback);
-        }
+        // 铁律：从窗口移除必须停止帧回调，无条件摘除（不依赖 prefetchScheduled 标记）
+        prefetchScheduled = false;
+        Choreographer.getInstance().removeFrameCallback(prefetchCallback);
     }
 
+    // 绘制:叠加调试叠层
     @Override
     protected void dispatchDraw(Canvas canvas) {
         if (debugMode && debugLayer != null) debugLayer.startDraw();
@@ -405,6 +442,7 @@ public class TileLayout extends ViewGroup {
         }
     }
 
+    // 增量偏移视窗
     public void offset(float dx, float dy) {
         if (isEmpty()) {
             return;
@@ -412,9 +450,12 @@ public class TileLayout extends ViewGroup {
         coreService.sync(dx, dy);
     }
 
+    // 跳转到指定锚点(零偏移)
     public void seek(int column, int row) {
         seek(column, row, 0, 0);
     }
+
+    // 跳转到指定锚点与偏移(暂存后由下次布局生效)
     public void seek(int column, int row, float offsetX, float offsetY) {
         if (isEmpty()) return;
         overrideInitLocation = true;
@@ -425,26 +466,32 @@ public class TileLayout extends ViewGroup {
         requestLayout();
     }
 
+    // 将视窗吸附回内容边界内
     public void snap() {
     	coreService.snap();
     }
 
+    // 查询指定列相对视窗的 X 坐标
     public float getTileX(int column) {
         return coreService.getTileX(column);
     }
 
+    // 查询指定行相对视窗的 Y 坐标
     public float getTileY(int row) {
         return coreService.getTileY(row);
     }
 
+    // 查找包含指定 X 坐标的列索引
     public int findColumn(float x) {
         return coreService.findColumn(x);
     }
 
+    // 查找包含指定 Y 坐标的行索引
     public int findRow(float y) {
         return coreService.findRow(y);
     }
 
+    // 查询布局模型
     public LayoutModel getLayoutModel() {
         return coreService.getLayoutModel();
     }
@@ -537,9 +584,13 @@ public class TileLayout extends ViewGroup {
     	coreService.resetAnimator();
     }
 
-    // 预取仅在开启时挂帧;已挂则不重复挂,避免同一帧多次驱动
+    // 帧回调铁律：debug 模式已开启或预取队列非空，二者任一成立即启动并继续；
+    // 二者皆不成立时不挂帧，自然停止。已挂则不重复挂，避免同一帧多次驱动。
+    // View 未附加到窗口时禁止挂帧，与 detach 必停的铁律一致
     private void schedulePrefetch() {
-        if (prefetchScheduled || !coreService.isPrefetchEnabled()) return;
+        if (prefetchScheduled) return;
+        if (!isAttachedToWindow()) return;
+        if (!debugMode && !coreService.hasPrefetchPending()) return;
         prefetchScheduled = true;
         Choreographer.getInstance().postFrameCallback(prefetchCallback);
     }
@@ -548,6 +599,7 @@ public class TileLayout extends ViewGroup {
         return adapter;
     }
 
+    // 设置适配器:更换时重置全部瓦片状态
     public void setAdapter(Adapter adapter) {
         if (this.adapter != adapter) {
             coreService.reset();
@@ -557,6 +609,7 @@ public class TileLayout extends ViewGroup {
         requestLayout();
     }
 
+    // 设置瓦片事件监听器
     public void setTileEventListener(TileEventListener<TileHolder> tileEventListener) {
         this.tileEventListener = tileEventListener;
     }
@@ -617,20 +670,24 @@ public class TileLayout extends ViewGroup {
         coreService.setPrefetchExpand(expand);
     }
 
-    public int getPrefetchLimit() {
-        return coreService.getPrefetchLimit();
-    }
-
-    public void setPrefetchLimit(int limit) {
-        coreService.setPrefetchLimit(limit);
-    }
-
     public boolean isPrefetchEnabled() {
         return coreService.isPrefetchEnabled();
     }
 
     public void setPrefetchEnabled(boolean enabled) {
         coreService.setPrefetchEnabled(enabled);
+        // 铁律：开启后若队列非空即启动帧回调；关闭时若队列已清空，下一帧自然停止
+        schedulePrefetch();
+    }
+
+    // 获取每帧预取数量上限（帧预算，由瓦片管理器持有）
+    public int getPrefetchPerFrame() {
+        return coreService.getPrefetchPerFrame();
+    }
+
+    // 设置每帧预取数量上限，非法参数（小于等于 0）无响应
+    public void setPrefetchPerFrame(int count) {
+        coreService.setPrefetchPerFrame(count);
     }
 
     public void setPrefetchTiles(LongMap<TileHolder> map) {
@@ -677,12 +734,14 @@ public class TileLayout extends ViewGroup {
         return coreService.isInteractingWithView();
     }
 
+    // 适配器基类(由使用方继承)
     public static abstract class Adapter extends TileAdapter<TileHolder> {
     }
 
+    // 布局瓦片持有者:以子 View 承载内容
     public static class TileHolder extends TileCoreService.BaseTileHolder {
 
-        public final View itemView;
+        public final View itemView; // 瓦片子 View
 
         private TileLayout view;
 

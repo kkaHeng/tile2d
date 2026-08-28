@@ -8,17 +8,18 @@ import com.ahheng.tile2d.tile.TileRecycledPool;
 import com.ahheng.tile2d.util.intintmap.IntIntMap;
 import com.ahheng.tile2d.util.intintmap.IntIntMapOpenHashMap;
 
-// 简易测量工具，不建议在大数据量场景下使用
+// 简易测量工具
+// 通过真实绑定瓦片并测量其宽高来推算列宽/行高,不建议在大数据量场景下使用
 public class MeasurableDimenProvider implements TileDimenProvider {
 
     private final TileAdapter<TileCoreService.BaseTileHolder> adapter;
-    private IntIntMap widths;
-    private IntIntMap heights;
+    private IntIntMap widths; // 列宽记录
+    private IntIntMap heights; // 行高记录
     private TileRecycledPool<TileCoreService.BaseTileHolder> recycledTiles = new TileRecycledPool<>();
 
     private int defaultTileWidth;
     private int defaultTileHeight;
-    private boolean minDefault; // 内容比默认尺寸小时，是否使用默认尺寸
+    private boolean minDefault; // 内容比默认尺寸小时,是否使用默认尺寸
 
     public MeasurableDimenProvider(TileAdapter<?> adapter) {
         this(0, 0, adapter);
@@ -32,6 +33,7 @@ public class MeasurableDimenProvider implements TileDimenProvider {
         this.heights = new IntIntMapOpenHashMap();
     }
 
+    // 内容比默认尺寸小时,是否使用默认尺寸
     public boolean isMinDefault() {
         return minDefault;
     }
@@ -56,11 +58,13 @@ public class MeasurableDimenProvider implements TileDimenProvider {
         return defaultTileHeight;
     }
 
+    // 全量测量:覆盖适配器全部边界
     public void full() {
         reset();
         measure(adapter.getLeftBound(), adapter.getTopBound(), adapter.getRightBound(), adapter.getBottomBound());
     }
 
+    // 测量指定范围内的所有瓦片,取每列/每行的最大宽高作为列宽/行高
     public void measure(int colStart, int rowStart, int colEnd, int rowEnd) {
         int[] output = new int[2];
         int column = colStart;
@@ -110,11 +114,13 @@ public class MeasurableDimenProvider implements TileDimenProvider {
         }
     }
 
+    // 清空测量记录
     public void reset() {
         widths.clear();
         heights.clear();
     }
 
+    // 清空内部瓦片回收池
     public void clearRecycledTiles() {
         recycledTiles.reset();
     }
@@ -149,8 +155,9 @@ public class MeasurableDimenProvider implements TileDimenProvider {
         heights.remove(row);
     }
 
+    // 替换列宽存储(数据迁移到新容器)
     public void setWidths(IntIntMap map) {
-        if (map == null) throw new IllegalArgumentException("widths map cannot be null");
+        if (map == null) throw new IllegalArgumentException("列宽存储不能设置为空");
         if (map == widths) return;
         map.clear();
         for (IntIntMap.Iterator it = widths.iterator(); it.next(); ) {
@@ -160,8 +167,9 @@ public class MeasurableDimenProvider implements TileDimenProvider {
         widths = map;
     }
 
+    // 替换行高存储(数据迁移到新容器)
     public void setHeights(IntIntMap map) {
-        if (map == null) throw new IllegalArgumentException("heights map cannot be null");
+        if (map == null) throw new IllegalArgumentException("行高存储不能设置为空");
         if (map == heights) return;
         map.clear();
         for (IntIntMap.Iterator it = heights.iterator(); it.next(); ) {
@@ -171,8 +179,9 @@ public class MeasurableDimenProvider implements TileDimenProvider {
         heights = map;
     }
 
+    // 替换内部回收池(数据迁移到新容器)
     public void setRecycledTiles(TileRecycledPool<TileCoreService.BaseTileHolder> map) {
-        if (map == null) throw new IllegalArgumentException("recycledTiles map cannot be null");
+        if (map == null) throw new IllegalArgumentException("回收池存储不能设置为空");
         if (map == recycledTiles) return;
         map.reset();
         recycledTiles.moveTo(map);

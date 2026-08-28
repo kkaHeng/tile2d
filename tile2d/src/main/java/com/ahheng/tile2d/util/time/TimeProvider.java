@@ -1,7 +1,7 @@
 package com.ahheng.tile2d.util.time;
 
 // 时间提供器接口
-// 提供墙钟与 CPU 时间两种计量，由调用点按语义自行选择
+// 提供墙钟与 CPU 时间两种计量,由调用点按语义自行选择
 public interface TimeProvider {
 
     // 墙钟时间(纳秒,单调),与帧周期同尺度,用于预算/调度类计量

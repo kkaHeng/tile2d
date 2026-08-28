@@ -8,11 +8,11 @@ import com.ahheng.tile2d.util.intintmap.IntIntMapOpenHashMap;
 // 负责管理尺寸相关的修改、存储、测量
 public class DimenManager {
 
-    private IntIntMap widths;
-    private IntIntMap heights;
+    private IntIntMap widths; // 列宽记录
+    private IntIntMap heights; // 行高记录
     private int defaultTileWidth;
     private int defaultTileHeight;
-    private TileDimenProvider dimenProvider;
+    private TileDimenProvider dimenProvider; // 外部尺寸提供者(优先级低于本地记录)
 
     private final Callback callback;
 
@@ -24,6 +24,7 @@ public class DimenManager {
 
     // 查询
 
+    // 查询列宽:本地记录 > 尺寸提供者 > 默认值
     public int getTileWidth(int column) {
         if (widths.containsKey(column)) {
             return widths.get(column);
@@ -34,6 +35,7 @@ public class DimenManager {
         return defaultTileWidth;
     }
 
+    // 查询行高:本地记录 > 尺寸提供者 > 默认值
     public int getTileHeight(int row) {
         if (heights.containsKey(row)) {
             return heights.get(row);
@@ -46,17 +48,28 @@ public class DimenManager {
 
     // 修改
 
+    // 设置列宽并同步刷新濒死区内受影响瓦片;width 必须大于 0，删除记录请用 deleteTileWidth
     public void setTileWidth(int column, int width, int gravity) {
+        if (width <= 0) return;
         if (callback.isEmpty()) return;
-        if (column > callback.getRightBound() || column < callback.getLeftBound())
-            throw new IndexOutOfBoundsException("列索引 " + column + " 不在 [" + callback.getLeftBound() + "," + callback.getRightBound() + "] 范围内");
+        if (column > callback.getRightBound() || column < callback.getLeftBound()) return;
         int old = getTileWidth(column);
-        if (width == 0) {
-            widths.remove(column);
-            width = getTileWidth(column);
-        } else {
-            widths.put(column, width);
-        }
+        widths.put(column, width);
+        applyWidthChange(column, old, width, gravity);
+    }
+
+    // 删除列宽记录，回退默认值并同步刷新濒死区内受影响瓦片
+    public void deleteTileWidth(int column, int gravity) {
+        if (callback.isEmpty()) return;
+        if (column > callback.getRightBound() || column < callback.getLeftBound()) return;
+        int old = getTileWidth(column);
+        widths.remove(column);
+        int width = getTileWidth(column);
+        applyWidthChange(column, old, width, gravity);
+    }
+
+    // 列宽变更后的同步：无变化跳过，否则刷新濒死区并通知布局
+    private void applyWidthChange(int column, int old, int width, int gravity) {
         if (width == old) return;
 
         int dyingLeft = callback.getDyingLeft();
@@ -76,17 +89,28 @@ public class DimenManager {
         callback.updateUI();
     }
 
+    // 设置行高并同步刷新濒死区内受影响瓦片;height 必须大于 0，删除记录请用 deleteTileHeight
     public void setTileHeight(int row, int height, int gravity) {
+        if (height <= 0) return;
         if (callback.isEmpty()) return;
-        if (row > callback.getBottomBound() || row < callback.getTopBound())
-            throw new IndexOutOfBoundsException("行索引 " + row + " 不在 [" + callback.getTopBound() + "," + callback.getBottomBound() + "] 范围内");
+        if (row > callback.getBottomBound() || row < callback.getTopBound()) return;
         int old = getTileHeight(row);
-        if (height == 0) {
-            heights.remove(row);
-            height = getTileHeight(row);
-        } else {
-            heights.put(row, height);
-        }
+        heights.put(row, height);
+        applyHeightChange(row, old, height, gravity);
+    }
+
+    // 删除行高记录，回退默认值并同步刷新濒死区内受影响瓦片
+    public void deleteTileHeight(int row, int gravity) {
+        if (callback.isEmpty()) return;
+        if (row > callback.getBottomBound() || row < callback.getTopBound()) return;
+        int old = getTileHeight(row);
+        heights.remove(row);
+        int height = getTileHeight(row);
+        applyHeightChange(row, old, height, gravity);
+    }
+
+    // 行高变更后的同步：无变化跳过，否则刷新濒死区并通知布局
+    private void applyHeightChange(int row, int old, int height, int gravity) {
         if (height == old) return;
 
         int dyingTop = callback.getDyingTop();
@@ -106,29 +130,19 @@ public class DimenManager {
         callback.updateUI();
     }
 
+    // 同时设置列宽与行高,一次性同步刷新受影响瓦片;宽高必须大于 0，删除记录请用 deleteTileWidth/deleteTileHeight
     public void setTileSize(int column, int width, int horizontalGravity, int row, int height, int verticalGravity) {
+        if (width <= 0 || height <= 0) return;
         if (callback.isEmpty()) return;
-        if (column > callback.getRightBound() || column < callback.getLeftBound())
-            throw new IndexOutOfBoundsException("列索引 " + column + " 不在 [" + callback.getLeftBound() + "," + callback.getRightBound() + "] 范围内");
-        if (row > callback.getBottomBound() || row < callback.getTopBound())
-            throw new IndexOutOfBoundsException("行索引 " + row + " 不在 [" + callback.getTopBound() + "," + callback.getBottomBound() + "] 范围内");
+        if (column > callback.getRightBound() || column < callback.getLeftBound()) return;
+        if (row > callback.getBottomBound() || row < callback.getTopBound()) return;
         int oldWidth = getTileWidth(column);
         int oldHeight = getTileHeight(row);
 
-        if (width == 0) {
-            widths.remove(column);
-            width = getTileWidth(column);
-        } else {
-            widths.put(column, width);
-        }
+        widths.put(column, width);
         boolean widthChanged = (width != oldWidth);
 
-        if (height == 0) {
-            heights.remove(row);
-            height = getTileHeight(row);
-        } else {
-            heights.put(row, height);
-        }
+        heights.put(row, height);
         boolean heightChanged = (height != oldHeight);
 
         if (!widthChanged && !heightChanged) return;
@@ -169,14 +183,6 @@ public class DimenManager {
         callback.updateUI();
     }
 
-    public void deleteTileWidth(int column, int gravity) {
-        setTileWidth(column, 0, gravity);
-    }
-
-    public void deleteTileHeight(int row, int gravity) {
-        setTileHeight(row, 0, gravity);
-    }
-
     // 默认尺寸
 
     public int getDefaultTileWidth() {
@@ -188,12 +194,12 @@ public class DimenManager {
     }
 
     public void setDefaultTileWidth(int width) {
-        if (width <= 0) throw new IllegalArgumentException("宽度必须大于 0");
+        if (width <= 0) return;
         this.defaultTileWidth = width;
     }
 
     public void setDefaultTileHeight(int height) {
-        if (height <= 0) throw new IllegalArgumentException("高度必须大于 0");
+        if (height <= 0) return;
         this.defaultTileHeight = height;
     }
 
@@ -209,8 +215,9 @@ public class DimenManager {
 
     // 存储替换
 
+    // 替换列宽存储(数据迁移到新容器)
     public void setWidths(IntIntMap map) {
-        if (map == null) throw new IllegalArgumentException("widths map cannot be null");
+        if (map == null) return;
         if (map == widths) return;
         map.clear();
         for (IntIntMap.Iterator it = widths.iterator(); it.next(); ) {
@@ -220,8 +227,9 @@ public class DimenManager {
         widths = map;
     }
 
+    // 替换行高存储(数据迁移到新容器)
     public void setHeights(IntIntMap map) {
-        if (map == null) throw new IllegalArgumentException("heights map cannot be null");
+        if (map == null) return;
         if (map == heights) return;
         map.clear();
         for (IntIntMap.Iterator it = heights.iterator(); it.next(); ) {
@@ -233,6 +241,7 @@ public class DimenManager {
 
     // 清理
 
+    // 清空全部尺寸记录
     public void clear() {
         widths.clear();
         heights.clear();

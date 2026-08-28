@@ -4,12 +4,12 @@ package com.ahheng.tile2d.util.longqueue;
 // 预取任务队列使用本接口存储待预取的瓦片 ID
 public interface LongQueue {
 
-    void enqueue(long value);
+    void enqueue(long value); // 队尾入队
 
-    long dequeue();
+    long dequeue(); // 队首出队,空队列调用会抛异常
 
-    int size();
+    int size(); // 当前元素个数
 
-    void clear();
+    void clear(); // 清空全部元素
 
 }

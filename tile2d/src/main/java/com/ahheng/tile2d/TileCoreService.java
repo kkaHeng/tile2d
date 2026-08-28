@@ -11,7 +11,7 @@ import com.ahheng.tile2d.util.longmap.LongMap;
 import com.ahheng.tile2d.util.longqueue.LongQueue;
 import com.ahheng.tile2d.util.time.TimeProvider;
 
-// 核心调度器(轻量中央控制器)
+// 核心调度器（轻量中央控制器）
 // 关联布局引擎、瓦片管理器、尺寸管理器、事件处理器、渲染交互端
 public class TileCoreService<T extends TileCoreService.BaseTileHolder> implements
         LayoutEngine.BoundaryInterface,
@@ -78,12 +78,12 @@ public class TileCoreService<T extends TileCoreService.BaseTileHolder> implement
 
     @Override
     public void onWindowCalculated(int colStart, int rowStart, int colEnd, int rowEnd) {
-        // 核心服务的统计计时仍依赖 debug 开关,时钟来源为时间提供器
+        // 核心服务的统计计时仍依赖 debug 开关，时钟来源为时间提供器
         if (isDebugMode && timeProvider != null) {
             startBindTime = timeProvider.cpuNanoTime();
         }
         tileManager.diffDying(colStart, rowStart, colEnd, rowEnd);
-        // 预取规划:仅淘汰越界瓦片并把环带坐标入队,不在此处创建瓦片,
+        // 预取规划：仅淘汰越界瓦片并把环带坐标入队，不在此处创建瓦片，
         // 真正的创建绑定由渲染端调 drainPrefetch 分摊到帧空闲
         tileManager.diffPrefetch(colStart, rowStart, colEnd, rowEnd);
     }
@@ -201,6 +201,7 @@ public class TileCoreService<T extends TileCoreService.BaseTileHolder> implement
     }
 
     public void setDyingExpand(int expand) {
+        if (expand <= 0) throw new IllegalArgumentException("濒死区扩展范围必须大于 0");
         tileManager.setDyingExpand(expand);
     }
 
@@ -219,15 +220,8 @@ public class TileCoreService<T extends TileCoreService.BaseTileHolder> implement
     }
 
     public void setPrefetchExpand(int expand) {
+        if (expand <= 0) throw new IllegalArgumentException("预取区扩展范围必须大于 0");
         tileManager.setPrefetchExpand(expand);
-    }
-
-    public int getPrefetchLimit() {
-        return tileManager.getPrefetchLimit();
-    }
-
-    public void setPrefetchLimit(int limit) {
-        tileManager.setPrefetchLimit(limit);
     }
 
     public boolean isPrefetchEnabled() {
@@ -238,9 +232,20 @@ public class TileCoreService<T extends TileCoreService.BaseTileHolder> implement
         tileManager.setPrefetchEnabled(enabled);
     }
 
-    // 消费预取队列,由渲染端在帧空闲时驱动,返回队列是否仍有剩余
-    public boolean drainPrefetch(int maxCount) {
-        return tileManager.drainPrefetch(maxCount);
+    // 获取每帧预取数量上限（帧预算）
+    public int getPrefetchPerFrame() {
+        return tileManager.getPrefetchPerFrame();
+    }
+
+    // 设置每帧预取数量上限，非法参数（小于等于 0）无响应
+    public void setPrefetchPerFrame(int count) {
+        if (count <= 0) return;
+        tileManager.setPrefetchPerFrame(count);
+    }
+
+    // 消费预取队列，由渲染端在帧空闲时驱动，返回队列是否仍有剩余
+    public boolean drainPrefetch() {
+        return tileManager.drainPrefetch();
     }
 
     @Override
@@ -285,34 +290,42 @@ public class TileCoreService<T extends TileCoreService.BaseTileHolder> implement
 
     // 公共 API
 
+    // 水平滚动开关
     public void setHorizontalScrollEnabled(boolean enabled) {
         layoutEngine.setHorizontalScrollEnabled(enabled);
     }
 
+    // 垂直滚动开关
     public void setVerticalScrollEnabled(boolean enabled) {
         layoutEngine.setVerticalScrollEnabled(enabled);
     }
 
+    // 禁止父容器拦截触摸(由宿主在触摸时转发)
     public void requestDisallowInterceptTouchEvent(boolean disallowIntercept) {
         eventHandler.requestDisallowInterceptTouchEvent(disallowIntercept);
     }
 
+    // 是否正在与视图交互(拖动/甩动中)
     public boolean isInteractingWithView() {
         return eventHandler.isInteractingWithView();
     }
 
+    // 触摸事件分发(委托给事件处理器)
     public void handleTouchEvent(MotionEvent event) {
         eventHandler.handleTouchEvent(event);
     }
 
+    // 驱动惯性滚动(委托给事件处理器)
     public void computeScroll() {
         eventHandler.computeScroll();
     }
 
+    // 中止进行中的惯性滚动
     public void resetAnimator() {
         eventHandler.resetAnimator();
     }
 
+    // 跳转到指定锚点并重排全部瓦片
     public void seek(int column, int row, float offsetX, float offsetY) {
         if (isEmpty()) return;
         tileManager.clearActiveAndDying();
@@ -321,6 +334,7 @@ public class TileCoreService<T extends TileCoreService.BaseTileHolder> implement
         updateUI();
     }
 
+    // 将视窗吸附回内容边界内(越界时跳到最近合法锚点)
     public void snap() {
         if (isEmpty()) {
             return;
@@ -342,43 +356,65 @@ public class TileCoreService<T extends TileCoreService.BaseTileHolder> implement
         seek(column, row, 0, 0);
     }
 
+    // 刷新单个瓦片数据
     public void update(int column, int row) {
         tileManager.update(column, row);
     }
 
+    // 刷新矩形范围内的全部瓦片
     public void updateRange(int left, int top, int right, int bottom) {
         tileManager.updateRange(left, top, right, bottom);
     }
 
+    // 刷新整列瓦片
     public void updateColumn(int column) {
         tileManager.updateColumn(column);
     }
 
+    // 刷新整行瓦片
     public void updateRow(int row) {
         tileManager.updateRow(row);
     }
 
+    // 全量刷新(按当前视窗锚点重排)
     public void updateAll() {
         LayoutModel model = layoutEngine.getLayoutModel();
         seek(model.colStart, model.rowStart, model.offsetX, model.offsetY);
     }
 
+    // 设置列宽并同步刷新(委托给尺寸管理器)
     public void setTileWidth(int column, int width, int gravity) {
+        if (width <= 0) throw new IllegalArgumentException("宽度必须大于 0");
+        if (column < getLeftBound() || column > getRightBound())
+            throw new IndexOutOfBoundsException("列索引 " + column + " 不在 [" + getLeftBound() + "," + getRightBound() + "] 范围内");
         dimenManager.setTileWidth(column, width, gravity);
     }
 
+    // 设置行高并同步刷新(委托给尺寸管理器)
     public void setTileHeight(int row, int height, int gravity) {
+        if (height <= 0) throw new IllegalArgumentException("高度必须大于 0");
+        if (row < getTopBound() || row > getBottomBound())
+            throw new IndexOutOfBoundsException("行索引 " + row + " 不在 [" + getTopBound() + "," + getBottomBound() + "] 范围内");
         dimenManager.setTileHeight(row, height, gravity);
     }
 
+    // 同时设置列宽与行高(委托给尺寸管理器)
     public void setTileSize(int column, int width, int hGravity, int row, int height, int vGravity) {
+        if (width <= 0) throw new IllegalArgumentException("宽度必须大于 0");
+        if (height <= 0) throw new IllegalArgumentException("高度必须大于 0");
+        if (column < getLeftBound() || column > getRightBound())
+            throw new IndexOutOfBoundsException("列索引 " + column + " 不在 [" + getLeftBound() + "," + getRightBound() + "] 范围内");
+        if (row < getTopBound() || row > getBottomBound())
+            throw new IndexOutOfBoundsException("行索引 " + row + " 不在 [" + getTopBound() + "," + getBottomBound() + "] 范围内");
         dimenManager.setTileSize(column, width, hGravity, row, height, vGravity);
     }
 
+    // 删除列宽记录,回退默认值
     public void deleteTileWidth(int column, int gravity) {
         dimenManager.deleteTileWidth(column, gravity);
     }
 
+    // 删除行高记录,回退默认值
     public void deleteTileHeight(int row, int gravity) {
         dimenManager.deleteTileHeight(row, gravity);
     }
@@ -493,10 +529,12 @@ public class TileCoreService<T extends TileCoreService.BaseTileHolder> implement
     }
 
     public void setDefaultTileWidth(int width) {
+        if (width <= 0) throw new IllegalArgumentException("宽度必须大于 0");
         dimenManager.setDefaultTileWidth(width);
     }
 
     public void setDefaultTileHeight(int height) {
+        if (height <= 0) throw new IllegalArgumentException("高度必须大于 0");
         dimenManager.setDefaultTileHeight(height);
     }
 
@@ -518,6 +556,16 @@ public class TileCoreService<T extends TileCoreService.BaseTileHolder> implement
 
     public int getPrefetchTileCount() {
         return tileManager.getPrefetchTileCount();
+    }
+
+    // 调试观测：预取队列历史峰值（高水位，随预取区生命周期归零，无需手动重置）
+    public int getPrefetchQueuePeak() {
+        return tileManager.getPrefetchQueuePeak();
+    }
+
+    // 预取队列是否还有待消费的坐标（帧回调继续条件之一：debug 开启或队列非空）
+    public boolean hasPrefetchPending() {
+        return tileManager.hasPrefetchPending();
     }
 
     public LongMap<T> getPrefetchTiles() {
@@ -549,34 +597,41 @@ public class TileCoreService<T extends TileCoreService.BaseTileHolder> implement
     }
 
     public void setActiveTiles(LongMap<T> map) {
+        if (map == null) throw new IllegalArgumentException("活跃区存储不能设置为空");
         tileManager.setActiveTiles(map);
     }
 
     public void setDyingTiles(LongMap<T> map) {
+        if (map == null) throw new IllegalArgumentException("濒死区存储不能设置为空");
         tileManager.setDyingTiles(map);
     }
 
     public void setPrefetchTiles(LongMap<T> map) {
+        if (map == null) throw new IllegalArgumentException("预取区存储不能设置为空");
         tileManager.setPrefetchTiles(map);
     }
 
     public void setPrefetchQueue(LongQueue queue) {
+        if (queue == null) throw new IllegalArgumentException("预取队列不能设置为空");
         tileManager.setPrefetchQueue(queue);
     }
 
     public void setWidths(IntIntMap map) {
+        if (map == null) throw new IllegalArgumentException("列宽存储不能设置为空");
         dimenManager.setWidths(map);
     }
 
     public void setHeights(IntIntMap map) {
+        if (map == null) throw new IllegalArgumentException("行高存储不能设置为空");
         dimenManager.setHeights(map);
     }
 
     public void setRecycledTiles(TileRecycledPool<T> map) {
+        if (map == null) throw new IllegalArgumentException("回收池存储不能设置为空");
         tileManager.setRecycledTiles(map);
     }
 
-    // 子模块访问器(供渲染层扩展使用)
+    // 子模块访问器（供渲染层扩展使用）
     public LayoutEngine getLayoutEngine() {
         return layoutEngine;
     }

@@ -3,6 +3,8 @@ package com.ahheng.tile2d.util.intintmap;
 import java.util.HashMap;
 import java.util.Map;
 
+// int 键 int 值映射表:基于 java.util.HashMap 的包装实现
+// 键值均装箱,适用于对性能不敏感或键较稀疏的场景
 public class IntIntMapHashMap implements IntIntMap {
 
     private final Map<Integer, Integer> map;
@@ -53,6 +55,7 @@ public class IntIntMapHashMap implements IntIntMap {
         map.clear();
     }
 
+    // 迭代器包装:deleteMode 由底层迭代器支持,语义等价
     @Override
     public IntIntMap.Iterator iterator(boolean deleteMode) {
         java.util.Iterator<Map.Entry<Integer, Integer>> i = map.entrySet().iterator();

@@ -77,6 +77,14 @@
 - `void setTileEventListener(TileEventListener<TileHolder> tileEventListener)`  
 设置瓦片事件监听器。
 
+### 缓存区（濒死区与预取区）
+
+两个缓存区互补：**濒死向后留，预取向前抢**。濒死区保存刚离开视窗的瓦片，回滚时跳过重新绑定；预取区提前加载运动方向前方的瓦片，进窗时直接转正。
+
+#### 濒死区
+
+濒死区是视窗向外扩展的缓冲环：瓦片离开视窗后暂存，短暂缓冲后可能被回收。
+
 - `int getDyingExpand()`  
 获取濒死区扩展层数。
 
@@ -88,6 +96,34 @@
 
 - `void setDyingEnabled(boolean enabled)`  
 设置启用濒死区，关闭时回收全部瓦片。
+
+#### 预取区
+
+预取区是濒死区的镜像补充：按运动**方向预测**，只朝视窗前方扩展条带并分批预加载瓦片，进入视窗时直接转正，避免滚动中一次性创建导致卡顿。**默认开启**，每帧最多消费 8 个预取任务。
+
+- `boolean isPrefetchEnabled()`  
+检查是否启用预取。
+
+- `void setPrefetchEnabled(boolean enabled)`  
+设置启用预取，默认开启；关闭时清空预取区。
+
+- `int getPrefetchExpand()`  
+获取预取扩展层数。
+
+- `void setPrefetchExpand(int expand)`  
+设置预取扩展层数，必须大于0，默认1。
+
+- `int getPrefetchPerFrame()`  
+获取每帧预取数量上限（帧预算，由瓦片管理器持有），默认 8。
+
+- `void setPrefetchPerFrame(int count)`  
+设置每帧预取数量上限，必须大于0。数值越大预取越快，但单帧创建绑定成本越高；数值越小越保守，低端机可适当调低。
+
+- `int getPrefetchTileCount()`  
+获取预取瓦片数（调试用）。
+
+- `int getPrefetchQueuePeak()`  
+获取预取队列历史峰值（调试用，随预取区生命周期归零）。
 
 ### 更新操作
 
@@ -120,22 +156,22 @@
 查询指定行高。
 
 - `void setTileWidth(int column, int width)`  
-设置指定列宽，触发布局扰动。
+设置指定列宽，必须大于0，触发布局扰动。
 
 - `void setTileWidth(int column, int width, int gravity)`  
-设置指定列宽，并指定对齐方向。
+设置指定列宽（必须大于0），并指定对齐方向。
 
 - `void setTileHeight(int row, int height)`  
-设置指定行高，触发布局扰动。
+设置指定行高，必须大于0，触发布局扰动。
 
 - `void setTileHeight(int row, int height, int gravity)`  
-设置指定行高，并指定对齐方向。
+设置指定行高（必须大于0），并指定对齐方向。
 
 - `void setTileSize(int column, int width, int row, int height)`  
-同时设置列宽与行高，布局扰动只发生一次。
+同时设置列宽与行高（均必须大于0），布局扰动只发生一次。
 
 - `void setTileSize(int column, int width, int hGravity, int row, int height, int vGravity)`  
-同时设置列宽与行高，并分别指定水平、垂直对齐方向。
+同时设置列宽与行高（均必须大于0），并分别指定水平、垂直对齐方向。
 
 - `void deleteTileWidth(int column)`  
 删除指定列的自定义宽度，回退到默认尺寸。
@@ -193,6 +229,9 @@
 
 - `void setRecycledTiles(TileRecycledPool<TileHolder> pool)`  
 替换瓦片回收池。
+
+- `void setPrefetchTiles(LongMap<TileHolder> map)`  
+替换预取瓦片存储。
 
 > 替换时数据会自动迁移到新容器，旧容器被清空。
 
@@ -259,6 +298,9 @@
 
 - `void onTileRecycled(T holder, int column, int row)`  
 瓦片被回收到池中。
+
+- `void onTilePrefetched(T holder, int column, int row)`  
+瓦片被预取（已创建绑定，尚未进入视窗），可在此提前完成进窗前的准备工作（默认空实现）。
 
 ## 布局模型（LayoutModel）
 
@@ -426,6 +468,24 @@
 - `LongMap<T> getDyingTiles()`  
 获取濒死瓦片映射。
 
+- `boolean isPrefetchEnabled()`  
+检查是否启用预取。
+
+- `void setPrefetchEnabled(boolean enabled)`  
+设置启用预取（默认开启）。
+
+- `boolean hasPrefetchPending()`  
+检查预取队列是否还有待消费的坐标。
+
+- `int getPrefetchTileCount()`  
+获取预取瓦片数。
+
+- `int getPrefetchQueuePeak()`  
+获取预取队列历史峰值（调试用）。
+
+- `LongMap<T> getPrefetchTiles()`  
+获取预取瓦片映射。
+
 - `long getBindTime()`  
 获取瓦片绑定耗时（调试用）。
 
@@ -454,6 +514,9 @@
 
 - `void setRecycledTiles(TileRecycledPool<T> pool)`  
 替换瓦片回收池。
+
+- `void setPrefetchTiles(LongMap<T> map)`  
+替换预取瓦片存储。
 
 #### 子模块访问器
 
@@ -585,33 +648,6 @@
 - `void resizeTile(int column, int row, int width, int height)`  
 更新已有瓦片的尺寸记录。
 
-- `void diffDying(int colStart, int rowStart, int colEnd, int rowEnd)`  
-清理超出濒死区的瓦片。
-
-- `int getDyingLeft()`  
-获取濒死区左边界。
-
-- `int getDyingTop()`  
-获取濒死区上边界。
-
-- `int getDyingRight()`  
-获取濒死区右边界。
-
-- `int getDyingBottom()`  
-获取濒死区下边界。
-
-- `int getDyingExpand()`  
-获取濒死区扩展层数。
-
-- `void setDyingExpand(int expand)`  
-设置濒死区扩展层数，必须大于0。
-
-- `boolean isDyingEnabled()`  
-检查是否启用濒死区。
-
-- `void setDyingEnabled(boolean enabled)`  
-设置濒死区开关，关闭时立即回收全部濒死瓦片。
-
 - `T getActiveTile(int column, int row)`  
 获取活跃瓦片。
 
@@ -641,6 +677,87 @@
 
 - `void clearActiveAndDying()`  
 清理活跃与濒死瓦片（跳转时调用）。
+
+#### 缓存区（濒死区与预取区）
+
+##### 濒死区
+
+- `void diffDying(int colStart, int rowStart, int colEnd, int rowEnd)`  
+清理超出濒死区的瓦片。
+
+- `int getDyingLeft()`  
+获取濒死区左边界。
+
+- `int getDyingTop()`  
+获取濒死区上边界。
+
+- `int getDyingRight()`  
+获取濒死区右边界。
+
+- `int getDyingBottom()`  
+获取濒死区下边界。
+
+- `int getDyingExpand()`  
+获取濒死区扩展层数。
+
+- `void setDyingExpand(int expand)`  
+设置濒死区扩展层数，必须大于0。
+
+- `boolean isDyingEnabled()`  
+检查是否启用濒死区。
+
+- `void setDyingEnabled(boolean enabled)`  
+设置濒死区开关，关闭时立即回收全部濒死瓦片。
+
+##### 预取区
+
+- `void diffPrefetch(int colStart, int rowStart, int colEnd, int rowEnd)`  
+视窗计算完毕后基于运动方向重新规划预取：淘汰方向矩形外的预取瓦片，并把前方条带坐标入队（三池均未持有才入队）。
+
+- `boolean drainPrefetch()`  
+消费预取队列，单次最多创建 `prefetchPerFrame`（帧预算）个瓦片，返回队列是否仍有剩余。
+
+- `int getPrefetchLeft()`  
+获取预取区左边界（仅朝运动方向扩展，其余三边贴合视窗）。
+
+- `int getPrefetchTop()`  
+获取预取区上边界。
+
+- `int getPrefetchRight()`  
+获取预取区右边界。
+
+- `int getPrefetchBottom()`  
+获取预取区下边界。
+
+- `int getPrefetchExpand()`  
+获取预取扩展层数。
+
+- `void setPrefetchExpand(int expand)`  
+设置预取扩展层数，必须大于0，默认1。
+
+- `boolean isPrefetchEnabled()`  
+检查是否启用预取。
+
+- `void setPrefetchEnabled(boolean enabled)`  
+设置启用预取（默认开启），关闭时清空预取区并重置跟踪状态。
+
+- `int getPrefetchPerFrame()`  
+获取每帧预取数量上限（帧预算），默认 8。
+
+- `void setPrefetchPerFrame(int count)`  
+设置每帧预取数量上限，必须大于0，非法参数无响应。
+
+- `int getPrefetchTileCount()`  
+获取预取瓦片数。
+
+- `int getPrefetchQueuePeak()`  
+获取预取队列历史峰值（调试用，随预取区生命周期归零）。
+
+- `boolean hasPrefetchPending()`  
+检查预取队列是否还有待消费的坐标。
+
+- `void setPrefetchTiles(LongMap<T> map)`  
+替换预取瓦片存储。
 
 > 瓦片 ID 编码与生命周期流程详见跨平台指南。
 
@@ -812,7 +929,7 @@
 - `void draw(Canvas canvas)`  
 绘制调试面板，并结算本帧绘制耗时。
 
-> `Callback`：`getActiveTileCount` / `getRecycledTileCount` / `getDyingTileCount` / `getBounds` / `getLayoutModel` / `postInvalidateOnAnimation` / `getBindTime` / `getLayoutTime`。集成方式见平台扩展指南。
+> `Callback`：`getActiveTileCount` / `getRecycledTileCount` / `getDyingTileCount` / `getPrefetchTileCount` / `getPrefetchQueuePeak` / `getBounds` / `getLayoutModel` / `postInvalidateOnAnimation` / `getBindTime` / `getLayoutTime`。集成方式见平台扩展指南。
 
 ## 长整型映射（LongMap）
 
@@ -841,6 +958,22 @@
 获取迭代器，`deleteMode` 为 true 时以删除模式遍历（便于边遍历边删除）。
 
 > 内置实现：`LongMapOpenHashMap`（默认，开地址哈希表，无装箱，构造可传期望容量）、`LongMapSparseArray`（基于 `LongSparseArray`，有序存储）、`LongMapHashMap`（基于 `HashMap`，大批量删除更优）。活跃/濒死瓦片使用本接口存储。
+
+## 长整型队列（LongQueue）
+
+- `int size()`  
+获取队列长度。
+
+- `void clear()`  
+清空全部元素。
+
+- `void enqueue(long value)`  
+队尾入队。
+
+- `long dequeue()`  
+队首出队（空队列调用会抛异常，出队前应先检查 `size()`）。
+
+> 内置实现：`LongQueueArrayFIFO`（默认，环形数组，2 的幂容量，自动扩容）。预取队列使用本接口存储待创建坐标。
 
 ## 整型映射（IntMap）
 

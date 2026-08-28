@@ -2,13 +2,15 @@ package com.ahheng.tile2d.util.intintmap;
 
 import android.util.SparseIntArray;
 
+// int 键 int 值映射表:基于 android.util.SparseIntArray 的实现
+// 零装箱,适用于键稀疏或频繁二分查找的场景;附带上次查找缓存,命中时免二分
 public class IntIntMapSparseArray implements IntIntMap {
 
     private final SparseIntArray sparseArray;
 
-    private int mLastKey = 0;
-    private int mLastIndex = -2;
-    private boolean mCacheValid = false;
+    private int mLastKey = 0; // 上次查找的键(缓存)
+    private int mLastIndex = -2; // 上次查找的下标,-2 表示无效
+    private boolean mCacheValid = false; // 缓存是否有效
 
     public IntIntMapSparseArray() {
         this.sparseArray = new SparseIntArray();
@@ -18,6 +20,7 @@ public class IntIntMapSparseArray implements IntIntMap {
         this.sparseArray = new SparseIntArray(initialCapacity);
     }
 
+    // 查找键下标:命中缓存直接返回,否则二分查找并更新缓存
     private int findIndex(int key) {
         if (mCacheValid && mLastKey == key) {
             return mLastIndex;
@@ -29,6 +32,7 @@ public class IntIntMapSparseArray implements IntIntMap {
         return index;
     }
 
+    // 结构变更后使缓存失效(键可能已移位)
     private void invalidateCache() {
         mCacheValid = false;
         mLastIndex = -2;
@@ -85,6 +89,7 @@ public class IntIntMapSparseArray implements IntIntMap {
         invalidateCache();
     }
 
+    // 迭代器:普通模式正向,deleteMode 反向(删除不移动后续元素下标)
     @Override
     public IntIntMap.Iterator iterator(boolean deleteMode) {
         return new IntIntMap.Iterator() {

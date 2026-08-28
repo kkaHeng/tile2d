@@ -6,7 +6,7 @@ import com.ahheng.tile2d.util.longmap.LongMapOpenHashMap;
 import com.ahheng.tile2d.util.longqueue.LongQueue;
 import com.ahheng.tile2d.util.longqueue.LongQueueArrayFIFO;
 
-// 瓦片管理器(跨平台)
+// 瓦片管理器（跨平台）
 // 负责瓦片相关的生命周期、存储、交互
 public class TileManager<T extends TileCoreService.BaseTileHolder> {
 
@@ -15,7 +15,7 @@ public class TileManager<T extends TileCoreService.BaseTileHolder> {
     private LongMap<T> prefetchTiles;
     private TileRecycledPool<T> recycledTiles;
 
-    // 濒死区域跟踪(对应活跃视窗范围)
+    // 濒死区域跟踪
     private int dyingColStart;
     private int dyingColEnd = -1;
     private int dyingRowStart;
@@ -23,17 +23,19 @@ public class TileManager<T extends TileCoreService.BaseTileHolder> {
     private int dyingExpand = 1; // 濒死区域扩展范围
     private boolean dyingEnabled = true; // 是否启用濒死区
 
-    // 预取区域跟踪(基于视窗独立扩展,与濒死区互不影响)
+    // 预取区域跟踪，带方向预测
     private LongQueue prefetchQueue;
     private int prefetchColStart;
     private int prefetchColEnd = -1;
     private int prefetchRowStart;
     private int prefetchRowEnd = -1;
+    private int prefetchDirX; // 水平运动方向： -1 左， 0 无， 1 右
+    private int prefetchDirY; // 垂直运动方向： -1 上， 0 无， 1 下
     private int prefetchExpand = 1; // 预取区域扩展范围
-    private int prefetchLimit = 64; // 预取池容量上限
-    private boolean prefetchEnabled = true; // 是否启用预取
-
-    private int recycledCount;
+    private boolean prefetchEnabled = true; // 是否启用预取区（默认开启，经全链路验证稳定）
+    private int prefetchPerFrame = 8; // 每帧预取数量上限（帧预算，默认 8 匹配二维吞吐）
+    private int prefetchQueuePeak; // 预取队列历史峰值（高水位，DebugLayer 观测用）
+    private int recycledCount; // 回收池瓦片数量
 
     private final Callback<T> callback;
 
@@ -52,7 +54,7 @@ public class TileManager<T extends TileCoreService.BaseTileHolder> {
         long id = TileCoreService.getTileId(column, row);
         T tile = dyingTiles.remove(id);
         if (tile == null && prefetchEnabled) {
-            // 命中预取池,已创建已绑定,直接复用
+            // 命中预取池，已创建已绑定，直接复用
             tile = prefetchTiles.remove(id);
         }
         if (tile == null) {
@@ -86,7 +88,7 @@ public class TileManager<T extends TileCoreService.BaseTileHolder> {
             if (dyingEnabled) {
                 dyingTiles.put(id, tile);
             } else {
-                // 濒死区关闭,离开视窗直接回收
+                // 濒死区关闭，离开视窗直接回收
                 recycle(tile);
             }
         }
@@ -133,10 +135,10 @@ public class TileManager<T extends TileCoreService.BaseTileHolder> {
         int dt = getRefreshTop();
         int db = getRefreshBottom();
 
-        int intersectLeft = Math.max(left, dl);
-        int intersectRight = Math.min(right, dr);
-        int intersectTop = Math.max(top, dt);
-        int intersectBottom = Math.min(bottom, db);
+        int intersectLeft = LayoutEngine.max(left, dl);
+        int intersectRight = LayoutEngine.min(right, dr);
+        int intersectTop = LayoutEngine.max(top, dt);
+        int intersectBottom = LayoutEngine.min(bottom, db);
 
         if (intersectLeft > intersectRight || intersectTop > intersectBottom) return;
 
@@ -199,8 +201,8 @@ public class TileManager<T extends TileCoreService.BaseTileHolder> {
             }
             in(column, row);
         } else {
-            // 在濒死区，仅刷新已缓存的瓦片数据,不为 update 预建新瓦片,
-            // 否则 updateRange 覆盖整个濒死区时会被填满,导致每帧遍历删除退化为 O(n^2)
+            // 在濒死区，仅刷新已缓存的瓦片数据，不为 update 预建新瓦片，
+            // 否则 updateRange 覆盖整个濒死区时会被填满，导致每帧遍历删除退化为 O(n^2)
             tile = dyingTiles.remove(id);
             if (tile != null) {
                 recycle(tile);
@@ -219,15 +221,15 @@ public class TileManager<T extends TileCoreService.BaseTileHolder> {
                     dyingTiles.put(id, newTile);
                 }
             } else if (prefetchEnabled) {
-                // 在预取区,直接丢弃回收,不原地重建,
-                // 下次预取规划时会重新入队补上,避免 updateRange 覆盖整个预取区退化
+                // 在预取区，直接丢弃回收，不原地重建，
+                // 下次预取规划时会重新入队补上，避免 updateRange 覆盖整个预取区退化
                 T ptile = prefetchTiles.remove(id);
                 if (ptile != null) recycle(ptile);
             }
         }
     }
 
-    // 由 DimenManager 调用,用于同步刷新已存在瓦片的尺寸
+    // 由 DimenManager 调用，用于同步刷新已存在瓦片的尺寸
     public void resizeTile(int column, int row, int width, int height) {
         long id = TileCoreService.getTileId(column, row);
         T tile = activeTiles.get(id);
@@ -251,7 +253,7 @@ public class TileManager<T extends TileCoreService.BaseTileHolder> {
 
     // 濒死区域
 
-    // 视窗计算完毕后,清理超出扩展濒死区的瓦片
+    // 视窗计算完毕后，清理超出扩展濒死区的瓦片
     public void diffDying(int colStart, int rowStart, int colEnd, int rowEnd) {
         if (dyingColStart == colStart && dyingColEnd == colEnd
                 && dyingRowStart == rowStart && dyingRowEnd == rowEnd) {
@@ -280,52 +282,42 @@ public class TileManager<T extends TileCoreService.BaseTileHolder> {
         }
     }
 
-    public int getDyingLeft() {
-        if (!dyingEnabled) return dyingColStart; // 关闭时退化为视窗边界
-        int leftBound = callback.getLeftBound();
-        int left = dyingColStart;
-        int expand = dyingExpand;
-        while (expand > 0 && left > leftBound) {
-            left--;
-            expand--;
+    // 从基准值出发沿单方向逐格行走最多 expand 步，被 bound 夹住即停（防越界）
+    // forward=true 向右/下(value 递增),false 向左/上(value 递减)
+    // 濒死区与预取区的 8 个边界 getter 共用，消除重复
+    private static int expandToBound(int value, int expand, int bound, boolean forward) {
+        if (forward) {
+            while (expand > 0 && value < bound) {
+                value++;
+                expand--;
+            }
+        } else {
+            while (expand > 0 && value > bound) {
+                value--;
+                expand--;
+            }
         }
-        return left;
+        return value;
+    }
+
+    public int getDyingLeft() {
+        // 关闭时退化为视窗边界
+        return dyingEnabled ? expandToBound(dyingColStart, dyingExpand, callback.getLeftBound(), false) : dyingColStart;
     }
 
     public int getDyingTop() {
-        if (!dyingEnabled) return dyingRowStart; // 关闭时退化为视窗边界
-        int topBound = callback.getTopBound();
-        int top = dyingRowStart;
-        int expand = dyingExpand;
-        while (expand > 0 && top > topBound) {
-            top--;
-            expand--;
-        }
-        return top;
+        // 关闭时退化为视窗边界
+        return dyingEnabled ? expandToBound(dyingRowStart, dyingExpand, callback.getTopBound(), false) : dyingRowStart;
     }
 
     public int getDyingRight() {
-        if (!dyingEnabled) return dyingColEnd; // 关闭时退化为视窗边界
-        int rightBound = callback.getRightBound();
-        int right = dyingColEnd;
-        int expand = dyingExpand;
-        while (expand > 0 && right < rightBound) {
-            right++;
-            expand--;
-        }
-        return right;
+        // 关闭时退化为视窗边界
+        return dyingEnabled ? expandToBound(dyingColEnd, dyingExpand, callback.getRightBound(), true) : dyingColEnd;
     }
 
     public int getDyingBottom() {
-        if (!dyingEnabled) return dyingRowEnd; // 关闭时退化为视窗边界
-        int bottomBound = callback.getBottomBound();
-        int bottom = dyingRowEnd;
-        int expand = dyingExpand;
-        while (expand > 0 && bottom < bottomBound) {
-            bottom++;
-            expand--;
-        }
-        return bottom;
+        // 关闭时退化为视窗边界
+        return dyingEnabled ? expandToBound(dyingRowEnd, dyingExpand, callback.getBottomBound(), true) : dyingRowEnd;
     }
 
     public int getDyingExpand() {
@@ -333,7 +325,7 @@ public class TileManager<T extends TileCoreService.BaseTileHolder> {
     }
 
     public void setDyingExpand(int expand) {
-        if (expand <= 0) throw new IllegalArgumentException("濒死区扩展范围必须大于 0: " + expand);
+        if (expand <= 0) return; // 非法参数无响应
         dyingExpand = expand;
     }
 
@@ -344,7 +336,7 @@ public class TileManager<T extends TileCoreService.BaseTileHolder> {
     public void setDyingEnabled(boolean enabled) {
         dyingEnabled = enabled;
         if (!enabled) {
-            // 关闭时立即回收濒死区内全部瓦片,不留缓冲
+            // 关闭时立即回收濒死区内全部瓦片，不留缓冲
             LongMap.Iterator<T> it = dyingTiles.iterator(true);
             while (it.next()) {
                 T tile = it.value();
@@ -356,25 +348,40 @@ public class TileManager<T extends TileCoreService.BaseTileHolder> {
 
     // 预取区域
 
-    // 视窗计算完毕后,重新规划预取:淘汰越界瓦片并把环带内待预取坐标入队
-    // 预取区基于视窗独立扩展,与濒死区互不影响,靠三池去重保证不冲突
+    // 视窗计算完毕后，基于运动方向重新规划预取
     public void diffPrefetch(int colStart, int rowStart, int colEnd, int rowEnd) {
         if (!prefetchEnabled) return;
-        if (prefetchColStart == colStart && prefetchColEnd == colEnd
-                && prefetchRowStart == rowStart && prefetchRowEnd == rowEnd) {
-            return;
+
+        // 计算相对上次视窗的位移方向（首帧/重置后区间为空，方向未知）
+        int dirX = 0;
+        int dirY = 0;
+        boolean sameWindow = false;
+        if (prefetchColStart <= prefetchColEnd && prefetchRowStart <= prefetchRowEnd) {
+            // 有上次记录
+            dirX = compareInt(colStart, prefetchColStart);
+            dirY = compareInt(rowStart, prefetchRowStart);
+            sameWindow = prefetchColStart == colStart && prefetchColEnd == colEnd
+                    && prefetchRowStart == rowStart && prefetchRowEnd == rowEnd;
         }
+
+        // 更新锚点与方向
         prefetchColStart = colStart;
         prefetchColEnd = colEnd;
         prefetchRowStart = rowStart;
         prefetchRowEnd = rowEnd;
+        prefetchDirX = dirX;
+        prefetchDirY = dirY;
 
+        // 视窗完全没动，保留已预取的前方瓦片
+        if (sameWindow) return;
+
+        // 按当前方向计算预取矩形（仅朝运动方向扩展，其余三边贴合视窗）
         int pl = getPrefetchLeft();
         int pt = getPrefetchTop();
         int pr = getPrefetchRight();
         int pb = getPrefetchBottom();
 
-        // 1. 淘汰超出新预取矩形的预取瓦片
+        // 淘汰落在新方向矩形之外的预取瓦片
         LongMap.Iterator<T> it = prefetchTiles.iterator(true);
         while (it.next()) {
             long id = it.key();
@@ -387,37 +394,45 @@ public class TileManager<T extends TileCoreService.BaseTileHolder> {
             }
         }
 
-        // 2. 重新规划:清空旧队列,把环带(预取矩形 - 视窗矩形)内未持有的坐标入队
-        //    环带按上/下/左/右四区域分解,避免遍历视窗内部
+        // 只把运动方向前方条带（方向矩形 - 视窗矩形）内未持有的坐标入队
         prefetchQueue.clear();
-        // 上区域: 列 [pl, pr], 行 [pt, rowStart-1]
+        // 上条带
         if (pt < rowStart) {
             enqueueRegion(pl, pr, pt, rowStart - 1);
         }
-        // 下区域: 列 [pl, pr], 行 [rowEnd+1, pb]
+        // 下条带
         if (rowEnd < pb) {
             enqueueRegion(pl, pr, rowEnd + 1, pb);
         }
-        // 左区域: 列 [pl, colStart-1], 行 [rowStart, rowEnd]
+        // 左条带
         if (pl < colStart) {
             enqueueRegion(pl, colStart - 1, rowStart, rowEnd);
         }
-        // 右区域: 列 [colEnd+1, pr], 行 [rowStart, rowEnd]
+        // 右条带
         if (colEnd < pr) {
             enqueueRegion(colEnd + 1, pr, rowStart, rowEnd);
         }
+
+        // 记录队列历史峰值（高水位，DebugLayer 观测用）
+        int queued = prefetchQueue.size();
+        if (queued > prefetchQueuePeak) prefetchQueuePeak = queued;
     }
 
-    // 遍历闭区间矩形,把三池均未持有的坐标入队
+    // 三值比较，跨平台展开
+    private static int compareInt(int a, int b) {
+        return a < b ? -1 : (a > b ? 1 : 0);
+    }
+
+    // 遍历闭区间矩形，把三池均未持有的坐标入队
     private void enqueueRegion(int cStart, int cEnd, int rStart, int rEnd) {
         int c = cStart;
         while (c <= cEnd) {
             int r = rStart;
             while (r <= rEnd) {
                 long id = TileCoreService.getTileId(c, r);
-                if (!activeTiles.containsKey(id)
-                        && !dyingTiles.containsKey(id)
-                        && !prefetchTiles.containsKey(id)) {
+                if (!activeTiles.containsKey(id) &&
+                    !dyingTiles.containsKey(id) &&
+                    !prefetchTiles.containsKey(id)) {
                     prefetchQueue.enqueue(id);
                 }
                 if (r == rEnd) break;
@@ -428,17 +443,12 @@ public class TileManager<T extends TileCoreService.BaseTileHolder> {
         }
     }
 
-    // 消费预取队列,单次最多创建 maxCount 个瓦片,返回队列是否仍有剩余
-    // 由渲染端在帧空闲时驱动,把创建绑定成本分摊到多帧
-    public boolean drainPrefetch(int maxCount) {
+    // 消费预取队列，单次最多创建 prefetchPerFrame 个瓦片，返回队列是否仍有剩余
+    // 由渲染端在帧空闲时驱动，把创建绑定成本分摊到多帧。
+    public boolean drainPrefetch() {
         if (!prefetchEnabled) return false;
         int count = 0;
-        while (prefetchQueue.size() > 0 && count < maxCount) {
-            if (prefetchTiles.size() >= prefetchLimit) {
-                // 池已满,放弃剩余队列
-                prefetchQueue.clear();
-                return false;
-            }
+        while (prefetchQueue.size() > 0 && count < prefetchPerFrame) {
             long id = prefetchQueue.dequeue();
             prefetchOne(TileCoreService.getColumn(id), TileCoreService.getRow(id));
             count++;
@@ -446,17 +456,28 @@ public class TileManager<T extends TileCoreService.BaseTileHolder> {
         return prefetchQueue.size() > 0;
     }
 
-    // 预取单个瓦片:创建并绑定,但不进活跃区,不触发进窗回调
+    // 获取每帧预取数量上限（帧预算）
+    public int getPrefetchPerFrame() {
+        return prefetchPerFrame;
+    }
+
+    // 设置每帧预取数量上限，非法参数（小于等于 0）无响应
+    public void setPrefetchPerFrame(int count) {
+        if (count <= 0) return;
+        prefetchPerFrame = count;
+    }
+
+    // 预取单个瓦片：创建并绑定，但不进活跃区，不触发进窗回调
     private void prefetchOne(int column, int row) {
         long id = TileCoreService.getTileId(column, row);
-        if (activeTiles.containsKey(id)
-                || dyingTiles.containsKey(id)
-                || prefetchTiles.containsKey(id)) {
+        if (activeTiles.containsKey(id) ||
+            dyingTiles.containsKey(id) ||
+            prefetchTiles.containsKey(id)) {
             return;
         }
         int type = callback.getTileType(column, row);
         T tile = obtain(type);
-        if (tile == null) return; // 稀疏坐标,正常跳过
+        if (tile == null) return; // 稀疏坐标，正常跳过
         int width = callback.getTileWidth(column);
         int height = callback.getTileHeight(row);
         tile.column = column;
@@ -470,52 +491,30 @@ public class TileManager<T extends TileCoreService.BaseTileHolder> {
         callback.onTilePrefetched(tile, column, row);
     }
 
+    // 预取矩形边界：仅朝运动方向扩展，其余三边贴合视窗本体
+
     public int getPrefetchLeft() {
-        if (!prefetchEnabled) return prefetchColStart;
-        int leftBound = callback.getLeftBound();
-        int left = prefetchColStart;
-        int expand = prefetchExpand;
-        while (expand > 0 && left > leftBound) {
-            left--;
-            expand--;
-        }
-        return left;
+        return prefetchEnabled && prefetchDirX < 0
+                ? expandToBound(prefetchColStart, prefetchExpand, callback.getLeftBound(), false)
+                : prefetchColStart;
     }
 
     public int getPrefetchTop() {
-        if (!prefetchEnabled) return prefetchRowStart;
-        int topBound = callback.getTopBound();
-        int top = prefetchRowStart;
-        int expand = prefetchExpand;
-        while (expand > 0 && top > topBound) {
-            top--;
-            expand--;
-        }
-        return top;
+        return prefetchEnabled && prefetchDirY < 0
+                ? expandToBound(prefetchRowStart, prefetchExpand, callback.getTopBound(), false)
+                : prefetchRowStart;
     }
 
     public int getPrefetchRight() {
-        if (!prefetchEnabled) return prefetchColEnd;
-        int rightBound = callback.getRightBound();
-        int right = prefetchColEnd;
-        int expand = prefetchExpand;
-        while (expand > 0 && right < rightBound) {
-            right++;
-            expand--;
-        }
-        return right;
+        return prefetchEnabled && prefetchDirX > 0
+                ? expandToBound(prefetchColEnd, prefetchExpand, callback.getRightBound(), true)
+                : prefetchColEnd;
     }
 
     public int getPrefetchBottom() {
-        if (!prefetchEnabled) return prefetchRowEnd;
-        int bottomBound = callback.getBottomBound();
-        int bottom = prefetchRowEnd;
-        int expand = prefetchExpand;
-        while (expand > 0 && bottom < bottomBound) {
-            bottom++;
-            expand--;
-        }
-        return bottom;
+        return prefetchEnabled && prefetchDirY > 0
+                ? expandToBound(prefetchRowEnd, prefetchExpand, callback.getBottomBound(), true)
+                : prefetchRowEnd;
     }
 
     public int getPrefetchExpand() {
@@ -523,17 +522,8 @@ public class TileManager<T extends TileCoreService.BaseTileHolder> {
     }
 
     public void setPrefetchExpand(int expand) {
-        if (expand <= 0) throw new IllegalArgumentException("预取区扩展范围必须大于 0: " + expand);
+        if (expand <= 0) return; // 非法参数无响应
         prefetchExpand = expand;
-    }
-
-    public int getPrefetchLimit() {
-        return prefetchLimit;
-    }
-
-    public void setPrefetchLimit(int limit) {
-        if (limit <= 0) throw new IllegalArgumentException("预取池容量上限必须大于 0: " + limit);
-        prefetchLimit = limit;
     }
 
     public boolean isPrefetchEnabled() {
@@ -544,13 +534,13 @@ public class TileManager<T extends TileCoreService.BaseTileHolder> {
         prefetchEnabled = enabled;
         if (!enabled) {
             clearPrefetch();
-            // 重置跟踪状态,下次开启时强制重新规划
             prefetchColStart = prefetchRowStart = 0;
             prefetchColEnd = prefetchRowEnd = -1;
+            prefetchDirX = prefetchDirY = 0;
         }
     }
 
-    // 清空预取池与队列,回收全部预取瓦片
+    // 清空预取池与队列，回收全部预取瓦片，峰值随预取区生命周期归零
     private void clearPrefetch() {
         LongMap.Iterator<T> it = prefetchTiles.iterator(true);
         while (it.next()) {
@@ -559,10 +549,22 @@ public class TileManager<T extends TileCoreService.BaseTileHolder> {
             recycle(tile);
         }
         prefetchQueue.clear();
+        prefetchQueuePeak = 0;
     }
 
+    // 获取预取瓦片个数
     public int getPrefetchTileCount() {
         return prefetchTiles.size();
+    }
+
+    // 预取队列历史峰值（高水位，随预取区生命周期归零，无需手动重置）
+    public int getPrefetchQueuePeak() {
+        return prefetchQueuePeak;
+    }
+
+    // 检查预取队列是否还有待消费的坐标
+    public boolean hasPrefetchPending() {
+        return prefetchQueue.size() > 0;
     }
 
     public LongMap<T> getPrefetchTiles() {
@@ -594,7 +596,7 @@ public class TileManager<T extends TileCoreService.BaseTileHolder> {
     // 存储替换
 
     public void setActiveTiles(LongMap<T> map) {
-        if (map == null) throw new IllegalArgumentException("activeTiles map cannot be null");
+        if (map == null) return; // 非法参数无响应
         if (map == activeTiles) return;
         map.clear();
         for (LongMap.Iterator<T> it = activeTiles.iterator(); it.next(); ) {
@@ -605,7 +607,7 @@ public class TileManager<T extends TileCoreService.BaseTileHolder> {
     }
 
     public void setDyingTiles(LongMap<T> map) {
-        if (map == null) throw new IllegalArgumentException("dyingTiles map cannot be null");
+        if (map == null) return; // 非法参数无响应
         if (map == dyingTiles) return;
         map.clear();
         for (LongMap.Iterator<T> it = dyingTiles.iterator(); it.next(); ) {
@@ -616,7 +618,7 @@ public class TileManager<T extends TileCoreService.BaseTileHolder> {
     }
 
     public void setPrefetchTiles(LongMap<T> map) {
-        if (map == null) throw new IllegalArgumentException("prefetchTiles map cannot be null");
+        if (map == null) return; // 非法参数无响应
         if (map == prefetchTiles) return;
         map.clear();
         for (LongMap.Iterator<T> it = prefetchTiles.iterator(); it.next(); ) {
@@ -627,14 +629,18 @@ public class TileManager<T extends TileCoreService.BaseTileHolder> {
     }
 
     public void setPrefetchQueue(LongQueue queue) {
-        if (queue == null) throw new IllegalArgumentException("prefetchQueue cannot be null");
+        if (queue == null) return; // 非法参数无响应
         if (queue == prefetchQueue) return;
         queue.clear();
+        // 迁移旧队列中待预取的坐标，替换容器不能丢失未消费的预取任务
+        while (prefetchQueue.size() > 0) {
+            queue.enqueue(prefetchQueue.dequeue());
+        }
         prefetchQueue = queue;
     }
 
     public void setRecycledTiles(TileRecycledPool<T> map) {
-        if (map == null) throw new IllegalArgumentException("recycledTiles map cannot be null");
+        if (map == null) return; // 非法参数无响应
         if (map == recycledTiles) return;
         map.reset();
         recycledTiles.moveTo(map);
@@ -674,9 +680,10 @@ public class TileManager<T extends TileCoreService.BaseTileHolder> {
         dyingColEnd = dyingRowEnd = -1;
         prefetchColStart = prefetchRowStart = 0;
         prefetchColEnd = prefetchRowEnd = -1;
+        prefetchDirX = prefetchDirY = 0;
     }
 
-    // 由 CoreScheduler.seek 调用:跳转时清理所有瓦片
+    // 由 CoreScheduler.seek 调用：跳转时清理所有瓦片
     public void clearActiveAndDying() {
         LongMap.Iterator<T> itActive = activeTiles.iterator();
         while (itActive.next()) {
@@ -694,28 +701,29 @@ public class TileManager<T extends TileCoreService.BaseTileHolder> {
         }
         dyingTiles.clear();
 
-        // 跳转后预取目标全部失效,清空预取池并重置跟踪状态
+        // 跳转后预取目标全部失效，清空预取池并重置跟踪状态（区间置空即无上次记录）
         clearPrefetch();
         prefetchColStart = prefetchRowStart = 0;
         prefetchColEnd = prefetchRowEnd = -1;
+        prefetchDirX = prefetchDirY = 0;
     }
 
-    // 刷新范围边界:濒死区与预取区的外接矩形
-    // update 系列据此判断坐标是否需要刷新,覆盖两个分支
+    // 刷新范围边界：濒死区与预取区的外接矩形
+    // update 系列据此判断坐标是否需要刷新，覆盖两个分支
     private int getRefreshLeft() {
-        return prefetchEnabled ? Math.min(getDyingLeft(), getPrefetchLeft()) : getDyingLeft();
+        return prefetchEnabled ? LayoutEngine.min(getDyingLeft(), getPrefetchLeft()) : getDyingLeft();
     }
 
     private int getRefreshTop() {
-        return prefetchEnabled ? Math.min(getDyingTop(), getPrefetchTop()) : getDyingTop();
+        return prefetchEnabled ? LayoutEngine.min(getDyingTop(), getPrefetchTop()) : getDyingTop();
     }
 
     private int getRefreshRight() {
-        return prefetchEnabled ? Math.max(getDyingRight(), getPrefetchRight()) : getDyingRight();
+        return prefetchEnabled ? LayoutEngine.max(getDyingRight(), getPrefetchRight()) : getDyingRight();
     }
 
     private int getRefreshBottom() {
-        return prefetchEnabled ? Math.max(getDyingBottom(), getPrefetchBottom()) : getDyingBottom();
+        return prefetchEnabled ? LayoutEngine.max(getDyingBottom(), getPrefetchBottom()) : getDyingBottom();
     }
 
     // 回调接口
@@ -739,7 +747,7 @@ public class TileManager<T extends TileCoreService.BaseTileHolder> {
 
         void onTilePrefetched(T holder, int column, int row);
 
-        // 尺寸查询(委托给 DimenManager)
+        // 尺寸查询（委托给 DimenManager）
         int getTileWidth(int column);
 
         int getTileHeight(int row);

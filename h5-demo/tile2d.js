@@ -675,17 +675,28 @@ class DimenManager {
     }
 
     setTileWidth(column, width, gravity) {
+        if (width <= 0) return;
         if (this.callback.isEmpty()) return;
         if (column > this.callback.getRightBound() || column < this.callback.getLeftBound()) {
             throw new RangeError('列索引越界: ' + column);
         }
-        let old = this.getTileWidth(column);
-        if (width === 0) {
-            this.widths.delete(column);
-            width = this.getTileWidth(column);
-        } else {
-            this.widths.set(column, width);
+        const old = this.getTileWidth(column);
+        this.widths.set(column, width);
+        this.applyWidthChange(column, old, width, gravity);
+    }
+
+    deleteTileWidth(column, gravity) {
+        if (this.callback.isEmpty()) return;
+        if (column > this.callback.getRightBound() || column < this.callback.getLeftBound()) {
+            throw new RangeError('列索引越界: ' + column);
         }
+        const old = this.getTileWidth(column);
+        this.widths.delete(column);
+        const width = this.getTileWidth(column);
+        this.applyWidthChange(column, old, width, gravity);
+    }
+
+    applyWidthChange(column, old, width, gravity) {
         if (width === old) return;
         // 同步濒死区内该列所有瓦片的尺寸
         const dl = this.callback.getDyingLeft(), dr = this.callback.getDyingRight();
@@ -700,17 +711,28 @@ class DimenManager {
     }
 
     setTileHeight(row, height, gravity) {
+        if (height <= 0) return;
         if (this.callback.isEmpty()) return;
         if (row > this.callback.getBottomBound() || row < this.callback.getTopBound()) {
             throw new RangeError('行索引越界: ' + row);
         }
-        let old = this.getTileHeight(row);
-        if (height === 0) {
-            this.heights.delete(row);
-            height = this.getTileHeight(row);
-        } else {
-            this.heights.set(row, height);
+        const old = this.getTileHeight(row);
+        this.heights.set(row, height);
+        this.applyHeightChange(row, old, height, gravity);
+    }
+
+    deleteTileHeight(row, gravity) {
+        if (this.callback.isEmpty()) return;
+        if (row > this.callback.getBottomBound() || row < this.callback.getTopBound()) {
+            throw new RangeError('行索引越界: ' + row);
         }
+        const old = this.getTileHeight(row);
+        this.heights.delete(row);
+        const height = this.getTileHeight(row);
+        this.applyHeightChange(row, old, height, gravity);
+    }
+
+    applyHeightChange(row, old, height, gravity) {
         if (height === old) return;
         const dt = this.callback.getDyingTop(), db = this.callback.getDyingBottom();
         if (row >= dt && row <= db) {
@@ -724,6 +746,7 @@ class DimenManager {
     }
 
     setTileSize(column, width, hGravity, row, height, vGravity) {
+        if (width <= 0 || height <= 0) return;
         if (this.callback.isEmpty()) return;
         if (column > this.callback.getRightBound() || column < this.callback.getLeftBound()) {
             throw new RangeError('列索引越界: ' + column);
@@ -733,13 +756,10 @@ class DimenManager {
         }
         const oldWidth = this.getTileWidth(column);
         const oldHeight = this.getTileHeight(row);
-        let widthChanged = false, heightChanged = false;
-        if (width === 0) { this.widths.delete(column); width = this.getTileWidth(column); }
-        else { this.widths.set(column, width); }
-        widthChanged = (width !== oldWidth);
-        if (height === 0) { this.heights.delete(row); height = this.getTileHeight(row); }
-        else { this.heights.set(row, height); }
-        heightChanged = (height !== oldHeight);
+        this.widths.set(column, width);
+        const widthChanged = (width !== oldWidth);
+        this.heights.set(row, height);
+        const heightChanged = (height !== oldHeight);
         if (!widthChanged && !heightChanged) return;
         // 同步其余瓦片尺寸
         if (widthChanged) {
@@ -763,9 +783,6 @@ class DimenManager {
         this.callback.updateSize(column, oldWidth, width, hGravity, row, oldHeight, height, vGravity);
         this.callback.updateUI();
     }
-
-    deleteTileWidth(column, gravity) { this.setTileWidth(column, 0, gravity); }
-    deleteTileHeight(row, gravity) { this.setTileHeight(row, 0, gravity); }
 
     getDefaultTileWidth() { return this.defaultTileWidth; }
     getDefaultTileHeight() { return this.defaultTileHeight; }
