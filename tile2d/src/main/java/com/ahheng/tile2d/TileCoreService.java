@@ -33,6 +33,17 @@ public class TileCoreService<T extends TileCoreService.BaseTileHolder> implement
     private float minScaleFactor = 0.5f;
     private float maxScaleFactor = 2;
 
+    // 双指缩放会话(快照模式)
+    // 缩放期间布局引擎完全冻结,所有输入(捏合 + 平移)只累积到快照的屏幕空间变换上,
+    // 两指全部抬起后才一次性结算为 scaleFactor + seek
+    private ZoomInterface zoomInterface; // 渲染层快照接口
+    private boolean zoomEnabled = true; // 双指缩放开关
+    private boolean zooming; // 是否处于缩放模式(快照已接管渲染)
+    private float zoomStartScale = 1; // 缩放开始时的缩放因子
+    private float zoomScale = 1; // 相对缩放(相对于缩放开始时)
+    private float zoomTranslateX; // 快照平移(屏幕像素)
+    private float zoomTranslateY;
+
     // 调试统计
     private boolean isDebugMode;
     private TimeProvider timeProvider;
@@ -252,6 +263,8 @@ public class TileCoreService<T extends TileCoreService.BaseTileHolder> implement
 
     // 消费预取队列，由渲染端在帧空闲时驱动，返回队列是否仍有剩余
     public boolean drainPrefetch() {
+        // 缩放期间冻结一切瓦片创建与绑定，避免与快照渲染争抢帧预算
+        if (zooming) return tileManager.hasPrefetchPending();
         return tileManager.drainPrefetch();
     }
 
@@ -262,17 +275,21 @@ public class TileCoreService<T extends TileCoreService.BaseTileHolder> implement
 
     @Override
     public void updateWidth(int column, int oldWidth, int newWidth, int gravity) {
+        // 尺寸变更会移动布局引擎，快照会立刻失效，直接放弃缩放会话
+        cancelZoom();
         layoutEngine.updateWidth(column, oldWidth, newWidth, gravity);
     }
 
     @Override
     public void updateHeight(int row, int oldHeight, int newHeight, int gravity) {
+        cancelZoom();
         layoutEngine.updateHeight(row, oldHeight, newHeight, gravity);
     }
 
     @Override
     public void updateSize(int column, int oldWidth, int newWidth, int hGravity,
                            int row, int oldHeight, int newHeight, int vGravity) {
+        cancelZoom();
         layoutEngine.updateSize(column, oldWidth, newWidth, hGravity, row, oldHeight, newHeight, vGravity);
     }
 
@@ -287,13 +304,19 @@ public class TileCoreService<T extends TileCoreService.BaseTileHolder> implement
     public boolean isVerticalScrollEnabled() {
         return layoutEngine.isVerticalScrollEnabled();
     }
-
     @Override
     public void sync(float dx, float dy) {
+        // 缩放模式拦截：不触发布局引擎，把平移累积到快照的屏幕变换上，统一结算
+        if (zooming) {
+            // EventHandler 已按当前缩放因子折算成内容位移，这里还原成屏幕像素
+            translateZoom(dx * scaleFactor, dy * scaleFactor);
+            return;
+        }
         coreInterface.beforeLayout();
         layoutEngine.sync(dx, dy);
         updateUI();
     }
+
 
     // 公共 API
 
@@ -335,6 +358,10 @@ public class TileCoreService<T extends TileCoreService.BaseTileHolder> implement
     // 跳转到指定锚点并重排全部瓦片
     public void seek(int column, int row, float offsetX, float offsetY) {
         if (isEmpty()) return;
+        // 缩放模式拦截：强制退出缩放并放弃本次结算，然后正常执行 seek
+        if (zooming) {
+            cancelZoom();
+        }
         tileManager.clearActiveAndDying();
         coreInterface.beforeLayout();
         layoutEngine.seek(column, row, offsetX, offsetY);
@@ -501,6 +528,7 @@ public class TileCoreService<T extends TileCoreService.BaseTileHolder> implement
     }
 
     public void reset() {
+        cancelZoom();
         tileManager.clearAll();
         dimenManager.clear();
         eventHandler.reset();
@@ -518,16 +546,166 @@ public class TileCoreService<T extends TileCoreService.BaseTileHolder> implement
     	return scaleFactor;
     }
 
+    // 缩放因子夹取
+    private float clampScale(float scale) {
+        return Math.max(minScaleFactor, Math.min(maxScaleFactor, scale));
+    }
+
+    // 缩放到指定因子，focus 为屏幕焦点（缩放中心），dx/dy 为附加的屏幕平移
+    // 语义：先以 focus 为中心缩放到 scale，再平移 (dx, dy)
     public void zoom(float scale, float focusX, float focusY, float dx, float dy) {
         if (!(scale > 0)) throw new IllegalArgumentException("缩放因子必须大于0");
+        // 手动缩放视为外部指令，放弃进行中的手势缩放会话
+        if (zooming) cancelZoom();
+        float target = clampScale(scale);
+        float relative = target / scaleFactor;
+        // 换算成快照变换：以 focus 为中心缩放等价于平移 (1 - relative) * focus
+        applyZoom(target, (1 - relative) * focusX + dx, (1 - relative) * focusY + dy);
+    }
+
+    // 以当前因子为基准的相对缩放（即时生效，不走快照）
+    public void zoomBy(float relativeScale, float focusX, float focusY) {
+        if (!(relativeScale > 0)) throw new IllegalArgumentException("缩放因子必须大于0");
+        zoom(scaleFactor * relativeScale, focusX, focusY, 0, 0);
+    }
+
+    // 结算快照变换：把「相对缩放 + 屏幕平移」换算成新的缩放因子与视窗偏移
+    // 推导：内容点在快照中的屏幕坐标 x0 = bounds.left + (offsetX + u) * oldScale，
+    // 快照变换后为 relative * x0 + tx，令其等于 bounds.left + (offsetX' + u) * newScale，
+    // 得 offsetX' = offsetX + (tx + (relative - 1) * bounds.left) / newScale
+    private void applyZoom(float newScale, float tx, float ty) {
         float old = scaleFactor;
-    	scaleFactor = Math.max(minScaleFactor, Math.min(maxScaleFactor, scale));
-        if (old == scaleFactor && dx == 0 && dy == 0) return;
+        float target = clampScale(newScale);
+        if (target == old && tx == 0 && ty == 0) return;
+        float relative = target / old;
         LayoutModel model = getLayoutModel();
+        float offsetX = model.offsetX;
+        float offsetY = model.offsetY;
+        // 被禁用的轴不参与换算，避免偏移量在不同步的轴上漂移
+        if (layoutEngine.isHorizontalScrollEnabled()) {
+            offsetX += (tx + (relative - 1) * bounds.left) / target;
+        }
+        if (layoutEngine.isVerticalScrollEnabled()) {
+            offsetY += (ty + (relative - 1) * bounds.top) / target;
+        }
+        scaleFactor = target;
         updateWindowSize();
-        float offsetX = model.offsetX + (focusX - bounds.left) * (1f / scaleFactor - 1f / old) + dx / scaleFactor;
-        float offsetY = model.offsetY + (focusY - bounds.top) * (1f / scaleFactor - 1f / old) + dy / scaleFactor;
         seek(model.colStart, model.rowStart, offsetX, offsetY);
+    }
+
+    // 缩放会话（快照模式）
+
+    // 是否处于快照缩放模式
+    public boolean isZooming() {
+        return zooming;
+    }
+
+    // 双指缩放开关
+    public boolean isZoomEnabled() {
+        return zoomEnabled;
+    }
+
+    public void setZoomEnabled(boolean enabled) {
+        zoomEnabled = enabled;
+        if (!enabled) cancelZoom();
+    }
+
+    public ZoomInterface getZoomInterface() {
+        return zoomInterface;
+    }
+
+    // 设置渲染层快照接口，未设置时不启用快照缩放（退化为即时缩放）
+    public void setZoomInterface(ZoomInterface zoomInterface) {
+        if (zooming) cancelZoom();
+        this.zoomInterface = zoomInterface;
+    }
+
+    // 快照当前的相对缩放（相对于缩放开始时的画面）
+    public float getZoomScale() {
+        return zoomScale;
+    }
+
+    public float getZoomTranslateX() {
+        return zoomTranslateX;
+    }
+
+    public float getZoomTranslateY() {
+        return zoomTranslateY;
+    }
+
+    // 开启缩放会话：截取渲染层快照并冻结布局引擎，成功才进入快照模式
+    public boolean beginZoom() {
+        if (zooming) return true;
+        if (!zoomEnabled || zoomInterface == null) return false;
+        if (isEmpty() || bounds.width() <= 0 || bounds.height() <= 0) return false;
+        if (!zoomInterface.captureZoomSnapshot()) return false;
+        zooming = true;
+        zoomStartScale = scaleFactor;
+        zoomScale = 1;
+        zoomTranslateX = 0;
+        zoomTranslateY = 0;
+        // 缩放期间不允许惯性滚动继续驱动布局
+        eventHandler.resetAnimator();
+        notifyZoomUpdate();
+        return true;
+    }
+
+    // 累积捏合输入：relativeScale 为相对上一次的增量因子，focus 为屏幕焦点
+    public void updateZoom(float relativeScale, float focusX, float focusY) {
+        if (!zooming || !(relativeScale > 0)) return;
+        float current = zoomStartScale * zoomScale;
+        float target = clampScale(current * relativeScale);
+        float factor = target / current;
+        if (factor == 1) return;
+        // 以 focus 为中心叠加缩放：p -> focus + factor * (T(p) - focus)
+        zoomScale *= factor;
+        zoomTranslateX = factor * zoomTranslateX + (1 - factor) * focusX;
+        zoomTranslateY = factor * zoomTranslateY + (1 - factor) * focusY;
+        notifyZoomUpdate();
+    }
+
+    // 累积平移输入（屏幕像素），与 sync 拦截共用一条累积通道
+    public void translateZoom(float dx, float dy) {
+        if (!zooming || (dx == 0 && dy == 0)) return;
+        if (layoutEngine.isHorizontalScrollEnabled()) zoomTranslateX += dx;
+        if (layoutEngine.isVerticalScrollEnabled()) zoomTranslateY += dy;
+        notifyZoomUpdate();
+    }
+
+    // 结算缩放会话：释放快照后一次性把累积输入应用到引擎
+    public void endZoom() {
+        if (!zooming) return;
+        zooming = false;
+        float target = clampScale(zoomStartScale * zoomScale);
+        float tx = zoomTranslateX;
+        float ty = zoomTranslateY;
+        resetZoomState();
+        // 先释放快照，再落地布局，同一帧内完成切换，不会看到中间态
+        ZoomInterface zoomI = zoomInterface;
+        if (zoomI != null) zoomI.releaseZoomSnapshot();
+        applyZoom(target, tx, ty);
+    }
+
+    // 放弃缩放会话：丢弃全部累积输入，画面回到缩放开始时的状态
+    public void cancelZoom() {
+        if (!zooming) return;
+        zooming = false;
+        resetZoomState();
+        ZoomInterface zoomI = zoomInterface;
+        if (zoomI != null) zoomI.releaseZoomSnapshot();
+    }
+
+    private void resetZoomState() {
+        zoomStartScale = scaleFactor;
+        zoomScale = 1;
+        zoomTranslateX = 0;
+        zoomTranslateY = 0;
+    }
+
+    private void notifyZoomUpdate() {
+        if (zoomInterface != null) {
+            zoomInterface.onZoomUpdate(zoomScale, zoomTranslateX, zoomTranslateY);
+        }
     }
 
     public float getMinScaleFactor() {
@@ -565,6 +743,10 @@ public class TileCoreService<T extends TileCoreService.BaseTileHolder> implement
     }
 
     public void setBounds(int left, int top, int right, int bottom) {
+        if (bounds.left != left || bounds.top != top || bounds.right != right || bounds.bottom != bottom) {
+            // 视窗尺寸变化会让快照与画面错位，放弃进行中的缩放会话
+            cancelZoom();
+        }
         bounds.set(left, top, right, bottom);
         updateWindowSize();
     }
@@ -804,6 +986,22 @@ public class TileCoreService<T extends TileCoreService.BaseTileHolder> implement
         void onBindTileHolder(T holder, int column, int row);
 
         int getTileType(int column, int row);
+
+    }
+
+    // 渲染层缩放快照接口
+    // 由渲染端实现：负责在缩放开始时冻结当前画面为快照，缩放期间只渲染快照
+    public interface ZoomInterface {
+
+        // 截取当前画面快照并切换到快照渲染模式，返回是否成功（失败则不进入缩放模式）
+        boolean captureZoomSnapshot();
+
+        // 快照变换更新：scale 为相对缩放，translateX/Y 为屏幕像素平移
+        // 渲染顺序等价于 canvas.translate(translateX, translateY) 后 canvas.scale(scale, scale)
+        void onZoomUpdate(float scale, float translateX, float translateY);
+
+        // 释放快照并恢复正常渲染
+        void releaseZoomSnapshot();
 
     }
 

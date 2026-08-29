@@ -23,6 +23,7 @@ import com.ahheng.tile2d.util.time.DefaultTimeProvider;
 import com.ahheng.tile2d.util.intintmap.IntIntMap;
 import com.ahheng.tile2d.util.longmap.LongMap;
 import com.ahheng.tile2d.widget.debug.DebugLayer;
+import com.ahheng.tile2d.widget.zoom.ZoomSnapshot;
 
 // 瓦片画布视图(自绘渲染端)
 // 以 Canvas 直接绘制瓦片,配合核心调度器完成滚动、触摸与调试叠层
@@ -114,12 +115,53 @@ public class TileView extends View {
         }
 
     };
-
     // 调试叠层相关
     private DebugLayer debugLayer;
     private boolean debugMode;
     private long startLayoutTime;
     private long layoutTime;
+
+    // 缩放快照：双指缩放期间接管渲染，不绘制瓦片、不触发布局
+    private final ZoomSnapshot zoomSnapshot = new ZoomSnapshot(new ZoomSnapshot.Renderer() {
+        @Override
+        public int getSnapshotWidth() {
+            return getWidth();
+        }
+
+        @Override
+        public int getSnapshotHeight() {
+            return getHeight();
+        }
+
+        @Override
+        public void drawSnapshotContent(Canvas canvas) {
+            drawTiles(canvas);
+        }
+
+        @Override
+        public void invalidateSnapshot() {
+            TileView.this.postInvalidateOnAnimation();
+        }
+    });
+
+    // 核心调度器的缩放接口：把快照生命周期交给核心统一调度
+    private final TileCoreService.ZoomInterface zoomInterface = new TileCoreService.ZoomInterface() {
+        @Override
+        public boolean captureZoomSnapshot() {
+            return zoomSnapshot.capture();
+        }
+
+        @Override
+        public void onZoomUpdate(float scale, float translateX, float translateY) {
+            zoomSnapshot.update(scale, translateX, translateY);
+        }
+
+        @Override
+        public void releaseZoomSnapshot() {
+            zoomSnapshot.release();
+        }
+    };
+
 
     // 初始化定位覆盖(seek 时暂存目标,等待下次布局生效)
     private boolean overrideInitLocation = false;
@@ -177,6 +219,7 @@ public class TileView extends View {
         coreService.setDefaultTileWidth((int) TypedValue.applyDimension(TypedValue.COMPLEX_UNIT_DIP, 80, displayMetrics));
         coreService.setDefaultTileHeight((int) TypedValue.applyDimension(TypedValue.COMPLEX_UNIT_DIP, 45, displayMetrics));
         coreService.setTimeProvider(new DefaultTimeProvider());
+        coreService.setZoomInterface(zoomInterface);
     }
 
     // 缩放数值
@@ -221,6 +264,30 @@ public class TileView extends View {
 
     public void zoom(float scaleFactor, float focusX, float focusY, float dx, float dy) {
     	coreService.zoom(scaleFactor, focusX, focusY, dx, dy);
+    }
+
+    // 以当前因子为基准的相对缩放
+    public void zoomBy(float relativeScale, float focusX, float focusY) {
+        coreService.zoomBy(relativeScale, focusX, focusY);
+    }
+
+    // 是否处于双指缩放(快照)模式
+    public boolean isZooming() {
+        return coreService.isZooming();
+    }
+
+    public boolean isZoomEnabled() {
+        return coreService.isZoomEnabled();
+    }
+
+    // 双指缩放开关(默认开启)
+    public void setZoomEnabled(boolean enabled) {
+        coreService.setZoomEnabled(enabled);
+    }
+
+    // 放弃进行中的缩放会话(画面回到缩放开始时的状态)
+    public void cancelZoom() {
+        coreService.cancelZoom();
     }
 
     public float getScaleFactor() {
@@ -297,49 +364,61 @@ public class TileView extends View {
         }
     }
 
-    // 绘制:按视窗范围遍历瓦片并逐个绘制,叠加调试叠层
+    // 绘制:缩放模式只画快照,否则按视窗范围遍历瓦片,最后叠加调试叠层
     @Override
     protected void onDraw(Canvas canvas) {
         super.onDraw(canvas);
         if (debugMode && debugLayer != null) debugLayer.startDraw();
-        LayoutModel model = coreService.getLayoutModel();
-        if (model.colStart <= model.colEnd && model.rowStart <= model.rowEnd) {
+        if (zoomSnapshot.isActive()) {
+            // 缩放中：不绘制瓦片内容、不做任何排版，只渲染快照位图
             canvas.save();
             if (!debugMode) canvas.clipRect(coreService.getBounds());
-            canvas.translate(getPaddingLeft(), getPaddingTop());
-            canvas.translate(scale(model.offsetX), scale(model.offsetY));
-            float x = 0;
-            int column = model.colStart;
-            while (column <= model.colEnd) {
-                float width = scale(coreService.getTileWidth(column));
-                canvas.translate(x, 0);
-                float y = 0;
-                int row = model.rowStart;
-                while (row <= model.rowEnd) {
-                    float height = scale(coreService.getTileHeight(row));
-                    TileHolder tile = coreService.getActiveTile(column, row);
-                    if (tile != null) {
-                        canvas.translate(0, y);
-                        int count = canvas.save();
-                        tile.draw(canvas);
-                        canvas.restoreToCount(count);
-                        canvas.translate(0, -y);
-                    }
-
-                    if (row == model.rowEnd) break;
-                    row++;
-                    y += height;
-                }
-                canvas.translate(-x, 0);
-                if (column == model.colEnd) break;
-                column++;
-                x += width;
-            }
+            zoomSnapshot.draw(canvas);
             canvas.restore();
+        } else {
+            drawTiles(canvas);
         }
         if (debugMode && debugLayer != null) {
             debugLayer.draw(canvas);
         }
+    }
+
+    // 按视窗范围遍历并绘制瓦片(快照截取与正常绘制共用)
+    private void drawTiles(Canvas canvas) {
+        LayoutModel model = coreService.getLayoutModel();
+        if (model.colStart > model.colEnd || model.rowStart > model.rowEnd) return;
+        canvas.save();
+        if (!debugMode) canvas.clipRect(coreService.getBounds());
+        canvas.translate(getPaddingLeft(), getPaddingTop());
+        canvas.translate(scale(model.offsetX), scale(model.offsetY));
+        float x = 0;
+        int column = model.colStart;
+        while (column <= model.colEnd) {
+            float width = scale(coreService.getTileWidth(column));
+            canvas.translate(x, 0);
+            float y = 0;
+            int row = model.rowStart;
+            while (row <= model.rowEnd) {
+                float height = scale(coreService.getTileHeight(row));
+                TileHolder tile = coreService.getActiveTile(column, row);
+                if (tile != null) {
+                    canvas.translate(0, y);
+                    int count = canvas.save();
+                    tile.draw(canvas);
+                    canvas.restoreToCount(count);
+                    canvas.translate(0, -y);
+                }
+
+                if (row == model.rowEnd) break;
+                row++;
+                y += height;
+            }
+            canvas.translate(-x, 0);
+            if (column == model.colEnd) break;
+            column++;
+            x += width;
+        }
+        canvas.restore();
     }
 
     // 触摸事件:命中瓦片则转发给瓦片,同时处理点击/长按/滚动判定
@@ -450,6 +529,8 @@ public class TileView extends View {
         removeLongPress();
         resetTouchTarget();
         coreService.resetAnimator();
+        // 离开窗口必须释放快照位图，避免持有大块内存
+        coreService.cancelZoom();
         // 铁律：从窗口移除必须停止帧回调，无条件摘除（不依赖 prefetchScheduled 标记）
         prefetchScheduled = false;
         Choreographer.getInstance().removeFrameCallback(prefetchCallback);

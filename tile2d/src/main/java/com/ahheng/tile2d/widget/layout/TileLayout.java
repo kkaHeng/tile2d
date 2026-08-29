@@ -22,6 +22,7 @@ import com.ahheng.tile2d.util.time.DefaultTimeProvider;
 import com.ahheng.tile2d.util.intintmap.IntIntMap;
 import com.ahheng.tile2d.util.longmap.LongMap;
 import com.ahheng.tile2d.widget.debug.DebugLayer;
+import com.ahheng.tile2d.widget.zoom.ZoomSnapshot;
 
 // 瓦片布局视图(ViewGroup 渲染端)
 // 以真实子 View 承载瓦片,配合核心调度器完成滚动、触摸与调试叠层
@@ -140,6 +141,54 @@ public class TileLayout extends ViewGroup {
     private long startLayoutTime;
     private long layoutTime;
 
+    // 缩放快照：双指缩放期间接管渲染，子 View 全部停画，只渲染快照位图
+    private boolean capturingSnapshot; // 截取中标记，避免快照绘制递归进入快照分支
+    private final ZoomSnapshot zoomSnapshot = new ZoomSnapshot(new ZoomSnapshot.Renderer() {
+        @Override
+        public int getSnapshotWidth() {
+            return getWidth();
+        }
+
+        @Override
+        public int getSnapshotHeight() {
+            return getHeight();
+        }
+
+        @Override
+        public void drawSnapshotContent(Canvas canvas) {
+            capturingSnapshot = true;
+            try {
+                // 子 View 按当前屏幕位置原样绘制到快照画布
+                TileLayout.super.dispatchDraw(canvas);
+            } finally {
+                capturingSnapshot = false;
+            }
+        }
+
+        @Override
+        public void invalidateSnapshot() {
+            TileLayout.this.postInvalidateOnAnimation();
+        }
+    });
+
+    // 核心调度器的缩放接口：把快照生命周期交给核心统一调度
+    private final TileCoreService.ZoomInterface zoomInterface = new TileCoreService.ZoomInterface() {
+        @Override
+        public boolean captureZoomSnapshot() {
+            return zoomSnapshot.capture();
+        }
+
+        @Override
+        public void onZoomUpdate(float scale, float translateX, float translateY) {
+            zoomSnapshot.update(scale, translateX, translateY);
+        }
+
+        @Override
+        public void releaseZoomSnapshot() {
+            zoomSnapshot.release();
+        }
+    };
+
     // 初始化定位覆盖(seek 时暂存目标,等待下次布局生效)
     private boolean overrideInitLocation = false;
     private int initLocationColumn;
@@ -185,6 +234,7 @@ public class TileLayout extends ViewGroup {
         coreService.setDefaultTileWidth((int) TypedValue.applyDimension(TypedValue.COMPLEX_UNIT_DIP, 80, displayMetrics));
         coreService.setDefaultTileHeight((int) TypedValue.applyDimension(TypedValue.COMPLEX_UNIT_DIP, 45, displayMetrics));
         coreService.setTimeProvider(new DefaultTimeProvider());
+        coreService.setZoomInterface(zoomInterface);
         setWillNotDraw(false);
     }
 
@@ -435,16 +485,23 @@ public class TileLayout extends ViewGroup {
             debugLayer.end();
         }
         coreService.resetAnimator();
+        // 离开窗口必须释放快照位图，避免持有大块内存
+        coreService.cancelZoom();
         // 铁律：从窗口移除必须停止帧回调，无条件摘除（不依赖 prefetchScheduled 标记）
         prefetchScheduled = false;
         Choreographer.getInstance().removeFrameCallback(prefetchCallback);
     }
 
-    // 绘制:叠加调试叠层
+    // 绘制:缩放模式下用快照替代子 View,叠加调试叠层
     @Override
     protected void dispatchDraw(Canvas canvas) {
         if (debugMode && debugLayer != null) debugLayer.startDraw();
-        super.dispatchDraw(canvas);
+        if (!capturingSnapshot && zoomSnapshot.isActive()) {
+            // 缩放中：子 View 一律不绘制，只渲染快照位图
+            zoomSnapshot.draw(canvas);
+        } else {
+            super.dispatchDraw(canvas);
+        }
         if (debugMode && debugLayer != null) {
             debugLayer.draw(canvas);
         }
@@ -487,6 +544,30 @@ public class TileLayout extends ViewGroup {
 
     public void zoom(float scaleFactor, float focusX, float focusY, float dx, float dy) {
     	coreService.zoom(scaleFactor, focusX, focusY, dx, dy);
+    }
+
+    // 以当前因子为基准的相对缩放
+    public void zoomBy(float relativeScale, float focusX, float focusY) {
+        coreService.zoomBy(relativeScale, focusX, focusY);
+    }
+
+    // 是否处于双指缩放(快照)模式
+    public boolean isZooming() {
+        return coreService.isZooming();
+    }
+
+    public boolean isZoomEnabled() {
+        return coreService.isZoomEnabled();
+    }
+
+    // 双指缩放开关(默认开启)
+    public void setZoomEnabled(boolean enabled) {
+        coreService.setZoomEnabled(enabled);
+    }
+
+    // 放弃进行中的缩放会话(画面回到缩放开始时的状态)
+    public void cancelZoom() {
+        coreService.cancelZoom();
     }
 
     public float getScaleFactor() {
