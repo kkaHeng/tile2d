@@ -30,6 +30,39 @@
 - `void setVerticalScrollEnabled(boolean verticalScrollEnabled)`  
 设置开启纵向滚动。
 
+### 缩放
+
+缩放是**渲染层**的变换，引擎始终工作在未缩放的逻辑空间：`scaleFactor` 只出现在绘制时的乘法与 `windowWidth = bounds.width() / scaleFactor` 的除法里，滚动、跳转、尺寸修改的语义在任意缩放级别下完全一致。
+
+- `void zoom(float scaleFactor)`  
+缩放到指定因子（`focus = 0,0`，即视窗原点），自动夹取到最小/最大缩放因子之间。
+
+- `void zoom(float scaleFactor, float focusX, float focusY, float dx, float dy)`  
+缩放到指定因子，`(focusX, focusY)` 为屏幕焦点（缩放中心，参照视图坐标），`dx/dy` 为附加的屏幕平移。语义：先以焦点为中心缩放到 `scaleFactor`，再平移。
+
+- `void zoomBy(float relativeScale, float focusX, float focusY)`  
+以当前因子为基准做相对缩放，例如 `zoomBy(2f, cx, cy)` 放大一倍。同样以 `(focusX, focusY)` 为焦点，即时生效、不走快照。
+
+- `float getScaleFactor()`  
+获取当前缩放因子，默认 1。
+
+- `float getMinScaleFactor()` / `void setMinScaleFactor(float scale)`  
+获取/设置最小缩放因子，默认 0.5，必须大于 0。
+
+- `float getMaxScaleFactor()` / `void setMaxScaleFactor(float scale)`  
+获取/设置最大缩放因子，默认 2，必须大于最小缩放因子。
+
+- `boolean isZooming()`  
+是否处于双指缩放（快照）模式。缩放过程中布局引擎完全冻结，此时 `getScaleFactor()` 返回的是缩放开始时的值。
+
+- `boolean isZoomEnabled()` / `void setZoomEnabled(boolean enabled)`  
+双指缩放开关，默认开启。关闭会立即放弃进行中的缩放会话。
+
+- `void cancelZoom()`  
+放弃进行中的缩放会话：丢弃全部累积输入，画面回到缩放开始时的状态。视窗尺寸变化、跳转、尺寸修改会自动触发。
+
+> **双指手势**：`EventHandler` 内置 `ScaleGestureDetector`。第二根手指落下即进入快照缩放模式；捏合期间不触发布局引擎，只对快照做平移与缩放；两指全部抬起后才一次性结算。抬起一根手指后仍停留在缩放模式，剩余手指可继续拖动。缩放与拖动不互斥，共用同一条累积通道。
+
 - `Adapter getAdapter()`  
 获取适配器。
 
@@ -373,6 +406,57 @@
 
 - `void reset()`  
 重置全部状态（更换适配器时调用）。
+
+#### 缩放
+
+缩放 API 与视图层同名方法一一对应，另外提供会话级接口，供自定义渲染端接入快照缩放：
+
+- `void zoom(float scaleFactor, float focusX, float focusY, float dx, float dy)`  
+缩放到指定因子（语义见视图层说明）。手动缩放会放弃进行中的手势缩放会话。
+
+- `void zoomBy(float relativeScale, float focusX, float focusY)`  
+以当前因子为基准的相对缩放。
+
+- `float getScaleFactor()`  
+获取当前缩放因子。
+
+- `float getMinScaleFactor()` / `void setMinScaleFactor(float scale)`  
+获取/设置最小缩放因子。
+
+- `float getMaxScaleFactor()` / `void setMaxScaleFactor(float scale)`  
+获取/设置最大缩放因子。
+
+- `boolean isZooming()`  
+是否处于快照缩放模式。处于该模式时：`sync` 拦截输入累积到快照、`seek` 放弃缩放后正常跳转、`drainPrefetch` 暂停创建瓦片。
+
+- `boolean isZoomEnabled()` / `void setZoomEnabled(boolean enabled)`  
+双指缩放开关。
+
+- `void cancelZoom()`  
+放弃进行中的缩放会话。
+
+- `boolean beginZoom()`  
+请求进入快照缩放模式：截取渲染层快照并冻结布局引擎。成功才进入，失败返回 `false`（调用方退回即时缩放或忽略手势）。
+
+- `void updateZoom(float relativeScale, float focusX, float focusY)`  
+累积捏合输入：`relativeScale` 为相对上一次的增量因子，`(focusX, focusY)` 为屏幕焦点。
+
+- `void translateZoom(float dx, float dy)`  
+累积屏幕像素平移（`sync` 拦截的内部通道）。
+
+- `void endZoom()`  
+结算缩放会话：释放快照后一次性把累积输入应用到引擎。
+
+- `float getZoomScale()`  
+获取快照当前的相对缩放（相对缩放开始时的画面）。
+
+- `float getZoomTranslateX()` / `float getZoomTranslateY()`  
+获取快照当前的屏幕平移（像素）。
+
+- `void setZoomInterface(TileCoreService.ZoomInterface zoomInterface)`  
+设置渲染层快照接口。**必须由渲染端注册**才能启用快照缩放，未注册时双指手势不会进入缩放模式。
+
+> **ZoomInterface**（渲染端实现）：`captureZoomSnapshot()` 截取当前画面为位图并切换到快照渲染；`onZoomUpdate(scale, translateX, translateY)` 更新快照变换（渲染顺序等价于先 `translate` 再 `scale`）；`releaseZoomSnapshot()` 释放快照恢复常规渲染。内置 `TileView`/`TileLayout` 已通过 `ZoomSnapshot` 实现，自定义渲染端参考 `widget/zoom/ZoomSnapshot`。
 
 #### 尺寸与坐标
 
@@ -816,7 +900,7 @@
 ## 事件处理器（EventHandler）
 
 - `void handleTouchEvent(MotionEvent event)`  
-处理触摸事件，`ACTION_DOWN` 时自动停止惯性滚动。
+处理触摸事件，`ACTION_DOWN` 时自动停止惯性滚动。内置 `GestureDetector` 与 `ScaleGestureDetector`：第二根手指落下即进入快照缩放模式，两指全部抬起后结算（见「缩放」章节）。
 
 - `void computeScroll()`  
 驱动惯性滚动（在视图 `computeScroll` 中调用）。
@@ -828,10 +912,12 @@
 控制触摸拦截。
 
 - `boolean isInteractingWithView()`  
-检查是否正在交互（滚动中）。
+检查是否正在交互（滚动/捏合中）。
 
 - `void reset()`  
 重置事件状态。
+
+> `Callback` 接口额外声明缩放生命周期：`isZooming()` / `beginZoom()` / `updateZoom(relativeScale, focusX, focusY)` / `endZoom()`，由 `TileCoreService` 实现。
 
 ## 尺寸提供者（TileDimenProvider）
 
