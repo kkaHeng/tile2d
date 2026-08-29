@@ -320,7 +320,9 @@ public class TileView extends View {
                     TileHolder tile = coreService.getActiveTile(column, row);
                     if (tile != null) {
                         canvas.translate(0, y);
+                        int count = canvas.save();
                         tile.draw(canvas);
+                        canvas.restoreToCount(count);
                         canvas.translate(0, -y);
                     }
 
