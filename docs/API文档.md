@@ -56,7 +56,7 @@
 是否处于双指缩放（快照）模式。缩放过程中布局引擎完全冻结，此时 `getScaleFactor()` 返回的是缩放开始时的值。
 
 - `boolean isZoomEnabled()` / `void setZoomEnabled(boolean enabled)`  
-双指缩放开关，默认开启。关闭会立即放弃进行中的缩放会话。
+双指缩放开关，默认关闭（`zoom` / `zoomBy` 手动缩放不受此开关影响）。关闭会立即放弃进行中的缩放会话。
 
 - `void cancelZoom()`  
 放弃进行中的缩放会话：丢弃全部累积输入，画面回到缩放开始时的状态。视窗尺寸变化、跳转、尺寸修改会自动触发。

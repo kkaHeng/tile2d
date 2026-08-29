@@ -560,7 +560,7 @@ public class TileLayout extends ViewGroup {
         return coreService.isZoomEnabled();
     }
 
-    // 双指缩放开关(默认开启)
+    // 双指缩放开关(默认关闭，关闭后双指手势降级为平移；zoom/zoomBy 手动缩放不受影响)
     public void setZoomEnabled(boolean enabled) {
         coreService.setZoomEnabled(enabled);
     }
