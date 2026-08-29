@@ -390,28 +390,33 @@ public class TileCoreService<T extends TileCoreService.BaseTileHolder> implement
         seek(column, row, 0, 0);
     }
 
-    // 刷新单个瓦片数据
+    // 刷新单个瓦片数据。缩放期间直接失效：快照接管渲染，结算时 seek 全量重刷
     public void update(int column, int row) {
+        if (zooming) return;
         tileManager.update(column, row);
     }
 
     // 刷新矩形范围内的全部瓦片
     public void updateRange(int left, int top, int right, int bottom) {
+        if (zooming) return;
         tileManager.updateRange(left, top, right, bottom);
     }
 
     // 刷新整列瓦片
     public void updateColumn(int column) {
+        if (zooming) return;
         tileManager.updateColumn(column);
     }
 
     // 刷新整行瓦片
     public void updateRow(int row) {
+        if (zooming) return;
         tileManager.updateRow(row);
     }
 
-    // 全量刷新(按当前视窗锚点重排)
+    // 全量刷新(按当前视窗锚点重排)。缩放期间直接失效：结算时 applyZoom 必然 seek 全量重绑
     public void updateAll() {
+        if (zooming) return;
         LayoutModel model = layoutEngine.getLayoutModel();
         seek(model.colStart, model.rowStart, model.offsetX, model.offsetY);
     }

@@ -28,6 +28,7 @@ import com.ahheng.tile2d.app.auto.AutoTileActivity;
 import com.ahheng.tile2d.app.engine.LayoutEngineBenchActivity;
 import com.ahheng.tile2d.app.engine.WindowParadigmActivity;
 import com.ahheng.tile2d.app.data.TableActivity;
+import com.ahheng.tile2d.app.gomoku.GomokuActivity;
 import com.ahheng.tile2d.app.maze.MaxMazeActivity;
 import com.ahheng.tile2d.app.maze.MazeActivity;
 import com.ahheng.tile2d.app.minesweeper.MinesweeperActivity;
@@ -97,6 +98,8 @@ public class MainActivity extends AppCompatActivity {
                         "展示 TileLayout 在海量坐标空间下的承载能力", MaxMazeActivity.class, C_DEEP_ORANGE, "maxmaze"),
                 new DemoInfo("扫雷", "完整扫雷游戏实现,支持标记/掀开、存档读档、AI 自动求解与摄像机跟随",
                         MinesweeperActivity.class, C_ERROR, "minesweeper"),
+                new DemoInfo("五子棋", "有限模式(-100~+100)与伪无限模式(完整 int32)均判定五连胜负,支持双人同屏、人机对战,「AI 自动下棋」开启后双方全由 AI 行棋,AI 为棋型评分 + α-β 剪枝",
+                        GomokuActivity.class, C_PRIMARY, "gomoku"),
                 new DemoInfo("性能测试", "LayoutEngine 纯算法基准测试,统计同步滚动/随机跳转场景下的纳秒级 " +
                         "耗时分布与吞吐量", LayoutEngineBenchActivity.class, C_SECONDARY, "bench"),
                 new DemoInfo("视窗范式", "对比绝对坐标(放大镜)与逻辑坐标+偏移(摄像机)两种视窗定位范式",
