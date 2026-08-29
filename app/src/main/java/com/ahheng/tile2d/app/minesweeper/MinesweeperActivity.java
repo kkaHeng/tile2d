@@ -143,6 +143,7 @@ public class MinesweeperActivity extends BaseActivity {
         generateTileBitmaps(tileSize, tileSize);
 
         loadGame();
+        tileView.setZoomEnabled(true); // Demo 默认开启缩放
         tileView.setAdapter((adapter = new MineAdapter()));
 
         tileView.post(() -> {

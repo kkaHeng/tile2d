@@ -37,7 +37,7 @@ public class TileCoreService<T extends TileCoreService.BaseTileHolder> implement
     // 缩放期间布局引擎完全冻结,所有输入(捏合 + 平移)只累积到快照的屏幕空间变换上,
     // 两指全部抬起后才一次性结算为 scaleFactor + seek
     private ZoomInterface zoomInterface; // 渲染层快照接口
-    private boolean zoomEnabled = true; // 双指缩放开关
+    private boolean zoomEnabled = false; // 双指缩放开关
     private boolean zooming; // 是否处于缩放模式(快照已接管渲染)
     private float zoomStartScale = 1; // 缩放开始时的缩放因子
     private float zoomScale = 1; // 相对缩放(相对于缩放开始时)

@@ -111,6 +111,7 @@ public class AutoTileActivity extends BaseActivity {
         tileLayout.setDebugMode(isDebugMode());
         tileLayout.setDefaultTileWidth(size);
         tileLayout.setDefaultTileHeight(size);
+        tileLayout.setZoomEnabled(true); // Demo 默认开启缩放
 
         tileLayout.setAdapter((adapter = new AutoTileAdapter()));
 

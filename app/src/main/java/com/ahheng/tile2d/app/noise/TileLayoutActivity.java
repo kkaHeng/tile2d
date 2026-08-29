@@ -3,7 +3,6 @@ package com.ahheng.tile2d.app.noise;
 import android.graphics.Color;
 import android.graphics.drawable.GradientDrawable;
 import android.os.Bundle;
-import android.os.Handler;
 import android.util.TypedValue;
 import android.view.Gravity;
 import android.view.ViewGroup;
@@ -43,12 +42,9 @@ public class TileLayoutActivity extends BaseActivity {
         int padding = dp2px(40);
         layout.setPadding(padding, padding, padding, padding);
         layout.setDebugMode(isDebugMode());
+        layout.setZoomEnabled(true); // Demo 默认开启缩放
         layout.setAdapter((adapter = new RandomAdapter()));
         initTextPlan(true);
-        
-        new Handler(getMainLooper()).postDelayed(() -> {
-            layout.zoom(1.25f);
-        }, 2000);
     }
 
     private void initColorPlan() {

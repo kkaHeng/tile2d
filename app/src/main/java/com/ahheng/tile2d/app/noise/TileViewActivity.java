@@ -5,7 +5,6 @@ import android.graphics.Color;
 import android.graphics.Paint;
 import android.graphics.Picture;
 import android.os.Bundle;
-import android.os.Handler;
 import android.view.ViewGroup;
 
 import androidx.annotation.Nullable;
@@ -41,12 +40,9 @@ public class TileViewActivity extends BaseActivity {
         int padding = dp2px(40);
         view.setPadding(padding, padding, padding, padding);
         view.setDebugMode(isDebugMode());
+        view.setZoomEnabled(true); // Demo 默认开启缩放
         view.setAdapter((adapter = new RandomAdapter()));
         initTextPlan(true);
-
-        new Handler(getMainLooper()).postDelayed(() -> {
-            view.zoom(1.25f);
-        }, 2000);
     }
 
     private void initColorPlan() {

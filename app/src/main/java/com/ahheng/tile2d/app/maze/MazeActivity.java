@@ -115,6 +115,7 @@ public class MazeActivity extends BaseActivity {
         root.addView(progressIndicator, progressLp);
         setContentView(root, new ViewGroup.LayoutParams(-1, -1));
 
+        tileLayout.setZoomEnabled(true); // Demo 默认开启缩放
         tileLayout.setAdapter((adapter = new MazeAdapter()));
 
         choreographer = Choreographer.getInstance();

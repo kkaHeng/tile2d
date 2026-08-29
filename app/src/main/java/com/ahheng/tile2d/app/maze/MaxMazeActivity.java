@@ -86,6 +86,7 @@ public class MaxMazeActivity extends BaseActivity {
             e.printStackTrace();
         }
 
+        tileLayout.setZoomEnabled(true); // Demo 默认开启缩放
         tileLayout.setAdapter((adapter = new MaxMazeAdapter()));
 
         executorService = Executors.newFixedThreadPool(4);

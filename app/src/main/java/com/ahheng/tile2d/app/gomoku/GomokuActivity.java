@@ -94,6 +94,7 @@ public class GomokuActivity extends BaseActivity {
 
         ai = new GomokuAI(4, 10);
         board = new GomokuBoard(BOARD_MIN, BOARD_MAX, isMaxMode());
+        tileView.setZoomEnabled(true); // Demo 默认开启缩放
         tileView.setAdapter((adapter = new GomokuAdapter()));
 
         tileView.post(() -> {

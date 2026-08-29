@@ -664,6 +664,7 @@ public class TableActivity extends BaseActivity {
         int padding = dp2px(40);
         tileLayout.setPadding(padding, padding, padding, padding);
         tileLayout.setDebugMode(isDebugMode());
+        tileLayout.setZoomEnabled(true); // Demo 默认开启缩放
         tileLayout.setAdapter((adapter = new DataAdapter()));
         tileLayout.setDimenProvider((dimenProvider = new MeasurableDimenProvider(
                 tileLayout.getDefaultTileWidth(),
