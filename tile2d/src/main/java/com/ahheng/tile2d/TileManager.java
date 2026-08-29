@@ -541,7 +541,7 @@ public class TileManager<T extends TileCoreService.BaseTileHolder> {
     }
 
     // 清空预取池与队列，回收全部预取瓦片，峰值随预取区生命周期归零
-    private void clearPrefetch() {
+    public void clearPrefetch() {
         LongMap.Iterator<T> it = prefetchTiles.iterator(true);
         while (it.next()) {
             T tile = it.value();

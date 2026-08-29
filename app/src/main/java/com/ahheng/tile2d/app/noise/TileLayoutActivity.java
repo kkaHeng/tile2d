@@ -54,6 +54,10 @@ public class TileLayoutActivity extends BaseActivity {
         layout.setDebugMode(isDebugMode());
         layout.setAdapter((adapter = new RandomAdapter()));
         initTextPlan(true);
+        
+        new Handler(getMainLooper()).postDelayed(() -> {
+            layout.zoom(1.25f);
+        }, 2000);
     }
 
     private void initColorPlan() {
@@ -205,7 +209,7 @@ public class TileLayoutActivity extends BaseActivity {
             } else {
                 textView.setText("");
             }
-
+            textView.setTextSize(TypedValue.COMPLEX_UNIT_DIP, 14 * getScaleFactor());
             textView.setOnClickListener(v -> {
                 showToast("单击了 " + getColumn() + "," + getRow());
             });

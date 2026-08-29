@@ -75,7 +75,8 @@ public class EventHandler {
             if (dy != 0 && callback.isVerticalScrollEnabled()) scrolled = true;
 
             if (scrolled) {
-                callback.sync(dx, dy);
+                float scaleFactor = callback.getScaleFactor();
+                callback.sync(dx / scaleFactor, dy / scaleFactor);
             } else {
                 callback.updateUI();
             }
@@ -112,7 +113,8 @@ public class EventHandler {
             }
             isInteractingWithView = scrolled;
             if (scrolled) {
-                callback.sync(dx, dy);
+                float scaleFactor = callback.getScaleFactor();
+                callback.sync(dx / scaleFactor, dy / scaleFactor);
                 return true;
             }
             return false;
@@ -163,6 +165,8 @@ public class EventHandler {
         void sync(float dx, float dy); // 同步布局
 
         void updateUI(); // 刷新 UI
+
+        float getScaleFactor();
 
     }
 

@@ -64,7 +64,6 @@ public class TileView extends View {
         
         @Override
         public void onTileRecycled(TileHolder holder, int column, int row) {
-            holder.view = null;
             if (tileEventListener != null) tileEventListener.onTileRecycled(holder, column, row);
         }
         
@@ -98,7 +97,9 @@ public class TileView extends View {
 
         @Override
         public TileHolder onCreateTileHolder(int type) {
-            return adapter.onCreateTileHolder(type);
+            TileHolder holder = adapter.onCreateTileHolder(type);
+            if (holder != null) holder.view = TileView.this;
+            return holder;
         }
 
         @Override
@@ -178,6 +179,11 @@ public class TileView extends View {
         coreService.setTimeProvider(new DefaultTimeProvider());
     }
 
+    // 缩放数值
+    private float scale(float num) {
+    	return num * coreService.getScaleFactor();
+    }
+
     // 增量偏移视窗
     public void offset(float dx, float dy) {
         if (isEmpty()) {
@@ -205,6 +211,36 @@ public class TileView extends View {
     // 将视窗吸附回内容边界内
     public void snap() {
     	coreService.snap();
+    }
+
+    // 缩放
+
+    public void zoom(float scaleFactor) {
+    	zoom(scaleFactor, 0, 0, 0, 0);
+    }
+
+    public void zoom(float scaleFactor, float focusX, float focusY, float dx, float dy) {
+    	coreService.zoom(scaleFactor, focusX, focusY, dx, dy);
+    }
+
+    public float getScaleFactor() {
+    	return coreService.getScaleFactor();
+    }
+
+    public float getMinScaleFactor() {
+    	return coreService.getMinScaleFactor();
+    }
+
+    public void setMinScaleFactor(float scaleFactor) {
+    	coreService.setMinScaleFactor(scaleFactor);
+    }
+
+    public float getMaxScaleFactor() {
+    	return coreService.getMaxScaleFactor();
+    }
+
+    public void setMaxScaleFactor(float scaleFactor) {
+    	coreService.setMaxScaleFactor(scaleFactor);
     }
 
     // 查询指定列相对视窗的 X 坐标
@@ -271,16 +307,16 @@ public class TileView extends View {
             canvas.save();
             if (!debugMode) canvas.clipRect(coreService.getBounds());
             canvas.translate(getPaddingLeft(), getPaddingTop());
-            canvas.translate(model.offsetX, model.offsetY);
+            canvas.translate(scale(model.offsetX), scale(model.offsetY));
             float x = 0;
             int column = model.colStart;
             while (column <= model.colEnd) {
-                int width = coreService.getTileWidth(column);
+                float width = scale(coreService.getTileWidth(column));
                 canvas.translate(x, 0);
                 float y = 0;
                 int row = model.rowStart;
                 while (row <= model.rowEnd) {
-                    int height = coreService.getTileHeight(row);
+                    float height = scale(coreService.getTileHeight(row));
                     TileHolder tile = coreService.getActiveTile(column, row);
                     if (tile != null) {
                         canvas.translate(0, y);
@@ -815,6 +851,10 @@ public class TileView extends View {
 
         public void requestDisallowInterceptTouchEvent(boolean disallowIntercept) {
             if (view != null) view.requestDisallowInterceptTouchEvent(disallowIntercept);
+        }
+
+        public float getScaleFactor() {
+        	return view != null ? view.getScaleFactor() : 1;
         }
 
     }

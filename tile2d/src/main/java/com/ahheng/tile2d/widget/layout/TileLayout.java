@@ -74,15 +74,14 @@ public class TileLayout extends ViewGroup {
         
         @Override
         public void onTileRecycled(TileHolder holder, int column, int row) {
-            holder.view = null;
             if (tileEventListener != null) tileEventListener.onTileRecycled(holder, column, row);
         }
         
         @Override
         public void onTileSizeChanged(TileHolder holder, int column, int row, int width, int height) {
             holder.itemView.measure(
-                    MeasureSpec.makeMeasureSpec(coreService.getTileWidth(column), MeasureSpec.EXACTLY),
-                    MeasureSpec.makeMeasureSpec(coreService.getTileHeight(row), MeasureSpec.EXACTLY));
+                    MeasureSpec.makeMeasureSpec(Math.round(scale(coreService.getTileWidth(column))), MeasureSpec.EXACTLY),
+                    MeasureSpec.makeMeasureSpec(Math.round(scale(coreService.getTileHeight(row))), MeasureSpec.EXACTLY));
         }
 
         @Override
@@ -112,7 +111,9 @@ public class TileLayout extends ViewGroup {
 
         @Override
         public TileHolder onCreateTileHolder(int type) {
-            return adapter.onCreateTileHolder(type);
+            TileHolder holder = adapter.onCreateTileHolder(type);
+            if (holder != null) holder.view = TileLayout.this;
+            return holder;
         }
 
         @Override
@@ -123,8 +124,8 @@ public class TileLayout extends ViewGroup {
             }
             holder.view = TileLayout.this;
             holder.itemView.measure(
-                    MeasureSpec.makeMeasureSpec(coreService.getTileWidth(column), MeasureSpec.EXACTLY),
-                    MeasureSpec.makeMeasureSpec(coreService.getTileHeight(row), MeasureSpec.EXACTLY));
+                    MeasureSpec.makeMeasureSpec(Math.round(scale(coreService.getTileWidth(column))), MeasureSpec.EXACTLY),
+                    MeasureSpec.makeMeasureSpec(Math.round(scale(coreService.getTileHeight(row))), MeasureSpec.EXACTLY));
         }
 
         @Override
@@ -187,26 +188,33 @@ public class TileLayout extends ViewGroup {
         setWillNotDraw(false);
     }
 
+    // 缩放数值
+    private float scale(float num) {
+    	return num * coreService.getScaleFactor();
+    }
+
     // 布局全部活跃瓦片的子 View 位置
     private void layoutTiles() {
         LayoutModel model = coreService.getLayoutModel();
 
         int column = model.colStart;
-        float x = getPaddingLeft() + model.offsetX;
+        float x = getPaddingLeft() + scale(model.offsetX);
         while (column <= model.colEnd) {
             int row = model.rowStart;
-            float y = getPaddingTop() + model.offsetY;
+            float width = scale(coreService.getTileWidth(column));
+            float y = getPaddingTop() + scale(model.offsetY);
             while (row <= model.rowEnd) {
+                float height = scale(coreService.getTileHeight(row));
                 TileHolder tile = coreService.getActiveTile(column, row);
                 if (tile != null) {
-                    tile.itemView.layout((int) x, (int) y, (int) x + coreService.getTileWidth(column), (int) y + coreService.getTileHeight(row));
+                    tile.itemView.layout((int) x, (int) y, Math.round(x + width), Math.round(y + height));
                 }
 
-                y += coreService.getTileHeight(row);
+                y += height;
                 if (row == model.rowEnd) break;
                 row++;
             }
-            x += coreService.getTileWidth(column);
+            x += width;
             if (column == model.colEnd) break;
             column++;
         }
@@ -218,10 +226,10 @@ public class TileLayout extends ViewGroup {
     private void measureTiles() {
         LayoutModel model = coreService.getLayoutModel();
         int column = model.colStart;
-        int width = MeasureSpec.makeMeasureSpec(coreService.getTileWidth(column), MeasureSpec.EXACTLY);
+        int width = MeasureSpec.makeMeasureSpec(Math.round(scale(coreService.getTileWidth(column))), MeasureSpec.EXACTLY);
         while (column <= model.colEnd) {
             int row = model.rowStart;
-            int height = MeasureSpec.makeMeasureSpec(coreService.getTileHeight(row), MeasureSpec.EXACTLY);
+            int height = MeasureSpec.makeMeasureSpec(Math.round(scale(coreService.getTileHeight(row))), MeasureSpec.EXACTLY);
             while (row <= model.rowEnd) {
                 TileHolder tile = coreService.getActiveTile(column, row);
                 if (tile != null) {
@@ -229,11 +237,11 @@ public class TileLayout extends ViewGroup {
                 }
                 if (row == model.rowEnd) break;
                 row++;
-                height = MeasureSpec.makeMeasureSpec(coreService.getTileHeight(row), MeasureSpec.EXACTLY);
+                height = MeasureSpec.makeMeasureSpec(Math.round(scale(coreService.getTileHeight(row))), MeasureSpec.EXACTLY);
             }
             if (column == model.colEnd) break;
             column++;
-            width = MeasureSpec.makeMeasureSpec(coreService.getTileWidth(column), MeasureSpec.EXACTLY);
+            width = MeasureSpec.makeMeasureSpec(Math.round(scale(coreService.getTileWidth(column))), MeasureSpec.EXACTLY);
         }
     }
 
@@ -469,6 +477,36 @@ public class TileLayout extends ViewGroup {
     // 将视窗吸附回内容边界内
     public void snap() {
     	coreService.snap();
+    }
+
+    // 缩放
+
+    public void zoom(float scaleFactor) {
+    	zoom(scaleFactor, 0, 0, 0, 0);
+    }
+
+    public void zoom(float scaleFactor, float focusX, float focusY, float dx, float dy) {
+    	coreService.zoom(scaleFactor, focusX, focusY, dx, dy);
+    }
+
+    public float getScaleFactor() {
+    	return coreService.getScaleFactor();
+    }
+
+    public float getMinScaleFactor() {
+    	return coreService.getMinScaleFactor();
+    }
+
+    public void setMinScaleFactor(float scaleFactor) {
+    	coreService.setMinScaleFactor(scaleFactor);
+    }
+
+    public float getMaxScaleFactor() {
+    	return coreService.getMaxScaleFactor();
+    }
+
+    public void setMaxScaleFactor(float scaleFactor) {
+    	coreService.setMaxScaleFactor(scaleFactor);
     }
 
     // 查询指定列相对视窗的 X 坐标
@@ -751,6 +789,10 @@ public class TileLayout extends ViewGroup {
 
         public void requestDisallowInterceptTouchEvent(boolean disallowIntercept) {
             if (view != null) view.requestDisallowInterceptTouchEvent(disallowIntercept);
+        }
+
+        public float getScaleFactor() {
+        	return view != null ? view.getScaleFactor() : 1;
         }
 
     }

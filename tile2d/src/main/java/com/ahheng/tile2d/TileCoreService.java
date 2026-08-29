@@ -28,6 +28,11 @@ public class TileCoreService<T extends TileCoreService.BaseTileHolder> implement
 
     private final Rect bounds = new Rect();
 
+    // 缩放
+    private float scaleFactor = 1;
+    private float minScaleFactor = 0.5f;
+    private float maxScaleFactor = 2;
+
     // 调试统计
     private boolean isDebugMode;
     private TimeProvider timeProvider;
@@ -425,12 +430,12 @@ public class TileCoreService<T extends TileCoreService.BaseTileHolder> implement
         float x = bounds.left + model.offsetX;
         int c = model.colStart;
         while (c < column) {
-            x += dimenManager.getTileWidth(c);
+            x += dimenManager.getTileWidth(c) * scaleFactor;
             c++;
         }
         while (c > column) {
             c--;
-            x -= dimenManager.getTileWidth(c);
+            x -= dimenManager.getTileWidth(c) * scaleFactor;
         }
         return x;
     }
@@ -441,12 +446,12 @@ public class TileCoreService<T extends TileCoreService.BaseTileHolder> implement
         float y = bounds.top + model.offsetY;
         int r = model.rowStart;
         while (r < row) {
-            y += dimenManager.getTileHeight(r);
+            y += dimenManager.getTileHeight(r) * scaleFactor;
             r++;
         }
         while (r > row) {
             r--;
-            y -= dimenManager.getTileHeight(r);
+            y -= dimenManager.getTileHeight(r) * scaleFactor;
         }
         return y;
     }
@@ -463,10 +468,10 @@ public class TileCoreService<T extends TileCoreService.BaseTileHolder> implement
         float currX = bounds.left + model.offsetX;
         while (col > leftBound && x < currX) {
             col--;
-            currX -= dimenManager.getTileWidth(col);
+            currX -= dimenManager.getTileWidth(col) * scaleFactor;
         }
         while (col < rightBound && x >= currX + dimenManager.getTileWidth(col)) {
-            currX += dimenManager.getTileWidth(col);
+            currX += dimenManager.getTileWidth(col) * scaleFactor;
             col++;
         }
         return col;
@@ -484,10 +489,10 @@ public class TileCoreService<T extends TileCoreService.BaseTileHolder> implement
         float currY = bounds.top + model.offsetY;
         while (row > topBound && y < currY) {
             row--;
-            currY -= dimenManager.getTileHeight(row);
+            currY -= dimenManager.getTileHeight(row) * scaleFactor;
         }
         while (row < bottomBound && y >= currY + dimenManager.getTileHeight(row)) {
-            currY += dimenManager.getTileHeight(row);
+            currY += dimenManager.getTileHeight(row) * scaleFactor;
             row++;
         }
         return row;
@@ -500,6 +505,46 @@ public class TileCoreService<T extends TileCoreService.BaseTileHolder> implement
         layoutEngine.reset();
         startBindTime = 0;
         bindTime = 0;
+    }
+
+    private void updateWindowSize() {
+    	layoutEngine.setWindowWidth(Math.round(bounds.width() / scaleFactor));
+        layoutEngine.setWindowHeight(Math.round(bounds.height() / scaleFactor));
+    }
+
+    public float getScaleFactor() {
+    	return scaleFactor;
+    }
+
+    public void zoom(float scale, float focusX, float focusY, float dx, float dy) {
+        float old = scaleFactor;
+    	scaleFactor = Math.max(minScaleFactor, Math.min(maxScaleFactor, scale));
+        if (old == scaleFactor && dx == 0 && dy == 0) return;
+        LayoutModel model = getLayoutModel();
+        updateWindowSize();
+        float offsetX = model.offsetX + (focusX - bounds.left) * (1f / scaleFactor - 1f / old) + dx / scaleFactor;
+        float offsetY = model.offsetY + (focusY - bounds.top) * (1f / scaleFactor - 1f / old) + dy / scaleFactor;
+        seek(model.colStart, model.rowStart, offsetX, offsetY);
+    }
+
+    public float getMinScaleFactor() {
+    	return minScaleFactor;
+    }
+
+    public void setMinScaleFactor(float scale) {
+    	if (scale > maxScaleFactor) throw new IllegalArgumentException("最小缩放因子不能大于最大缩放因子：" + maxScaleFactor);
+        minScaleFactor = scale;
+        zoom(scaleFactor, 0, 0, 0, 0);
+    }
+
+    public float getMaxScaleFactor() {
+    	return maxScaleFactor;
+    }
+
+    public void setMaxScaleFactor(float scale) {
+    	if (scale < minScaleFactor) throw new IllegalArgumentException("最大缩放因子不能小于最小缩放因子：" + minScaleFactor);
+        maxScaleFactor = scale;
+        zoom(scaleFactor, 0, 0, 0, 0);
     }
 
     public TileDimenProvider getDimenProvider() {
@@ -516,8 +561,7 @@ public class TileCoreService<T extends TileCoreService.BaseTileHolder> implement
 
     public void setBounds(int left, int top, int right, int bottom) {
         bounds.set(left, top, right, bottom);
-        layoutEngine.setWindowWidth(bounds.width());
-        layoutEngine.setWindowHeight(bounds.height());
+        updateWindowSize();
     }
 
     public int getDefaultTileWidth() {
@@ -735,12 +779,12 @@ public class TileCoreService<T extends TileCoreService.BaseTileHolder> implement
         void onTileIn(T holder, int column, int row);
 
         void onTileOut(T holder, int column, int row);
+
         void onTileRecycled(T holder, int column, int row);
 
         void onTileSizeChanged(T holder, int column, int row, int width, int height);
 
         void onTilePrefetched(T holder, int column, int row);
-
 
         int getLeftBound();
 

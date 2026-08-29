@@ -6,6 +6,7 @@ import android.graphics.Color;
 import android.graphics.Paint;
 import android.graphics.Picture;
 import android.os.Bundle;
+import android.os.Handler;
 import android.view.Menu;
 import android.view.MenuItem;
 import android.view.ViewGroup;
@@ -52,6 +53,9 @@ public class TileViewActivity extends BaseActivity {
         view.setAdapter((adapter = new RandomAdapter()));
         initTextPlan(true);
 
+        new Handler(getMainLooper()).postDelayed(() -> {
+            view.zoom(1.25f);
+        }, 2000);
     }
 
     private void initColorPlan() {
@@ -236,6 +240,7 @@ public class TileViewActivity extends BaseActivity {
             }
             Canvas canvas = picture.beginRecording(getWidth(), getHeight());
             fillPaint.setColor(backgroundColor);
+            canvas.scale(getScaleFactor(), getScaleFactor());
             canvas.drawRect(0, 0, getWidth(), getHeight(), fillPaint);
             canvas.drawRect(0, 0, getWidth(), getHeight(), borderPaint);
             if (displayText && cachedText != null) {
