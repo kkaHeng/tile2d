@@ -30,7 +30,7 @@ public class AutoTileActivity extends BaseActivity {
     private static final int TYPE_EMPTY = 0;
     private static final int PIECE_COLS = 4;
     private static final int PIECE_ROWS = 4;
-    private static final int MENU_ID_DRAG = 5;
+    private static final int MENU_ID_DRAG = nextId();
 
     private TileLayout tileLayout;
     private AutoTileAdapter adapter;

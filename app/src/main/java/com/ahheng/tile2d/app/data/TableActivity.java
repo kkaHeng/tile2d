@@ -1,6 +1,5 @@
 package com.ahheng.tile2d.app.data;
 
-import android.animation.ValueAnimator;
 import android.content.res.Configuration;
 import android.graphics.Color;
 import android.graphics.drawable.Drawable;
@@ -9,14 +8,10 @@ import android.graphics.drawable.LayerDrawable;
 import android.os.Bundle;
 import android.util.TypedValue;
 import android.view.Gravity;
-import android.view.Menu;
-import android.view.MenuItem;
 import android.view.ViewGroup;
-import android.view.animation.OvershootInterpolator;
 import android.widget.FrameLayout;
 import android.widget.TextView;
 
-import androidx.annotation.NonNull;
 import androidx.annotation.Nullable;
 import androidx.core.content.ContextCompat;
 
@@ -28,13 +23,7 @@ import com.ahheng.tile2d.dimen.MeasurableDimenProvider;
 import com.ahheng.tile2d.widget.canvas.TileView;
 import com.ahheng.tile2d.widget.layout.TileLayout;
 
-import java.util.Locale;
-import java.util.Random;
-
 public class TableActivity extends BaseActivity {
-
-    private static final int MENU_ID_RANDOM_WIDTH = nextId();
-    private static final int MENU_ID_RANDOM_HEIGHT = nextId();
 
     private TileLayout tileLayout;
     private DataAdapter adapter;
@@ -717,59 +706,34 @@ public class TableActivity extends BaseActivity {
         tileLayout.setDebugMode(enabled);
     }
 
-    private ValueAnimator widthAnimator;
-    private ValueAnimator heightAnimator;
-
     @Override
-    public boolean onCreateOptionsMenu(Menu menu) {
-        boolean result = super.onCreateOptionsMenu(menu);
-        menu.add(Menu.NONE, MENU_ID_RANDOM_WIDTH, Menu.NONE, "随机调整宽度")
-                .setOnMenuItemClickListener(this)
-                .setShowAsAction(MenuItem.SHOW_AS_ACTION_NEVER);
-        menu.add(Menu.NONE, MENU_ID_RANDOM_HEIGHT, Menu.NONE, "随机调整高度")
-                .setOnMenuItemClickListener(this)
-                .setShowAsAction(MenuItem.SHOW_AS_ACTION_NEVER);
-        return result;
-    }
-
-    @Override
-    public boolean onMenuItemClick(@NonNull MenuItem menuItem) {
-        int id = menuItem.getItemId();
-        if (id == MENU_ID_RANDOM_WIDTH) {
-            if (widthAnimator != null) {
-                widthAnimator.cancel();
+    protected RandomSize onInitRandomSize() {
+        return new RandomSize() {
+            @Override
+            public int getCenterColumn() {
+                return tileLayout.findColumn(tileLayout.getWidth() / 2f);
             }
-            int column = tileLayout.findColumn(tileLayout.getWidth() / 2f);
-            int dp = (new Random().nextInt(19) + 4) * 10;
-            int target = dp2px(dp);
-            widthAnimator = ValueAnimator.ofInt(tileLayout.getTileWidth(column), target);
-            widthAnimator.setDuration(2000);
-            widthAnimator.setInterpolator(new OvershootInterpolator());
-            widthAnimator.addUpdateListener(a -> {
-                int current = (int) a.getAnimatedValue();
-                tileLayout.setTileWidth(column, current, TileView.DIMEN_GRAVITY_CENTER);
-            });
-            widthAnimator.start();
-            showToast(String.format(Locale.getDefault(), "调整第 %d 列宽度到 %ddp", column, dp));
-        }
-        if (id == MENU_ID_RANDOM_HEIGHT) {
-            if (heightAnimator != null) {
-                heightAnimator.cancel();
+            @Override
+            public int getCenterRow() {
+                return tileLayout.findRow(tileLayout.getHeight() / 2f);
             }
-            int row = tileLayout.findRow(tileLayout.getHeight() / 2f);
-            int dp = (new Random().nextInt(7) + 3) * 10;
-            int target = dp2px(dp);
-            heightAnimator = ValueAnimator.ofInt(tileLayout.getTileHeight(row), target);
-            heightAnimator.setDuration(2000);
-            heightAnimator.setInterpolator(new OvershootInterpolator());
-            heightAnimator.addUpdateListener(a -> {
-                int current = (int) a.getAnimatedValue();
-                tileLayout.setTileHeight(row, current, TileView.DIMEN_GRAVITY_CENTER);
-            });
-            heightAnimator.start();
-            showToast(String.format(Locale.getDefault(), "调整第 %d 行高度到 %ddp", row, dp));
-        }
-        return super.onMenuItemClick(menuItem);
+            @Override
+            public int getTileWidth(int column) {
+                return tileLayout.getTileWidth(column);
+            }
+            @Override
+            public int getTileHeight(int row) {
+                return tileLayout.getTileHeight(row);
+            }
+            @Override
+            public void setTileWidth(int column, int width) {
+                tileLayout.setTileWidth(column, width, TileView.DIMEN_GRAVITY_CENTER);
+            }
+            @Override
+            public void setTileHeight(int row, int height) {
+                tileLayout.setTileHeight(row, height, TileView.DIMEN_GRAVITY_CENTER);
+            }
+        };
     }
 
     @Override
@@ -915,12 +879,6 @@ public class TableActivity extends BaseActivity {
         super.onDestroy();
         if (dimenProvider != null) {
             dimenProvider.clearRecycledTiles();
-        }
-        if (widthAnimator != null) {
-            widthAnimator.cancel();
-        }
-        if (heightAnimator != null) {
-            heightAnimator.cancel();
         }
         tileLayout.setAdapter(null);
     }

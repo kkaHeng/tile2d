@@ -32,7 +32,7 @@ public class MazeActivity extends BaseActivity {
 
     private static final String ASSET_PATH = "dirt_tileset.png";
     private static final int TYPE_EMPTY = 0;
-    private static final int MENU_MAZE = 5;
+    private static final int MENU_MAZE = nextId();
 
     private static final int MAZE_STEP_MS = 20;
     private static final int MAZE_BACKTRACK_MS = 5;

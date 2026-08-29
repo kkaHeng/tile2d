@@ -62,7 +62,7 @@ public class LayoutEngine {
         // 水平同步到 [-tileWidth, 0]
         if (horizontalScrollEnabled) {
             // 起始锚点
-            if (offsetX <= 0 && totalWidth + offsetX < windowWidth && colEnd == rightBound) {
+            if (totalWidth + offsetX < windowWidth && colEnd == rightBound) {
                 // 右侧有空白，尝试右对齐，伪造用户向右拖事件
                 float end = windowWidth - (totalWidth + offsetX);
                 offsetX += end;
@@ -104,7 +104,7 @@ public class LayoutEngine {
 
         // 垂直同步 (同上)
         if (verticalScrollEnabled) {
-            if (offsetY <= 0 && totalHeight + offsetY < windowHeight && rowEnd == bottomBound) {
+            if (totalHeight + offsetY < windowHeight && rowEnd == bottomBound) {
                 float end = windowHeight - (totalHeight + offsetY);
                 offsetY += end;
             }
