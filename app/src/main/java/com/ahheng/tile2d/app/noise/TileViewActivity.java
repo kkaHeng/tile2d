@@ -240,7 +240,6 @@ public class TileViewActivity extends BaseActivity {
             }
             Canvas canvas = picture.beginRecording(getWidth(), getHeight());
             fillPaint.setColor(backgroundColor);
-            canvas.scale(getScaleFactor(), getScaleFactor());
             canvas.drawRect(0, 0, getWidth(), getHeight(), fillPaint);
             canvas.drawRect(0, 0, getWidth(), getHeight(), borderPaint);
             if (displayText && cachedText != null) {
@@ -261,6 +260,7 @@ public class TileViewActivity extends BaseActivity {
     
         @Override
         public void draw(Canvas canvas) {
+            canvas.scale(getScaleFactor(), getScaleFactor());
             if (picture == null || needReplay) {
                 if (getWidth() > 0 && getHeight() > 0) {
                     recordPicture();

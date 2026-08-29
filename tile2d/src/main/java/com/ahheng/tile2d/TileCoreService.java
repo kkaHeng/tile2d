@@ -145,11 +145,13 @@ public class TileCoreService<T extends TileCoreService.BaseTileHolder> implement
         coreInterface.onTilePrefetched(holder, column, row);
     }
 
+    // 获取指定列的宽度。坐标系：原始坐标系
     @Override
     public int getTileWidth(int column) {
         return dimenManager.getTileWidth(column);
     }
 
+    // 获取指定行的高度。坐标系：原始坐标系
     @Override
     public int getTileHeight(int row) {
         return dimenManager.getTileHeight(row);
@@ -387,7 +389,7 @@ public class TileCoreService<T extends TileCoreService.BaseTileHolder> implement
         seek(model.colStart, model.rowStart, model.offsetX, model.offsetY);
     }
 
-    // 设置列宽并同步刷新(委托给尺寸管理器)
+    // 设置列宽并同步刷新(委托给尺寸管理器)。坐标系：原始坐标系
     public void setTileWidth(int column, int width, int gravity) {
         if (width <= 0) throw new IllegalArgumentException("宽度必须大于 0");
         if (column < getLeftBound() || column > getRightBound())
@@ -395,7 +397,7 @@ public class TileCoreService<T extends TileCoreService.BaseTileHolder> implement
         dimenManager.setTileWidth(column, width, gravity);
     }
 
-    // 设置行高并同步刷新(委托给尺寸管理器)
+    // 设置行高并同步刷新(委托给尺寸管理器)。坐标系：原始坐标系
     public void setTileHeight(int row, int height, int gravity) {
         if (height <= 0) throw new IllegalArgumentException("高度必须大于 0");
         if (row < getTopBound() || row > getBottomBound())
@@ -403,7 +405,7 @@ public class TileCoreService<T extends TileCoreService.BaseTileHolder> implement
         dimenManager.setTileHeight(row, height, gravity);
     }
 
-    // 同时设置列宽与行高(委托给尺寸管理器)
+    // 同时设置列宽与行高(委托给尺寸管理器)。坐标系：原始坐标系
     public void setTileSize(int column, int width, int hGravity, int row, int height, int vGravity) {
         if (width <= 0) throw new IllegalArgumentException("宽度必须大于 0");
         if (height <= 0) throw new IllegalArgumentException("高度必须大于 0");
@@ -424,10 +426,10 @@ public class TileCoreService<T extends TileCoreService.BaseTileHolder> implement
         dimenManager.deleteTileHeight(row, gravity);
     }
 
-    // 从视窗起始锚点开始计算指定列相对于视窗的 X 坐标，包含渲染端的左内边距
+    // 从视窗起始锚点开始计算指定列相对于视窗的 X 坐标，包含渲染端的左内边距。坐标系：屏幕坐标系
     public float getTileX(int column) {
         LayoutModel model = layoutEngine.getLayoutModel();
-        float x = bounds.left + model.offsetX;
+        float x = bounds.left + (model.offsetX * scaleFactor);
         int c = model.colStart;
         while (c < column) {
             x += dimenManager.getTileWidth(c) * scaleFactor;
@@ -440,10 +442,10 @@ public class TileCoreService<T extends TileCoreService.BaseTileHolder> implement
         return x;
     }
 
-    // 从视窗起始锚点开始计算指定行相对于视窗的 Y 坐标，包含渲染端的上内边距
+    // 从视窗起始锚点开始计算指定行相对于视窗的 Y 坐标，包含渲染端的上内边距。坐标系：屏幕坐标系
     public float getTileY(int row) {
         LayoutModel model = layoutEngine.getLayoutModel();
-        float y = bounds.top + model.offsetY;
+        float y = bounds.top + (model.offsetY * scaleFactor);
         int r = model.rowStart;
         while (r < row) {
             y += dimenManager.getTileHeight(r) * scaleFactor;
@@ -456,7 +458,7 @@ public class TileCoreService<T extends TileCoreService.BaseTileHolder> implement
         return y;
     }
 
-    // 从视窗起始锚点开始查找包含指定 X 坐标的的列索引，参考原点是渲染端的原点
+    // 从视窗起始锚点开始查找包含指定 X 坐标的的列索引，参考原点是渲染端的原点。坐标系：屏幕坐标系
     public int findColumn(float x) {
         LayoutModel model = layoutEngine.getLayoutModel();
         int leftBound = coreInterface.getLeftBound();
@@ -465,19 +467,19 @@ public class TileCoreService<T extends TileCoreService.BaseTileHolder> implement
 
         if (col > rightBound) return leftBound;
 
-        float currX = bounds.left + model.offsetX;
+        float currX = bounds.left + (model.offsetX * scaleFactor);
         while (col > leftBound && x < currX) {
             col--;
             currX -= dimenManager.getTileWidth(col) * scaleFactor;
         }
-        while (col < rightBound && x >= currX + dimenManager.getTileWidth(col)) {
+        while (col < rightBound && x >= currX + dimenManager.getTileWidth(col) * scaleFactor) {
             currX += dimenManager.getTileWidth(col) * scaleFactor;
             col++;
         }
         return col;
     }
 
-    // 从视窗起始锚点开始查找包含指定 Y 坐标的的行索引，参考原点是渲染端的原点
+    // 从视窗起始锚点开始查找包含指定 Y 坐标的的行索引，参考原点是渲染端的原点。坐标系：屏幕坐标系
     public int findRow(float y) {
         LayoutModel model = layoutEngine.getLayoutModel();
         int topBound = coreInterface.getTopBound();
@@ -486,12 +488,12 @@ public class TileCoreService<T extends TileCoreService.BaseTileHolder> implement
 
         if (row > bottomBound) return topBound;
 
-        float currY = bounds.top + model.offsetY;
+        float currY = bounds.top + (model.offsetY * scaleFactor);
         while (row > topBound && y < currY) {
             row--;
             currY -= dimenManager.getTileHeight(row) * scaleFactor;
         }
-        while (row < bottomBound && y >= currY + dimenManager.getTileHeight(row)) {
+        while (row < bottomBound && y >= currY + dimenManager.getTileHeight(row) * scaleFactor) {
             currY += dimenManager.getTileHeight(row) * scaleFactor;
             row++;
         }
@@ -517,6 +519,7 @@ public class TileCoreService<T extends TileCoreService.BaseTileHolder> implement
     }
 
     public void zoom(float scale, float focusX, float focusY, float dx, float dy) {
+        if (!(scale > 0)) throw new IllegalArgumentException("缩放因子必须大于0");
         float old = scaleFactor;
     	scaleFactor = Math.max(minScaleFactor, Math.min(maxScaleFactor, scale));
         if (old == scaleFactor && dx == 0 && dy == 0) return;
@@ -532,6 +535,7 @@ public class TileCoreService<T extends TileCoreService.BaseTileHolder> implement
     }
 
     public void setMinScaleFactor(float scale) {
+        if (!(scale > 0)) throw new IllegalArgumentException("最小缩放因子必须大于0");
     	if (scale > maxScaleFactor) throw new IllegalArgumentException("最小缩放因子不能大于最大缩放因子：" + maxScaleFactor);
         minScaleFactor = scale;
         zoom(scaleFactor, 0, 0, 0, 0);
@@ -542,6 +546,7 @@ public class TileCoreService<T extends TileCoreService.BaseTileHolder> implement
     }
 
     public void setMaxScaleFactor(float scale) {
+        if (!(scale > 0)) throw new IllegalArgumentException("最大缩放因子必须大于0");
     	if (scale < minScaleFactor) throw new IllegalArgumentException("最大缩放因子不能小于最小缩放因子：" + minScaleFactor);
         maxScaleFactor = scale;
         zoom(scaleFactor, 0, 0, 0, 0);
