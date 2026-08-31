@@ -492,6 +492,18 @@ public class GomokuActivity extends BaseActivity {
     // ========== 模式切换与生命周期 ==========
 
     @Override
+    protected void onPause() {
+        super.onPause();
+        // 离开前台停止 AI 对弈，避免后台持续自弈耗电（与扫雷/生命游戏的清理惯例一致）
+        // 在途计算返回时由 aiGeneration 令牌防线丢弃，无需等待线程
+        if (aiPlaying) {
+            aiPlaying = false;
+            stopThinking();
+            invalidateOptionsMenu();
+        }
+    }
+
+    @Override
     protected void onMaxModeChanged(boolean maxMode) {
         super.onMaxModeChanged(maxMode);
         board = new GomokuBoard(BOARD_MIN, BOARD_MAX, maxMode);

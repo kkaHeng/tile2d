@@ -29,6 +29,7 @@ import com.ahheng.tile2d.app.engine.LayoutEngineBenchActivity;
 import com.ahheng.tile2d.app.engine.WindowParadigmActivity;
 import com.ahheng.tile2d.app.data.TableActivity;
 import com.ahheng.tile2d.app.gomoku.GomokuActivity;
+import com.ahheng.tile2d.app.life.LifeActivity;
 import com.ahheng.tile2d.app.maze.MaxMazeActivity;
 import com.ahheng.tile2d.app.maze.MazeActivity;
 import com.ahheng.tile2d.app.minesweeper.MinesweeperActivity;
@@ -62,13 +63,21 @@ public class MainActivity extends AppCompatActivity {
         }
     }
 
-    private static final int C_PRIMARY = 0xFF3D5A80;
-    private static final int C_TERTIARY = 0xFF4A6359;
-    private static final int C_SECONDARY = 0xFF556B7D;
-    private static final int C_ERROR = 0xFFBA1A1A;
-    private static final int C_AMBER = 0xFFBF7D1A;
-    private static final int C_TEAL = 0xFF1A7A6E;
-    private static final int C_DEEP_ORANGE = 0xFFB8451A;
+    // Demo 入口色板（11 档，冷 → 暖）
+    // 参照柏林噪声 Demo 的 ColorGenerator 色相序列（亮蓝→青→绿→黄→橙→红），
+    // 但取深色调以匹配白字 tag/按钮的可读性。
+    // 按各 Demo 的系统复杂度单调分配：越简单越冷（蓝），越复杂越暖（红）。
+    private static final int C_BLUE = 0xFF2563EB;      // 蓝    - 瓦片画板
+    private static final int C_SKY = 0xFF0E7490;       // 天青  - 瓦片布局
+    private static final int C_CYAN = 0xFF0891B2;      // 青    - 视窗范式
+    private static final int C_TEAL = 0xFF0F766E;      // 青绿  - 性能测试
+    private static final int C_GREEN = 0xFF16A34A;     // 绿    - 迷宫生成
+    private static final int C_LIME = 0xFF65A30D;      // 黄绿  - 自动瓦片
+    private static final int C_YELLOW = 0xFFCA8A04;    // 暗黄  - 无限迷宫
+    private static final int C_AMBER = 0xFFD97706;     // 琥珀  - 数据表
+    private static final int C_ORANGE = 0xFFEA580C;    // 橙    - 扫雷
+    private static final int C_RED = 0xFFDC2626;       // 红    - 五子棋
+    private static final int C_CRIMSON = 0xFFB91C1C;   // 深红  - 生命游戏
 
     // Jitpack badge URL
     private static final String JITPACK_SVG_URL = "https://jitpack.io/v/kkaHeng/tile2d.svg";
@@ -84,26 +93,30 @@ public class MainActivity extends AppCompatActivity {
         }
 
         DemoInfo[] demos = new DemoInfo[]{
+                // —— 冷（简单）→ 暖（复杂）：蓝/青/绿 → 黄 → 橙/红 ——
                 new DemoInfo("瓦片画板", "基于 Canvas 的瓦片渲染引擎,展示 Perlin 噪声生成彩色纹理、" +
-                        "随机列宽/行高动画、瓦片删除与 Picture 缓存优化", TileViewActivity.class, C_TERTIARY, "canvas"),
+                        "随机列宽/行高动画、瓦片删除与 Picture 缓存优化", TileViewActivity.class, C_BLUE, "canvas"),
                 new DemoInfo("瓦片布局", "基于 Android View 体系的瓦片布局,与画板使用相同噪声数据,通过 " +
-                        "TextView 渲染,支持点击/长按交互与瓦片移除", TileLayoutActivity.class, C_PRIMARY, "layout"),
-                new DemoInfo("数据表", "基于 TileLayout 的纯文本表格(CSV)编辑器,内置元素周期表数据," +
-                        "支持单元格编辑、行列增删移动、TSV/CSV 复制与解析,数据同步持久化", TableActivity.class, C_TEAL, "data"),
-                new DemoInfo("自动瓦片", "基于连接规则(ConnectionRule)的自动图块拼接系统,支持拖动绘制、 " +
-                        "瓦片破碎粒子动画与进入弹跳效果", AutoTileActivity.class, C_AMBER, "auto"),
-                new DemoInfo("迷宫生成", "递归回溯算法实时生成迷宫,摄像机平滑跟随,展示 TileLayout 的动态 " +
-                        "瓦片更新与范围刷新能力", MazeActivity.class, C_PRIMARY, "maze"),
-                new DemoInfo("无限迷宫", "分块(Chunk)驱动的无限迷宫系统,多线程异步生成、区块池回收复用, " +
-                        "展示 TileLayout 在海量坐标空间下的承载能力", MaxMazeActivity.class, C_DEEP_ORANGE, "maxmaze"),
-                new DemoInfo("扫雷", "完整扫雷游戏实现,支持标记/掀开、存档读档、AI 自动求解与摄像机跟随",
-                        MinesweeperActivity.class, C_ERROR, "minesweeper"),
-                new DemoInfo("五子棋", "有限模式(-100~+100)与伪无限模式(完整 int32)均判定五连胜负,支持双人同屏、人机对战,「AI 自动下棋」开启后双方全由 AI 行棋,AI 为棋型评分 + α-β 剪枝",
-                        GomokuActivity.class, C_PRIMARY, "gomoku"),
-                new DemoInfo("性能测试", "LayoutEngine 纯算法基准测试,统计同步滚动/随机跳转场景下的纳秒级 " +
-                        "耗时分布与吞吐量", LayoutEngineBenchActivity.class, C_SECONDARY, "bench"),
+                        "TextView 渲染,支持点击/长按交互与瓦片移除", TileLayoutActivity.class, C_SKY, "layout"),
                 new DemoInfo("视窗范式", "对比绝对坐标(放大镜)与逻辑坐标+偏移(摄像机)两种视窗定位范式",
-                        WindowParadigmActivity.class, C_SECONDARY, "paradigm"),
+                        WindowParadigmActivity.class, C_CYAN, "paradigm"),
+                new DemoInfo("性能测试", "LayoutEngine 纯算法基准测试,统计同步滚动/随机跳转场景下的纳秒级 " +
+                        "耗时分布与吞吐量", LayoutEngineBenchActivity.class, C_TEAL, "bench"),
+                new DemoInfo("迷宫生成", "递归回溯算法实时生成迷宫,摄像机平滑跟随,展示 TileLayout 的动态 " +
+                        "瓦片更新与范围刷新能力", MazeActivity.class, C_GREEN, "maze"),
+                new DemoInfo("自动瓦片", "基于连接规则(ConnectionRule)的自动图块拼接系统,支持拖动绘制、 " +
+                        "瓦片破碎粒子动画与进入弹跳效果", AutoTileActivity.class, C_LIME, "auto"),
+                new DemoInfo("无限迷宫", "分块(Chunk)驱动的无限迷宫系统,多线程异步生成、区块池回收复用, " +
+                        "展示 TileLayout 在海量坐标空间下的承载能力", MaxMazeActivity.class, C_YELLOW, "maxmaze"),
+                new DemoInfo("数据表", "基于 TileLayout 的纯文本表格(CSV)编辑器,内置元素周期表数据," +
+                        "支持单元格编辑、行列增删移动、TSV/CSV 复制与解析,数据同步持久化", TableActivity.class, C_AMBER, "data"),
+                new DemoInfo("扫雷", "完整扫雷游戏实现,支持标记/掀开、存档读档、AI 自动求解与摄像机跟随",
+                        MinesweeperActivity.class, C_ORANGE, "minesweeper"),
+                new DemoInfo("五子棋", "有限模式(-100~+100)与伪无限模式(完整 int32)均判定五连胜负,支持双人同屏、人机对战,「AI 自动下棋」开启后双方全由 AI 行棋,AI 为棋型评分 + α-β 剪枝",
+                        GomokuActivity.class, C_RED, "gomoku"),
+                new DemoInfo("生命游戏", "Conway 细胞自动机(B3/S23)运行于完整 int32 无限平面,稀疏活细胞存储、" +
+                        "子线程逐代演算、按变化坐标增量重绘,内置滑翔机枪等 9 种经典图案与年龄着色",
+                        LifeActivity.class, C_CRIMSON, "life"),
         };
 
         // ===== Root ScrollView (no padding — cards use margins for shadows) =====
@@ -175,9 +188,10 @@ public class MainActivity extends AppCompatActivity {
         SpannableStringBuilder sb = new SpannableStringBuilder();
         sb.append("精选 ");
         int s = sb.length();
-        sb.append("8");
-        sb.setSpan(new StyleSpan(Typeface.BOLD), s, s + 1, Spanned.SPAN_EXCLUSIVE_EXCLUSIVE);
-        sb.setSpan(new ForegroundColorSpan(C_PRIMARY), s, s + 1, Spanned.SPAN_EXCLUSIVE_EXCLUSIVE);
+        String count = "11";
+        sb.append(count);
+        sb.setSpan(new StyleSpan(Typeface.BOLD), s, s + count.length(), Spanned.SPAN_EXCLUSIVE_EXCLUSIVE);
+        sb.setSpan(new ForegroundColorSpan(C_BLUE), s, s + count.length(), Spanned.SPAN_EXCLUSIVE_EXCLUSIVE);
         sb.append(" 个 Demo,展示 Tile2D 引擎的核心能力");
 
         TextView text = new TextView(this);

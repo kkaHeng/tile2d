@@ -316,6 +316,19 @@ A complete Gomoku game based on **TileView (Canvas drawing)**.
 
 ![Screenshot](screenshots/gomoku.jpg)
 
+### Game of Life
+
+Conway's Game of Life based on **TileView (Canvas drawing)**, running on a **full int32 infinite plane**.
+
+- Rules: standard B3/S23 — a live cell with 2–3 neighbours survives, a dead cell with exactly 3 neighbours is born
+- Data: sparse live-cell table (`column<<32 | row` packed into a long key); dead cells consume no storage, so memory scales only with the live population; each generation only walks live cells and their neighbours, so cost is independent of plane size
+- Threading: a single background thread evolves each generation (pure function + copy-on-write snapshot), leaving the main thread unblocked; editing/pausing/clearing invalidates in-flight results via a generation token
+- Rendering: each generation only calls `update()` on coordinates whose state or age tier changed (incremental repaint), falling back to one full refresh when more than 256 cells change; 4 age tiers (bright cyan for newborns → purple for long-lived), 5 appearances pre-recorded as `Picture` vectors, no re-recording on zoom
+- Patterns: 9 classic patterns built in — Glider, LWSS, Pulsar, **Gosper Glider Gun** (fires a glider every 30 generations, unbounded growth), R-pentomino (chaotic for 1103 generations), Acorn (5206 generations), Diehard (dies out at generation 130), Toad, Block
+- Scenario: tap cells to place/remove, single-step or continuous evolution (5 speed tiers), random fill within the viewport, clear; stops automatically once the pattern stabilizes or dies out
+
+![Screenshot](screenshots/life.jpg)
+
 ### Benchmarks
 
 A pure-algorithm benchmark operating directly on the `LayoutEngine` core layer (**zero Android view overhead**), validating the layout engine's raw performance ceiling.
