@@ -88,8 +88,8 @@ public class MainActivity extends AppCompatActivity {
                         "随机列宽/行高动画、瓦片删除与 Picture 缓存优化", TileViewActivity.class, C_TERTIARY, "canvas"),
                 new DemoInfo("瓦片布局", "基于 Android View 体系的瓦片布局,与画板使用相同噪声数据,通过 " +
                         "TextView 渲染,支持点击/长按交互与瓦片移除", TileLayoutActivity.class, C_PRIMARY, "layout"),
-                new DemoInfo("数据表", "基于 TileLayout 构建的大规模结构化数据表格,展示瓦片引擎在数据 " +
-                        "可视化场景下的应用", TableActivity.class, C_TEAL, "data"),
+                new DemoInfo("数据表", "基于 TileLayout 的纯文本表格(CSV)编辑器,内置元素周期表数据," +
+                        "支持单元格编辑、行列增删移动、TSV/CSV 复制与解析,数据同步持久化", TableActivity.class, C_TEAL, "data"),
                 new DemoInfo("自动瓦片", "基于连接规则(ConnectionRule)的自动图块拼接系统,支持拖动绘制、 " +
                         "瓦片破碎粒子动画与进入弹跳效果", AutoTileActivity.class, C_AMBER, "auto"),
                 new DemoInfo("迷宫生成", "递归回溯算法实时生成迷宫,摄像机平滑跟随,展示 TileLayout 的动态 " +

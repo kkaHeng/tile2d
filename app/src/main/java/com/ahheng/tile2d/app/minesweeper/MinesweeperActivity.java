@@ -7,6 +7,7 @@ import android.graphics.Canvas;
 import android.graphics.Color;
 import android.graphics.Paint;
 import android.graphics.Path;
+import android.graphics.Picture;
 import android.os.Bundle;
 import android.os.Handler;
 import android.os.Looper;
@@ -83,8 +84,10 @@ public class MinesweeperActivity extends BaseActivity {
     private int lastCenterCol = 0;
     private int lastCenterRow = 0;
 
-    // 预渲染图库
-    private Bitmap[] tileBitmaps;
+    // 录制图库：15 种状态的绘制指令（Picture 矢量录制），缩放时按 scaleFactor 矢量回放，无需重录
+    private Picture[] tilePictures;
+    private int recordW = -1; // 录制时的模型尺寸（瓦片尺寸变化才重录；缩放不重录）
+    private int recordH = -1;
 
     // AI
     private boolean aiPlaying = false;
@@ -140,7 +143,7 @@ public class MinesweeperActivity extends BaseActivity {
         tileView.setDefaultTileWidth(tileSize);
         tileView.setDefaultTileHeight(tileSize);
 
-        generateTileBitmaps(tileSize, tileSize);
+        ensurePictures(tileSize, tileSize); // 初始按模型尺寸录制一次
 
         loadGame();
         tileView.setZoomEnabled(true); // Demo 默认开启缩放
@@ -153,17 +156,22 @@ public class MinesweeperActivity extends BaseActivity {
         });
     }
 
-    // ========== 素材预渲染 ==========
-    private void generateTileBitmaps(int w, int h) {
+    // ========== 素材录制 ==========
+
+    // 按模型尺寸录制 15 种状态的绘制指令：仅首次或瓦片尺寸变化时重录。
+    // 缩放通过 canvas.scale 矢量回放（指令放大不失真），无需按缩放级别重建
+    private void ensurePictures(int w, int h) {
+        if (w <= 0 || h <= 0) return;
+        if (tilePictures != null && recordW == w && recordH == h) return;
+        recordPictures(w, h);
+    }
+
+    private void recordPictures(int w, int h) {
         if (w <= 0 || h <= 0) return;
 
-        if (tileBitmaps == null) {
-            tileBitmaps = new Bitmap[15];
-        } else {
-            for (Bitmap b : tileBitmaps) {
-                if (b != null) b.recycle();
-            }
-        }
+        tilePictures = new Picture[15]; // 旧数组失去引用由 GC 回收（Picture 无公开 close()）
+        recordW = w;
+        recordH = h;
 
         Paint bgPaint = new Paint(Paint.ANTI_ALIAS_FLAG);
         Paint linePaint = new Paint(Paint.ANTI_ALIAS_FLAG);
@@ -180,10 +188,11 @@ public class MinesweeperActivity extends BaseActivity {
         minePaint.setColor(Color.BLACK);
 
         for (int i = 0; i < 15; i++) {
-            Bitmap bmp = Bitmap.createBitmap(w, h, Bitmap.Config.ARGB_8888);
-            Canvas canvas = new Canvas(bmp);
+            Picture pic = new Picture();
+            Canvas canvas = pic.beginRecording(w, h);
             drawTileState(canvas, i, w, h, bgPaint, linePaint, textPaint, flagPaint, minePaint);
-            tileBitmaps[i] = bmp;
+            pic.endRecording();
+            tilePictures[i] = pic;
         }
     }
 
@@ -1028,6 +1037,11 @@ public class MinesweeperActivity extends BaseActivity {
         public void onSizeChanged(int width, int height) {
             super.onSizeChanged(width, height);
             updateContent();
+            // 瓦片模型尺寸变化（非缩放）：标记下次绘制时重录
+            if (tilePictures != null && (recordW != width || recordH != height)) {
+                recordW = -1;
+                recordH = -1;
+            }
         }
 
         private void updateContent() {
@@ -1092,12 +1106,17 @@ public class MinesweeperActivity extends BaseActivity {
 
         @Override
         public void draw(Canvas canvas) {
-            if (currentState != -1 && tileBitmaps != null) {
-                Bitmap bmp = tileBitmaps[currentState];
-                if (bmp != null && !bmp.isRecycled()) {
-                    canvas.drawBitmap(bmp, 0, 0, null);
-                }
-            }
+            if (currentState == -1) return;
+            // 懒录制：模型尺寸（缩放不触发；瓦片尺寸变化才重录）
+            ensurePictures(getWidth(), getHeight());
+            if (tilePictures == null) return;
+            Picture pic = tilePictures[currentState];
+            if (pic == null) return;
+            // 矢量回放：指令按 scaleFactor 等比缩放，清晰不失真且无需按缩放级别重建
+            canvas.save();
+            canvas.scale(getScaleFactor(), getScaleFactor());
+            pic.draw(canvas);
+            canvas.restore();
         }
 
         @Override
@@ -1168,11 +1187,6 @@ public class MinesweeperActivity extends BaseActivity {
         tileView.setAdapter(null);
         aiExecutor.shutdownNow();
         
-        if (tileBitmaps != null) {
-            for (Bitmap b : tileBitmaps) {
-                if (b != null) b.recycle();
-            }
-            tileBitmaps = null;
-        }
+        tilePictures = null; // Picture 无公开 close()，置空引用交给 GC 回收 native 指令
     }
 }

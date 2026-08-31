@@ -345,7 +345,9 @@ public class MaxMazeActivity extends BaseActivity {
             ImageView imageView = new ImageView(MaxMazeActivity.this);
             imageView.setImageBitmap(wallBitmap);
             imageView.setLayoutParams(new ViewGroup.LayoutParams(-2, -2));
-            imageView.setScaleType(ImageView.ScaleType.CENTER);
+            // FIT_CENTER：位图按瓦片 View 实际尺寸等比缩放——缩放模式下 View 尺寸随 scaleFactor 变化，
+            // 位图必须跟着缩放，CENTER 会保持位图原始尺寸不变（内容不跟随缩放）
+            imageView.setScaleType(ImageView.ScaleType.FIT_CENTER);
             return new TileLayout.TileHolder(imageView);
         }
 

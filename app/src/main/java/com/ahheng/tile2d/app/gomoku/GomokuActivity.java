@@ -8,8 +8,8 @@ import android.graphics.Bitmap;
 import android.graphics.Canvas;
 import android.graphics.Color;
 import android.graphics.Paint;
+import android.graphics.Picture;
 import android.graphics.RadialGradient;
-import android.graphics.RectF;
 import android.graphics.Shader;
 import android.os.Bundle;
 import android.os.Handler;
@@ -71,9 +71,10 @@ public class GomokuActivity extends BaseActivity {
     private static final int B_BLACK_MARK = 4;
     private static final int B_WHITE_MARK = 5;
 
-    private Bitmap[] tileBitmaps;
-    private int bitmapW;
-    private int bitmapH;
+    // 录制图库：6 种瓦片外观的绘制指令（Picture 矢量录制），缩放时按 scaleFactor 矢量回放，无需重录
+    private Picture[] tilePictures;
+    private int recordW = -1; // 录制时的模型尺寸（瓦片尺寸变化才重录；缩放不重录）
+    private int recordH = -1;
 
     // 视觉常量（统一木色棋盘）
     private static final int COLOR_BG = Color.parseColor("#DEB887");      // 木色
@@ -113,22 +114,22 @@ public class GomokuActivity extends BaseActivity {
         }
     }
 
-    // ========== 瓦片位图预渲染 ==========
+    // ========== 瓦片绘制指令录制 ==========
 
-    // 按屏幕像素尺寸渲染 6 种瓦片外观，尺寸变化（缩放结算）时懒重建。
-    // 位图内容与瓦片屏幕尺寸绑定，缩放后棋子/格线随格子等比缩放，不再切割或留缝
-    private void ensureBitmaps(int w, int h) {
+    // 按模型尺寸录制 6 种瓦片外观的绘制指令：仅首次或瓦片尺寸变化时重录。
+    // 缩放通过 canvas.scale 矢量回放（指令放大不失真），无需按缩放级别重建
+    private void ensurePictures(int w, int h) {
         if (w <= 0 || h <= 0) return;
-        if (tileBitmaps != null && bitmapW == w && bitmapH == h) return;
-        if (tileBitmaps == null) {
-            tileBitmaps = new Bitmap[6];
-        } else {
-            for (Bitmap b : tileBitmaps) {
-                if (b != null) b.recycle();
-            }
-        }
-        bitmapW = w;
-        bitmapH = h;
+        if (tilePictures != null && recordW == w && recordH == h) return;
+        recordPictures(w, h);
+    }
+
+    private void recordPictures(int w, int h) {
+        if (w <= 0 || h <= 0) return;
+
+        tilePictures = new Picture[6]; // 旧数组失去引用由 GC 回收（Picture 无公开 close()）
+        recordW = w;
+        recordH = h;
 
         Paint bgPaint = new Paint(Paint.ANTI_ALIAS_FLAG);
         bgPaint.setColor(COLOR_BG);
@@ -140,38 +141,41 @@ public class GomokuActivity extends BaseActivity {
         starPaint.setStyle(Paint.Style.FILL);
 
         // 基础：木色底 + 十字格线（四条边各画半条，与邻格衔接成连续棋盘线）
-        Bitmap bg = createBitmap(w, h, canvas -> {
-            canvas.drawRect(0, 0, w, h, bgPaint);
-            canvas.drawLine(0, h / 2f, w, h / 2f, linePaint);
-            canvas.drawLine(w / 2f, 0, w / 2f, h, linePaint);
-        });
+        tilePictures[B_BG] = record(w, h, canvas -> drawBg(canvas, w, h, bgPaint, linePaint));
         // 星位格：基础 + 中心圆点
-        Bitmap bgStar = createBitmap(w, h, canvas -> {
-            canvas.drawBitmap(bg, 0, 0, null);
+        tilePictures[B_BG_STAR] = record(w, h, canvas -> {
+            drawBg(canvas, w, h, bgPaint, linePaint);
             canvas.drawCircle(w / 2f, h / 2f, Math.max(2f, dp2px(2.5f)), starPaint);
         });
-        tileBitmaps[B_BG] = bg;
-        tileBitmaps[B_BG_STAR] = bgStar;
-        tileBitmaps[B_BLACK] = drawStoneBitmap(w, h, GomokuBoard.BLACK, false);
-        tileBitmaps[B_WHITE] = drawStoneBitmap(w, h, GomokuBoard.WHITE, false);
-        tileBitmaps[B_BLACK_MARK] = drawStoneBitmap(w, h, GomokuBoard.BLACK, true);
-        tileBitmaps[B_WHITE_MARK] = drawStoneBitmap(w, h, GomokuBoard.WHITE, true);
+        tilePictures[B_BLACK] = drawStonePicture(w, h, GomokuBoard.BLACK, false);
+        tilePictures[B_WHITE] = drawStonePicture(w, h, GomokuBoard.WHITE, false);
+        tilePictures[B_BLACK_MARK] = drawStonePicture(w, h, GomokuBoard.BLACK, true);
+        tilePictures[B_WHITE_MARK] = drawStonePicture(w, h, GomokuBoard.WHITE, true);
     }
 
-    private interface BitmapDrawer {
+    // 录制工具：把绘制逻辑录制成矢量指令
+    private Picture record(int w, int h, PictureDrawer drawer) {
+        Picture pic = new Picture();
+        Canvas canvas = pic.beginRecording(w, h);
+        drawer.draw(canvas);
+        pic.endRecording();
+        return pic;
+    }
+
+    // 木色底 + 十字格线（基础外观，供普通格与星位格复用）
+    private void drawBg(Canvas canvas, int w, int h, Paint bgPaint, Paint linePaint) {
+        canvas.drawRect(0, 0, w, h, bgPaint);
+        canvas.drawLine(0, h / 2f, w, h / 2f, linePaint);
+        canvas.drawLine(w / 2f, 0, w / 2f, h, linePaint);
+    }
+
+    private interface PictureDrawer {
         void draw(Canvas canvas);
     }
 
-    private Bitmap createBitmap(int w, int h, BitmapDrawer drawer) {
-        Bitmap bmp = Bitmap.createBitmap(w, h, Bitmap.Config.ARGB_8888);
-        Canvas canvas = new Canvas(bmp);
-        drawer.draw(canvas);
-        return bmp;
-    }
-
     // 棋子瓦片：木色底 + 立体棋子（径向渐变高光）+ 末手红标
-    private Bitmap drawStoneBitmap(int w, int h, int color, boolean mark) {
-        return createBitmap(w, h, canvas -> {
+    private Picture drawStonePicture(int w, int h, int color, boolean mark) {
+        return record(w, h, canvas -> {
             float cx = w / 2f;
             float cy = h / 2f;
             float r = Math.min(w, h) * 0.42f;
@@ -500,12 +504,7 @@ public class GomokuActivity extends BaseActivity {
         super.onDestroy();
         stopThinking();
         aiExecutor.shutdownNow();
-        if (tileBitmaps != null) {
-            for (Bitmap b : tileBitmaps) {
-                if (b != null) b.recycle();
-            }
-            tileBitmaps = null;
-        }
+        tilePictures = null; // Picture 无公开 close()，置空引用交给 GC 回收 native 指令
         tileView.setAdapter(null);
     }
 
@@ -544,19 +543,16 @@ public class GomokuActivity extends BaseActivity {
         }
     }
 
-    // 瓦片绘制：按屏幕尺寸选预渲染位图（缩放适配 + 3D 立体棋子 + 末手高亮）
+    // 瓦片绘制：录制指令 + 矢量回放（缩放适配 + 3D 立体棋子 + 末手高亮）
     private class GomokuTileHolder extends TileView.TileHolder {
 
         @Override
         public void draw(Canvas canvas) {
             int col = getColumn();
             int row = getRow();
-            // 屏幕像素尺寸 = 模型尺寸 × 缩放因子：缩放后内容随格子等比缩放，
-            // 避免"缩小切割 / 放大留缝"（内容与瓦片位置错位）
-            float sw = getWidth() * getScaleFactor();
-            float sh = getHeight() * getScaleFactor();
-            ensureBitmaps(Math.round(sw), Math.round(sh));
-            if (tileBitmaps == null) return;
+            // 懒录制：模型尺寸（缩放不触发；瓦片尺寸变化才重录）
+            ensurePictures(getWidth(), getHeight());
+            if (tilePictures == null) return;
 
             int stone = board.get(col, row);
             boolean last = stone != GomokuBoard.EMPTY
@@ -569,8 +565,23 @@ public class GomokuActivity extends BaseActivity {
             } else {
                 idx = (!isMaxMode() && isStarCell(col, row)) ? B_BG_STAR : B_BG;
             }
-            // 拉伸到精确屏幕尺寸，消除取整造成的瓦片间缝隙
-            canvas.drawBitmap(tileBitmaps[idx], null, new RectF(0, 0, sw, sh), null);
+            // 矢量回放：指令按 scaleFactor 等比缩放，清晰不失真且无需按缩放级别重建
+            Picture pic = tilePictures[idx];
+            if (pic == null) return;
+            canvas.save();
+            canvas.scale(getScaleFactor(), getScaleFactor());
+            pic.draw(canvas);
+            canvas.restore();
+        }
+
+        @Override
+        public void onSizeChanged(int width, int height) {
+            super.onSizeChanged(width, height);
+            // 瓦片模型尺寸变化（非缩放）：标记下次绘制时重录
+            if (tilePictures != null && (recordW != width || recordH != height)) {
+                recordW = -1;
+                recordH = -1;
+            }
         }
 
         @Override

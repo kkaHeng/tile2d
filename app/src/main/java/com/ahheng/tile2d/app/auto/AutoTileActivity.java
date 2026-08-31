@@ -345,7 +345,8 @@ public class AutoTileActivity extends BaseActivity {
             ImageView imageView = new ImageView(AutoTileActivity.this);
             imageView.setImageBitmap(tileSet.getTile(type));
             imageView.setLayoutParams(new ViewGroup.LayoutParams(-2, -2));
-            imageView.setScaleType(ImageView.ScaleType.CENTER);
+            // FIT_CENTER：位图按瓦片 View 实际尺寸等比缩放（缩放模式下内容跟随缩放）
+            imageView.setScaleType(ImageView.ScaleType.FIT_CENTER);
             imageView.setColorFilter(null);
             return new TileLayout.TileHolder(imageView);
         }
