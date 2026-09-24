@@ -158,6 +158,17 @@ public int getBottomBound() {
 }
 ```
 
+### 刷新语义
+
+```java
+// 适配器数据变化后直接调用，不需要重新 setAdapter
+tileView.update(3, 5); // 单个瓦片
+tileView.updateRange(-10, -10, 10, 10); // 矩形区域（闭区间）
+tileView.updateColumn(0); // 整列
+tileView.updateRow(0); // 整行
+tileView.updateAll(); // 全部（等价于在原地重新执行一次 seek）
+```
+
 ---
 
 ## 架构
@@ -253,6 +264,7 @@ App 模块内置 **11 个示例**，覆盖两种渲染范式（Canvas 自绘 / �
 - **随机调整尺寸**  
 平滑地调整视窗中心的**列宽**或**行高**，展示引擎动态调整尺寸的效率，在视窗外调整尺寸效率更高。
 
+> 以下 Demo 均由 AI 生成。
 
 ### 瓦片画板（TileView）
 

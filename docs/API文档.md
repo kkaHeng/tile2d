@@ -1119,3 +1119,7 @@
 获取迭代器，`deleteMode` 为 true 时以删除模式遍历（便于边遍历边删除）。
 
 > 内置实现：`IntIntMapOpenHashMap`（默认）、`IntIntMapSparseArray`、`IntIntMapHashMap`，特性同 `LongMap`。列宽/行高使用本接口存储。
+
+---
+
+> 本文档内容由 AI 生成。
