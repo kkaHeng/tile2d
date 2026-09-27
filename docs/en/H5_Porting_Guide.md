@@ -1,14 +1,14 @@
 # H5 Porting Guide (Tile2D)
 
 > This document is the H5 sub-document of the "Cross-Platform Porting Guide": **using the project's real, runnable `h5-demo/` as an example, it teaches you step by step how to port Tile2D to the browser (JavaScript)**.
-> The rendering approach is **DOM** — tiles are real elements (mirroring the app-side `TileLayout`, which uses real child Views to carry tiles), not Canvas self-drawing.
+> The rendering approach is **Canvas self-drawing** — every tile in the window is painted onto a single `<canvas>` (mirroring the app-side `TileView`), with no DOM tiles.
 > The code blocks in this document are **real code extracted from `h5-demo/`**; when it says "see file X for the full code", the file is authoritative.
 
 ## How to Use This Guide
 
 - **Prerequisite**: first read the `LayoutEngine` chapter of the "Cross-Platform Porting Guide" (`sync`'s 3a–3g, `seek`, and the responsibilities of `diff`). This document won't repeat the theory.
 - **How to read**: every step follows the pattern "what to port → what the real code looks like → self-check points".
-- **Order**: engine (pure algorithm) first, then the container layer (DOM), and finally interaction and menus — matching the order in which this demo was actually written.
+- **Order**: engine (pure algorithm) first, then the container layer (Canvas drawing), and finally interaction and menus — matching the order in which this demo was actually written.
 - **Running it**: just double-click `h5-demo/index.html` (local `file://` works, zero network dependencies), or serve it with `python3 -m http.server`.
 
 ## Step 0: Decide What to Replicate First
@@ -19,26 +19,26 @@ Porting is not "copying Java line by line into JS"; it's **first distinguishing 
 |---|---|---|
 | `LayoutEngine` | `h5-demo/tile2d.js` | **Line-by-line alignment** (comments included); behavior must be identical |
 | `LayoutModel` | `h5-demo/tile2d.js` | Line-by-line alignment |
-| `TileLayout` (ViewGroup + real child Views) | `TileDomCore` (container + real DOM elements) | **Replicate as needed**: enter/leave, layout, scaling, recycling, hit-testing |
+| `TileView` (Canvas self-drawing) | `TileCanvasCore` (self-drawn container layer) | **Replicate as needed**: draw loop, scaling, hit-testing, snapping |
 | `TileManager` (prefetch / dying zone) | —— | Not needed by the demo; drop it |
-| `DimenManager` | The size table inside `TileDomCore` | As needed: per-column width / per-row height + defaults |
-| `TileCoreService` (dispatch layer) | `main.js` + `TileDomCore` | As needed: keep only what the demo uses |
+| `DimenManager` | The size table inside `TileCanvasCore` | As needed: per-column width / per-row height + defaults |
+| `TileCoreService` (dispatch layer) | `main.js` + `TileCanvasCore` | As needed: keep only what the demo uses |
 | Perlin noise + 24-color gradient | `h5-demo/noise.js` | **Bit-for-bit alignment** (same seed must produce the same image) |
 
 In one sentence: **the engine and the RNG must be "exactly the same"; the container layer and the dispatch layer are "rewritten to intent".**
 
 The sample has 4 files:
 
-- `h5-demo/index.html` — page structure and styles (mobile-first, safe-area aware)
-- `h5-demo/tile2d.js` — `LayoutModel` + `LayoutEngine` (line-by-line aligned) + `TileDomCore` (DOM container layer)
+- `h5-demo/index.html` — page structure and styles (mobile-first, safe-area aware); the tile container is simply `<canvas id="view">`
+- `h5-demo/tile2d.js` — `LayoutModel` + `LayoutEngine` (line-by-line aligned) + `TileCanvasCore` (Canvas self-drawn layer)
 - `h5-demo/noise.js` — `java.util.Random` replica + Perlin noise + 24-color gradient
-- `h5-demo/main.js` — adapter + DOM tile rendering + gestures (inertial scroll / pinch zoom) + menus
+- `h5-demo/main.js` — adapter + gestures (inertial scroll / pinch zoom) + menus
 
 > **Unit tests do not go into the project**: this project requires test code to live only in a **temporary directory outside the project** (which also makes it easy to run isomorphic diffing against the Java version). `h5-demo/tile2d.js` keeps `module.exports` at the bottom precisely so external test scripts can `require` it.
 
 ## Step 1: Build the Page Skeleton (index.html)
 
-Three key points for the container (mirroring the fact that `TileLayout` is a `ViewGroup`):
+The tile container itself is a `<canvas>` (mirroring the app-side `TileView`, which is a single canvas):
 
 ```css
 #view {
@@ -46,30 +46,30 @@ Three key points for the container (mirroring the fact that `TileLayout` is a `V
     left: 0; top: 0;
     width: 100%;
     height: 100%;
-    overflow: hidden;      /* Window clipping, equivalent to ViewGroup's clipChildren */
+    display: block;        /* canvas element */
+    background: #0e1117;   /* first frame / sparse-area background */
     touch-action: none;    /* Key: blocks default browser gestures (otherwise dragging is stolen by page scroll) */
-    contain: strict;       /* Tells the browser: internal layout and paint don't overflow; more stable performance */
-}
-
-/* Tiles: real DOM elements (mirroring TileLayout.TileHolder.itemView) */
-#view > .tile {
-    position: absolute;
-    left: 0; top: 0;       /* Position is entirely handled by transform */
-    display: flex;
-    align-items: center;   /* Corresponds to TextView's gravity=CENTER */
-    justify-content: center;
-    box-sizing: border-box;
-    border: 0.5px solid #808080;   /* Corresponds to GradientDrawable.setStroke(0.5dp, GRAY) */
-    will-change: transform;
-    contain: layout paint style;
+    cursor: grab;
 }
 ```
 
 Three things for mobile adaptation: `<meta name="viewport" … viewport-fit=cover>`, using `env(safe-area-inset-*)` to leave a safe area for the top/bottom bars, and `html,body { overflow: hidden; overscroll-behavior: none; }` to prevent full-page rubber-banding.
 
-Page structure (full version in `h5-demo/index.html`): `#view` (tile container) + `#topbar` (status pill + menu button) + `#hud` (debug panel) + `#toast` + `#sheet` (bottom drawer menu).
+Page structure (full version in `h5-demo/index.html`): `#view` (self-drawn canvas) + `#topbar` (status pill + menu button) + `#hud` (debug panel) + `#toast` + `#sheet` (bottom drawer menu).
 
-**Self-check**: the page opens on a phone, the page doesn't scroll along when dragging, and the tile container hugs all four screen edges (including the notch safe area).
+**Making the canvas "retina"**: the `<canvas>` backing store must be enlarged by the device pixel ratio while drawing coordinates stay in CSS pixels (done in `TileCanvasCore.resizeCanvas`):
+
+```js
+resizeCanvas() {
+    const w = Math.max(1, Math.round(this.containerWidth * this.dpr));
+    const h = Math.max(1, Math.round(this.containerHeight * this.dpr));
+    if (this.canvas.width !== w) this.canvas.width = w;
+    if (this.canvas.height !== h) this.canvas.height = h;
+}
+// before drawing: ctx.setTransform(this.dpr, 0, 0, this.dpr, 0, 0)
+```
+
+**Self-check**: the page opens on a phone, the page doesn't scroll along when dragging, the canvas hugs all four screen edges (including the notch safe area), and tiles/text are not blurry when zoomed.
 
 ## Step 2: Layout Model (LayoutModel)
 
@@ -191,61 +191,83 @@ The engine's remaining methods correspond one-to-one (full code in `h5-demo/tile
 
 **Self-check**: run the same set of inputs through Java and JS; the eight fields of `LayoutModel` must match bit for bit (see Step 7).
 
-## Step 4: Container Layer (TileDomCore) — Tiles Are Real DOM Elements
+## Step 4: Container Layer (TileCanvasCore) — Canvas Self-Drawing
 
-This step corresponds to Java's `TileLayout` (ViewGroup). Four things:
+This step corresponds to Java's `TileView` (a single canvas). The core is **one draw loop** plus **one paint-info cache**.
 
-1. **Entering/leaving the window = attaching/detaching elements**
+**① Entering/leaving the window only updates the cache, never DOM**
+
+The engine's `in/out` no longer add or remove elements; they just cache "how to draw this cell"; sparse cells store `null`, are skipped when drawing, and reveal the background:
 
 ```js
 onTileIn(column, row) {
-    const tile = this.obtain(type);           // Take from the recycling stack first; only create if none
-    this.adapter.onBindTileHolder(tile, column, row);
-    this.container.appendChild(tile.el);      // Corresponds to addViewInLayout
-    this.active.set(key, tile);
+    const type = this.adapter.getTileType(column, row);
+    this.paints.set(TileCanvasCore.key(column, row),
+        type === -1 ? null : this.adapter.getPaint(column, row));
 }
 onTileOut(column, row) {
-    if (tile.el.parentNode === this.container) this.container.removeChild(tile.el);  // Corresponds to removeViewInLayout
-    /* After detaching, push into the recycling stack for reuse by the next obtain */
+    this.paints.delete(TileCanvasCore.key(column, row));
 }
 ```
 
-2. **Layout = one pass over the visible range, writing only style**
+**② Drawing = clear + paint each cell's rect / border / text across the window**
 
 ```js
-layoutTiles() {                       // Corresponds to TileLayout.layoutTiles
-    let x = paddingLeft + this.scale(model.offsetX);
+draw() {
+    ctx.setTransform(this.dpr, 0, 0, this.dpr, 0, 0);
+    ctx.fillStyle = this.background;      // fill the background first (sparse/empty areas show it)
+    ctx.fillRect(0, 0, this.containerWidth, this.containerHeight);
+
+    let x = this.paddingLeft + model.offsetX * scale;
     for (let column = model.colStart; ; column++) {
-        const width = this.scale(this.getTileWidth(column));
-        let y = paddingTop + this.scale(model.offsetY);
+        const w = this.getTileWidth(column) * scale;
+        let y = this.paddingTop + model.offsetY * scale;
         for (let row = model.rowStart; ; row++) {
-            const height = this.scale(this.getTileHeight(row));
-            const tile = this.getActiveTile(column, row);
-            if (tile) {               // Only active tiles touch the DOM
-                tile.el.style.transform = `translate3d(${x}px,${y}px,0)`;
-                tile.el.style.width = width + 'px';
-                tile.el.style.height = height + 'px';
-                tile.el.style.fontSize = this.scale(14) + 'px';   // Font size scales too
+            const h = this.getTileHeight(row) * scale;
+            const paint = this.getPaint(column, row);
+            if (paint) {
+                ctx.fillStyle = paint.color;  ctx.fillRect(x, y, w, h);
+                ctx.strokeStyle = '#808080';  ctx.strokeRect(x, y, w, h);   // 0.5px border
+                ctx.fillStyle = paint.textColor;
+                ctx.fillText(paint.text, x + w / 2, y + h / 2);             // centered text
             }
-            y += height;
-            if (row === model.rowEnd) break;
+            y += h; if (row === model.rowEnd) break;
         }
-        x += width;
-        if (column === model.colEnd) break;
+        x += w; if (column === model.colEnd) break;
     }
 }
 ```
 
-> **Why `transform` instead of `left/top`**: `transform` only touches the compositor layer and doesn't trigger layout reflow; `left/top` makes the browser recompute layout every time.
-> **Why write `width/height` and `fontSize` explicitly**: the DOM doesn't scale by itself — when `scaleFactor` changes, they must be recomputed (exactly the same as `TileLayout`'s `scale()`).
+**③ Scaling = scaleFactor, and the engine window must be divided by the scale**
 
-3. **Scaling = scaleFactor** (mirrors `TileLayout.scale(n) = n * getScaleFactor()`): both geometry and font size are multiplied by it. The window size the container hands to the engine is still computed from the container size; zoom only affects "how many pixels one cell occupies on screen".
+Geometry and font size are both multiplied by `scaleFactor` (equivalent to `TileView`'s `scale(n) = n * getScaleFactor()`). **Key**: the engine's window is in *content pixels*, so the window handed to the engine is `(container size - padding) ÷ scaleFactor` (mirroring `TileCoreService.updateWindowSize`):
 
-4. **Hit-testing = findColumn / findRow**: convert screen coordinates back to content coordinates (subtract padding first, then divide by scale), and accumulate widths along the column/row.
+```js
+const scale = this.scaleFactor || 1;
+this.viewportWidth  = Math.max(1, Math.round((this.containerWidth  - this.paddingLeft * 2) / scale));
+this.viewportHeight = Math.max(1, Math.round((this.containerHeight - this.paddingTop  * 2) / scale));
+```
+
+**④ Jumps must clear the cache; out-of-bounds must snap back**
+
+- `seek` is a "reset the window": clear the paint cache first, then let the engine rebuild it (mirroring `clearActiveAndDying` inside `TileCoreService.seek`).
+- `snap` is "on out-of-bounds, jump to the nearest legal anchor" and **must not be just `sync(0,0)`** (when out of bounds, `sync` short-circuits and does nothing):
+
+```js
+snap() {
+    if (this.isEmpty()) return;
+    const m = this.getLayoutModel();
+    if (m.colStart >= left && m.colEnd <= right && m.rowStart >= top && m.rowEnd <= bottom) return;
+    this.seek(Math.max(left, Math.min(m.colStart, right)),
+              Math.max(top,  Math.min(m.rowStart, bottom)), 0, 0);
+}
+```
+
+**⑤ Hit-testing = findColumn / findRow**: convert screen coordinates back to content coordinates (subtract padding first, then divide by scale), and accumulate widths along the column/row.
 
 The size table follows a simplified version of `DimenManager`'s three-level priority: **individually set > default** (the demo doesn't need `TileDimenProvider`).
 
-**Self-check**: the number of child elements in the container equals the number of active tiles; while scrolling, `transform` is rewritten and elements scrolled off-screen are detached (you can watch the DOM tree in DevTools).
+**Self-check**: the number of cells painted in a single draw == the number of cells in the window; sparse cells are really skipped; no stale frame remains after a jump; no blank (and no overflow) after zooming.
 
 ## Step 5: Data Source (noise.js)
 
@@ -275,30 +297,40 @@ class JavaRandom {
 
 ## Step 6: Adapter and Interaction (main.js)
 
-The **adapter** only needs four things (mirroring `TileLayout.Adapter`):
+The **adapter** only needs "bounds + type + how to draw" (mirroring `TileView.Adapter`):
 
 ```js
 const adapter = {
-    getLeftBound / getTopBound / getRightBound / getBottomBound,   // In pseudo-infinite mode, return the int32 extremes
-    getTileType: (c, r) => removed.has(c + ',' + r) || noiseAt(c, r) < 0.3 ? -1 : 0,
-    onCreateTileHolder: (type) => type === -1 ? null : { type, el: makeTileDiv() },
-    onBindTileHolder: (holder, c, r) => { /* backgroundColor + textColor + text = noise/0.03 with %.2f */ },
+    getLeftBound / getTopBound / getRightBound / getBottomBound,  // In pseudo-infinite mode, return the int32 extremes
+    // Low-noise areas are sparse: return -1 means "don't draw this cell"
+    getTileType: (column, row) => noiseAt(column, row) < 0.3 ? -1 : 0,
+    // Data needed for self-drawing: background color + text color + text
+    getPaint: (column, row) => {
+        const noise = noiseAt(column, row);
+        const color = colorGen.getColor((noise - 0.3) / 0.7);
+        return {
+            color: ColorGenerator.css(color),
+            textColor: ColorGenerator.luminance(color) > 0.40 ? '#111111' : '#ffffff',
+            text: (noise / 0.03).toFixed(2),
+        };
+    },
 };
 ```
 
-**Gestures** (all implemented on `#view` with Pointer Events):
+**Gestures** (all implemented on the canvas with Pointer Events; works for both mouse and touch):
 
 | Gesture | Implementation notes |
 |---|---|
-| Single-finger drag | `dx = (current x - previous x) / scaleFactor` — dividing by scale is what makes it "follow the finger" |
+| Drag (touch / mouse) | `dx = (current x - previous x) / scaleFactor` — dividing by scale is what makes it "follow the finger" |
 | Inertial scroll | Record the velocity of the last 100ms (content px/ms); after release decay with `v *= 0.94^(dt/16.7)`; stop below the threshold |
 | Two-finger pinch | Compute the new `scaleFactor` from the ratio of the two-finger distance; in `zoomTo(s, fx, fy)`, use `dx = (fx - padding) * (1/sNew - 1/sOld)` to pin the content point under the focus |
 | Double tap | Two taps within 300ms → 1x ↔ 2x (same `zoomTo`, focus = tap point) |
-| Long-press delete | 500ms timer + movement-threshold check → `removed.add(key)` + `core.update(c,r)` (the element is detached and recycled) |
-| Single tap | Convert coordinates with `findColumn/findRow` → Toast |
-| Desktop | `wheel` scroll; `Ctrl/⌘ + wheel` zoom (`{ passive: false }` is required for `preventDefault`) |
+| Single tap | Convert coordinates with `findColumn/findRow` → Toast (no long-press) |
+| Wheel | Only `Ctrl/⌘ + wheel` for zoom (`{ passive: false }` is required for `preventDefault`) |
 
-**Menus** mirror the app side's `BaseActivity` set: Debug mode, pseudo-infinite mode, random size adjustment (width/height, 2-second overshoot animation applied to the column/row at the center of the window), visit the bounds (eight directions + return to origin), view (zoom in / zoom out / reset zoom). Debug mode additionally provides a HUD: window size, window range, offset, content width/height, scale, active/recycled tile counts, DOM child count.
+**Menus** mirror the app side's `BaseActivity` set: Debug mode, pseudo-infinite mode, random size adjustment (width/height, 2-second overshoot animation applied to the column/row at the **center of the window**), visit the bounds (eight directions + return to origin), view (zoom in / zoom out / reset zoom). Debug mode additionally provides a HUD: window size, window range, offset, content width/height, scale, canvas size, cached cell count.
+
+> Small detail: menu items auto-close the sheet (like a native menu), otherwise the bottom drawer covers the center of the screen and you can't see the random-size animation; the center column/row is computed from **the engine's own window geometry** (`padding + viewport*scale/2`), the same source as the painted window, so it can't misalign.
 
 ## Step 7: Aligning with the Java Version (How to Prove the Port Is Correct)
 
@@ -313,6 +345,8 @@ Three things, all done in a **temporary directory outside the project**:
 
 ## Step 8: Common Pitfalls
 
+**Engine side**:
+
 1. **Where the offset accumulation goes**: put it at the top of the method and the `dx` inside the checks gets cancelled out — the condition degenerates to always-true/always-false (`>=` always false, `<` always true; flipping the sign doesn't save it).
 2. **`seek`'s accumulator initial value**: it must be `let contentWidth = Math.trunc(offsetX);` and then `- Math.trunc(offsetX)` at the end — the initial value and the minus sign cancel out, leaving the pure sum of widths. Starting from 0 while still subtracting `offsetX` at the end subtracts a whole extra `offsetX`, making `contentWidth` too small (when `offsetX>0`) or too large (when `offsetX<0`), and the extension loop's terminating column off by one.
 3. **Integer truncation**: Java's `(int)` maps to `Math.trunc`; using `~~` for negatives is wrong.
@@ -320,8 +354,16 @@ Three things, all done in a **temporary directory outside the project**:
 5. **The fill loop's boundary**: `while (contentWidth + offsetX < windowWidth && …)` uses **strictly less than** — exactly filling would lay one extra cell (11 columns instead of 10); this is the engine's existing behavior, don't "fix it in passing".
 6. **3c-2 must not be removed**: without it, large displacements nearly double the traversal, and the intermediate state shows `contentWidth` inconsistent with the anchor span.
 7. **No 64-bit integers**: use the string `"col,row"` for tile keys; parse it back into two integers when you need to compare by numeric value.
-8. **Touch details**: the container needs `touch-action: none`; `setPointerCapture` ensures move events still arrive when the finger slides off the element; the `wheel` listener must be `{ passive: false }` to `preventDefault`; disable `contextmenu` on `document` to avoid the long-press menu.
-9. **Don't touch `left/top/width/height` during dragging**: only write `transform`; write sizes only when the size changes.
+
+**Rendering / interaction side**:
+
+8. **`snap` must not be just `sync(0,0)`**: when out of bounds, `sync` short-circuits and returns, doing nothing (this is exactly how the window failed to be pulled back after pseudo-infinite mode was turned off). Out of bounds requires a `seek` to the nearest legal anchor.
+9. **Changing the scale must recompute the engine window**: window = `(container size - padding) ÷ scaleFactor`. Not dividing by scale → with `scale>1` "overflows off-screen and isn't recycled", with `scale<1` "blank space".
+10. **`seek` must clear the paint cache first**: the engine's `in/out` only maintain the cache; without clearing before `seek`, the previous frame's cache lingers.
+11. **Retina canvas**: enlarge the backing store by `devicePixelRatio` and call `ctx.setTransform(dpr,0,0,dpr,0,0)` before drawing, keeping coordinates in CSS pixels; otherwise it's blurry and mouse coordinates misalign with the picture.
+12. **Don't just `clearRect`**: fill the background with `fillRect` first, so sparse/empty areas show the background color.
+13. **Don't read `getBoundingClientRect()` every frame**: cache the container rect and only re-read it on size changes (resize / rotation), otherwise every touch event may force a synchronous layout.
+14. **Touch details**: the container needs `touch-action: none`; `setPointerCapture` ensures move events still arrive when the finger slides off the canvas; the `wheel` listener must be `{ passive: false }` to `preventDefault`; disable `contextmenu` on `document`.
 
 ## Step 9: Running and the Self-Check List
 
@@ -330,13 +372,14 @@ How to open: `h5-demo/index.html` (works directly via `file://`), or serve with 
 Check each item:
 
 - [ ] The first screen is filled with tiles, no holes inside the window; sparse areas (low noise) are indeed empty
-- [ ] Dragging follows the finger: moving the finger 100px moves the content 100px (same when scale ≠ 1)
+- [ ] Dragging follows the finger: moving the finger/mouse 100px moves the content 100px (same when scale ≠ 1)
 - [ ] Releasing has inertia and eventually stops; after stopping it no longer changes
 - [ ] The **focus** of two-finger pinch zoom doesn't drift (the tile under the focus stays between the fingers)
 - [ ] Double tap 1x ↔ 2x; menu zoom in/out/reset all take effect
-- [ ] After long-press deleting a tile it disappears, and the corresponding element is detached from the DOM (not `display:none`)
-- [ ] Pseudo-infinite mode: can reach the far left / far right (int32 extremes) and still work after coming back
-- [ ] Random width/height adjustment has a 2-second animation, and the anchor doesn't jump around during it
+- [ ] Single-tapping a tile pops up its coordinate toast (there is no long-press)
+- [ ] Pseudo-infinite mode: can reach the far left / far right (int32 extremes); **after turning it off the window is pulled back into the legal range**
+- [ ] Random width/height adjustment has a 2-second animation applied to the **column/row at the center of the window**, and the anchor doesn't jump around during it
+- [ ] No blank (and no overflow) inside the window (the Debug dashed box roughly matches the tile window)
 - [ ] Tile text matches the app side at the same coordinate (e.g. `(0,0)` is `16.67`)
 
 ## Related Documents

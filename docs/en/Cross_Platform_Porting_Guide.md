@@ -421,7 +421,7 @@ Boundary scenario checklist:
 
 ## Sub-document
 
-- [H5 Porting Guide (DOM)](H5_Porting_Guide.md) — a complete porting tutorial using the browser as the example, with a runnable sample (h5-demo/).
+- [H5 Porting Guide (Canvas self-drawing)](H5_Porting_Guide.md) — a complete porting tutorial using the browser as the example, with a runnable sample (h5-demo/).
 
 ---
 
