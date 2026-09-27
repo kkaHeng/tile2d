@@ -12,6 +12,7 @@ import androidx.annotation.Nullable;
 
 import com.ahheng.tile2d.TileCoreService;
 import com.ahheng.tile2d.app.BaseActivity;
+import com.ahheng.tile2d.tile.TileEventListener;
 import com.ahheng.tile2d.widget.canvas.TileView;
 import com.ahheng.tile2d.widget.layout.TileLayout;
 
@@ -43,6 +44,19 @@ public class TileLayoutActivity extends BaseActivity {
         layout.setZoomEnabled(true); // Demo 默认开启缩放
         layout.setAdapter((adapter = new RandomAdapter()));
         initTextPlan();
+
+        // 数据边界提示（所见即所得）：每帧布局完成后检查是否撞上数据边界；
+        // 撞上时弹一次提示，停留在边界上继续同向滚动不重复弹，离开后再次撞上才再弹。
+        layout.setTileEventListener(new TileEventListener<TileLayout.TileHolder>() {
+            @Override public void onBeforeLayout() {}
+            @Override public void onAfterLayout() {
+                checkBounds(layout.isAtLeftBound(), layout.isAtTopBound(),
+                        layout.isAtRightBound(), layout.isAtBottomBound());
+            }
+            @Override public void onTileIn(TileLayout.TileHolder holder, int column, int row) {}
+            @Override public void onTileOut(TileLayout.TileHolder holder, int column, int row) {}
+            @Override public void onTileRecycled(TileLayout.TileHolder holder, int column, int row) {}
+        });
     }
 
     private void initTextPlan() {

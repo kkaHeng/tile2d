@@ -83,8 +83,8 @@ public class LayoutEngine {
             if (contentWidth + offsetX < windowWidth && colEnd == rightBound) {
                 // 右侧有空白，尝试右对齐，伪造用户向右拖事件
                 // 在日常滚动中，通过这种方式避免右边出现空白，继续往左边拖动不会发生变化
-                // 在 seek 调整场景中，如果距离数据右边界太近，会触发下面的循环补充左边
-                offsetX += windowWidth - (contentWidth + offsetX);
+                // 在 seek 中，如果距离数据右边界太近，会触发下面的循环补充左边
+                offsetX = windowWidth - contentWidth;
             }
             while (offsetX > 0 && colStart > leftBound) {
                 // 用户向右拖，内容向右边滚动，锚点左移
@@ -132,7 +132,7 @@ public class LayoutEngine {
             }
             if (contentWidth > windowWidth && contentWidth + offsetX < windowWidth && colEnd == rightBound) {
                 // 复核发现前面2个循环导致右边出现空白，处理掉
-                offsetX += windowWidth - (contentWidth + offsetX);
+                offsetX = windowWidth - contentWidth;
             }
             output.offsetX = original.offsetX = offsetX;
         }
@@ -142,7 +142,7 @@ public class LayoutEngine {
             float offsetY = original.offsetY + dy;
 
             if (contentHeight + offsetY < windowHeight && rowEnd == bottomBound) {
-                offsetY += windowHeight - (contentHeight + offsetY);
+                offsetY = windowHeight - contentHeight;
             }
             while (offsetY > 0 && rowStart > topBound) {
                 rowStart--;
@@ -176,7 +176,7 @@ public class LayoutEngine {
                 endHeight = windowInterface.getRowHeight(rowEnd);
             }
             if (contentHeight > windowHeight && contentHeight + offsetY < windowHeight && rowEnd == bottomBound) {
-                offsetY += windowHeight - (contentHeight + offsetY);
+                offsetY = windowHeight - contentHeight;
             }
             output.offsetY = original.offsetY = offsetY;
         }

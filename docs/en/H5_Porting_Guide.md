@@ -107,7 +107,7 @@ sync(dx, dy):
 
         # 3a. Content doesn't fill and right bound is reached: try right-alignment (tentative compensation)
         if contentWidth + offsetX < windowWidth and colEnd == rightBound:
-            offsetX += windowWidth - (contentWidth + offsetX)
+            offsetX = windowWidth - contentWidth      # right-align directly (the offsetX terms cancel)
 
         # 3b. Dragging right, anchor moves left, bring in new columns
         while offsetX > 0 and colStart > leftBound:
@@ -147,7 +147,7 @@ sync(dx, dy):
 
         # 3g. The two loops above may leave a blank on the right: patch it (final-state compensation)
         if contentWidth > windowWidth and contentWidth + offsetX < windowWidth and colEnd == rightBound:
-            offsetX += windowWidth - (contentWidth + offsetX)
+            offsetX = windowWidth - contentWidth      # same, right-align directly
 
         write back offsetX
 

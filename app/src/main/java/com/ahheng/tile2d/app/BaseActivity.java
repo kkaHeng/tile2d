@@ -47,6 +47,10 @@ public abstract class BaseActivity extends AppCompatActivity implements MenuItem
     private ToTheEnd toTheEnd;
     private RandomSize randomSize;
 
+    // 数据边界提示：撞到某条边界时弹一次，离开该边界前不再重复弹
+    private boolean atLeftBound, atRightBound, atTopBound, atBottomBound;
+    private boolean boundsSeeded = false;
+
     private ValueAnimator widthAnimator;
     private ValueAnimator heightAnimator;
 
@@ -86,6 +90,35 @@ public abstract class BaseActivity extends AppCompatActivity implements MenuItem
         if (toast != null) toast.cancel();
         toast = Toast.makeText(this, text, Toast.LENGTH_SHORT);
         toast.show();
+    }
+
+    // 数据边界检查：由各 demo 在每次布局完成后调用（见 TileEventListener.onAfterLayout）。
+    // 传入当前的四向边界状态，只在「新撞上」某条边界时提示一次；停留在边界上继续朝同方向滚动
+    // 不会重复提示，离开该边界后再次撞上才会重新提示。弹出时把当前撞上的边界一并显示成方位词
+    // （如「右下」「左上」）。首次调用只记录状态（避免启动/跳转时误报）。
+    public void checkBounds(boolean left, boolean top, boolean right, boolean bottom) {
+        boolean anyNew = (left && !atLeftBound) || (right && !atRightBound)
+                || (top && !atTopBound) || (bottom && !atBottomBound);
+
+        atLeftBound = left;
+        atRightBound = right;
+        atTopBound = top;
+        atBottomBound = bottom;
+
+        if (boundsSeeded && anyNew) {
+            showToast("到达数据边界：" + boundLabel(left, top, right, bottom));
+        }
+        boundsSeeded = true;
+    }
+
+    // 把「当前撞上的边界」拼成方位词：右下 / 左上 / 右 / 下 ……
+    private static String boundLabel(boolean left, boolean top, boolean right, boolean bottom) {
+        StringBuilder sb = new StringBuilder(4);
+        if (left) sb.append("左");
+        if (right) sb.append("右");
+        if (top) sb.append("上");
+        if (bottom) sb.append("下");
+        return sb.length() == 0 ? "边界" : sb.toString();
     }
 
     @Override
@@ -166,6 +199,7 @@ public abstract class BaseActivity extends AppCompatActivity implements MenuItem
     }
 
     private boolean gogogo(int column, int row, String name) {
+        boundsSeeded = false; // 菜单跳转本身已有提示，边界拦截静默一次，避免两条 toast 打架
         showToast("到达" + name + "：" + column + "," + row);
         toTheEnd.gogogo(column, row);
         return true;

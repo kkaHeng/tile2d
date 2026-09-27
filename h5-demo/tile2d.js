@@ -111,7 +111,8 @@ class LayoutEngine {
                 // 右侧有空白，尝试右对齐，伪造用户向右拖事件
                 // 在日常滚动中，通过这种方式避免右边出现空白，继续往左边拖动不会发生变化
                 // 在 seek 调整场景中，如果距离数据右边界太近，会触发下面的循环补充左边
-                offsetX += this.windowWidth - (contentWidth + offsetX);
+                // 代数上等价于 offsetX = windowWidth - contentWidth（int 相减，结果精确）
+                offsetX = this.windowWidth - contentWidth;
             }
             while (offsetX > 0 && colStart > leftBound) {
                 // 用户向右拖，内容向右边滚动，锚点左移
@@ -159,7 +160,7 @@ class LayoutEngine {
             }
             if (contentWidth > this.windowWidth && contentWidth + offsetX < this.windowWidth && colEnd === rightBound) {
                 // 复核发现前面2个循环导致右边出现空白，处理掉
-                offsetX += this.windowWidth - (contentWidth + offsetX);
+                offsetX = this.windowWidth - contentWidth;
             }
             this.output.offsetX = o.offsetX = offsetX;
         }
@@ -169,7 +170,7 @@ class LayoutEngine {
             let offsetY = o.offsetY + dy;
 
             if (contentHeight + offsetY < this.windowHeight && rowEnd === bottomBound) {
-                offsetY += this.windowHeight - (contentHeight + offsetY);
+                offsetY = this.windowHeight - contentHeight;
             }
             while (offsetY > 0 && rowStart > topBound) {
                 rowStart--;
@@ -202,7 +203,7 @@ class LayoutEngine {
                 endHeight = this.window.getRowHeight(rowEnd);
             }
             if (contentHeight > this.windowHeight && contentHeight + offsetY < this.windowHeight && rowEnd === bottomBound) {
-                offsetY += this.windowHeight - (contentHeight + offsetY);
+                offsetY = this.windowHeight - contentHeight;
             }
             this.output.offsetY = o.offsetY = offsetY;
         }
