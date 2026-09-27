@@ -174,7 +174,7 @@ seek(column, row, offsetX, offsetY):
 
 Three points to note:
 
-- Write `contentWidth` as "accumulator starts at 0, subtract `trunc(offsetX)` at the end". Do **not** start the accumulator at `offsetX` — the minus sign and the initial value would cancel each other out, yielding a `contentWidth` that is too small by that amount, and the loop's terminating column shifts with it (the H5 port hit exactly this; now fixed).
+- Write `contentWidth` as "accumulator starts at `offsetX`, then subtract `trunc(offsetX)` at the end": the initial value and the minus sign cancel out, leaving the pure sum of widths. Do **not** start the accumulator at 0 while still subtracting `offsetX` at the end — that subtracts a whole extra `offsetX`, making `contentWidth` too small (when `offsetX>0`) or too large (when `offsetX<0`), and the loop's terminating column shifts by one as well (the H5 port hit exactly this; now fixed).
 - `seek` passes its arguments as `dx/dy` to `sync` (after zeroing the offsets) and relies on the offset accumulation inside sync's branch to fine-tune the "half-built window". So when a direction's scrolling is disabled, that direction's `offsetX/offsetY` argument has no effect — this is intentional.
 - Every cell in the expansion loops must call `in()` to preload, otherwise a hole can appear in the first frame after `seek`.
 

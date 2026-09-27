@@ -166,7 +166,7 @@ The engine's remaining methods correspond one-to-one (full code in `h5-demo/tile
 
 | Method | Purpose | Porting notes |
 |---|---|---|
-| `seek(column,row,offsetX,offsetY)` | Distance-independent jump | The accumulator **starts at 0**; subtract `Math.trunc(offsetX)` at the end; treat the arguments as `dx/dy` and hand them to `sync` for fine-tuning |
+| `seek(column,row,offsetX,offsetY)` | Distance-independent jump | The accumulator **starts at `offsetX`**; subtract `Math.trunc(offsetX)` at the end (the two cancel out, leaving the pure sum of widths); treat the arguments as `dx/dy` and hand them to `sync` for fine-tuning |
 | `diff` / `diffRegion` | Compute the difference between old and new windows; decide who goes `in` and who goes `out` | When completely disjoint, fall back to handling the whole block (extreme jumps rely on it) |
 | `updateWidth/Height/Size` | Positional compensation after a size change | Go through the same path via `sync(dx,0)`; don't write a second implementation |
 | `isAtLeftBound` etc. | Boundary checks | Exact comparison, **no tolerance** (reason below) |
@@ -314,7 +314,7 @@ Three things, all done in a **temporary directory outside the project**:
 ## Step 8: Common Pitfalls
 
 1. **Where the offset accumulation goes**: put it at the top of the method and the `dx` inside the checks gets cancelled out — the condition degenerates to always-true/always-false (`>=` always false, `<` always true; flipping the sign doesn't save it).
-2. **`seek`'s accumulator initial value**: writing `let contentWidth = offsetX;` and then `- offsetX` at the end makes the two `offsetX` cancel each other → `contentWidth` too small and the extension loop's terminating column off too. It must start from 0 and end with `Math.trunc`.
+2. **`seek`'s accumulator initial value**: it must be `let contentWidth = Math.trunc(offsetX);` and then `- Math.trunc(offsetX)` at the end — the initial value and the minus sign cancel out, leaving the pure sum of widths. Starting from 0 while still subtracting `offsetX` at the end subtracts a whole extra `offsetX`, making `contentWidth` too small (when `offsetX>0`) or too large (when `offsetX<0`), and the extension loop's terminating column off by one.
 3. **Integer truncation**: Java's `(int)` maps to `Math.trunc`; using `~~` for negatives is wrong.
 4. **Pseudo-random precision**: multiplications like `seed * 1103515245` lose precision in JS once they exceed 2^53, and the two sequences drift; use a smaller multiplier or `BigInt`.
 5. **The fill loop's boundary**: `while (contentWidth + offsetX < windowWidth && …)` uses **strictly less than** — exactly filling would lay one extra cell (11 columns instead of 10); this is the engine's existing behavior, don't "fix it in passing".

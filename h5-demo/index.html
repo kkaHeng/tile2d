@@ -42,29 +42,12 @@
         left: 0; top: 0;
         width: 100%;
         height: 100%;
-        overflow: hidden;
-        background: #0e1117;
+        display: block;            /* canvas 元素 */
+        background: #0e1117;       /* 首帧 / 稀疏区底色 */
         touch-action: none;
         cursor: grab;
-        contain: strict;
     }
     #view.dragging { cursor: grabbing; }
-
-    /* 瓦片：真实 DOM 元素（对照 TileLayout.TileHolder.itemView） */
-    #view > .tile {
-        position: absolute;
-        left: 0; top: 0;
-        display: flex;
-        align-items: center;
-        justify-content: center;
-        box-sizing: border-box;
-        border: 0.5px solid #808080;
-        overflow: hidden;
-        white-space: nowrap;
-        font-variant-numeric: tabular-nums;
-        will-change: transform;
-        contain: layout paint style;
-    }
 
     /* ==================== 顶部条 ==================== */
     #topbar {
@@ -126,7 +109,7 @@
         bottom: calc(var(--safe-b) + 10px);
         padding: 8px 10px;
         border-radius: 12px;
-        background: var(--panel);
+        background: rgba(19, 23, 32, .52);   /* 半透明，方便透看背后的瓦片 */
         border: 1px solid var(--line);
         backdrop-filter: blur(12px);
         -webkit-backdrop-filter: blur(12px);
@@ -138,13 +121,9 @@
     }
     #hud.on { display: block; }
 
-    /* 调试叠层：视窗边框（对应 DebugLayer） */
+    /* 调试叠层：视窗边框（对应 DebugLayer；位置由 JS 按引擎视窗 = 内边距内缩设置） */
     #debugBox {
         position: fixed;
-        left: calc(var(--safe-l) + 4px);
-        top: calc(var(--safe-t) + 4px);
-        right: calc(var(--safe-r) + 4px);
-        bottom: calc(var(--safe-b) + 4px);
         border: 1px dashed rgba(76, 157, 255, .55);
         pointer-events: none;
         z-index: 8;
@@ -304,8 +283,8 @@
 </head>
 <body>
 
-<!-- 瓦片容器：对照 app 端 TileLayout（真实子元素承载瓦片） -->
-<div id="view"></div>
+<!-- 自绘画布：视窗内的所有瓦片都画在这里 -->
+<canvas id="view"></canvas>
 
 <div id="debugBox"></div>
 
@@ -367,8 +346,8 @@
     </div>
 
     <div class="hint">
-        单指拖动滚动（松手带惯性）·双指捏合缩放·双击放大/还原·桌面端滚轮滚动、<code>Ctrl</code>+滚轮缩放<br>
-        长按瓦片删除它 · 单击瓦片看坐标 · 瓦片是真实 DOM 元素（对照 app 端 TileLayout）<br>
+        单指拖动 / 鼠标拖动滚动（松手带惯性）·双指捏合缩放·双击放大/还原·<code>Ctrl</code>+滚轮缩放<br>
+        单击瓦片看坐标 · 自绘渲染（Canvas，无 DOM 瓦片）<br>
         数据与 app 端柏林噪声 demo 逐位一致（种子 123456789，缩放 0.03，文本方案）
     </div>
 </div>

@@ -4,8 +4,8 @@
  * 只复刻演示 Demo 需要的部分：
  *   - LayoutModel  ：布局模型（原始 / 输出快照）
  *   - LayoutEngine ：滚动核心，与 Java 版逐行对齐（含注释）
- *   - TileDomCore  ：容器层，对照 app 端 TileLayout——瓦片是真实的 DOM 元素，
- *                    进出视窗时挂上/摘下容器，逐格写位置与尺寸，缩放用 scaleFactor
+ *   - TileCanvasCore：容器层，对照 app 端 TileView——视窗内的瓦片全部画在一张 <canvas> 上，
+ *                    进出视窗只维护一份绘制信息缓存，不增删 DOM，缩放用 scaleFactor
  * 完整框架（TileManager 的预取/濒死区、DimenManager、TileCoreService）见 Java 侧与 docs/。
  *
  * 约定：瓦片 key 用字符串 "列,行"（JS 位运算只有 32 位，无法直接搬 long 编码）。
@@ -236,8 +236,11 @@ class LayoutEngine {
         }
         const rightBound = this.boundary.getRightBound();
         const bottomBound = this.boundary.getBottomBound();
-        let contentWidth = 0;
-        let contentHeight = 0;
+        // 累加器从 offset 起算，末尾再减去 offset：两者抵消，得到纯「宽度和」。
+        // 若从 0 起算、末尾仍减 offset，contentWidth 会整整差一个 offset，
+        // 扩展循环的终止列（colEnd）也会偏一列 —— 表现为缩放/跳转后视窗逻辑尺寸不对（留白或超出不回收）。
+        let contentWidth = Math.trunc(offsetX);
+        let contentHeight = Math.trunc(offsetY);
         let colEnd = column;
         let rowEnd = row;
 
@@ -565,19 +568,25 @@ LayoutEngine.DIMEN_GRAVITY_CENTER = 0; // 居中对齐
 LayoutEngine.DIMEN_GRAVITY_START = -1; // 左对齐
 LayoutEngine.DIMEN_GRAVITY_END = 1; // 右对齐
 
-// ==================== 演示用轻量容器层（TileDomCore） ====================
+
+// ==================== Canvas 自绘容器层（TileCanvasCore） ====================
 //
-// 对照 app 端 TileLayout（ViewGroup + 真实子 View 承载瓦片）的 JS 版：
-//   - 瓦片 = 真实的 DOM 元素（div），进出视窗时挂上/摘下容器
-//   - 摆放 = layoutTiles()：沿视窗逐格算像素矩形，写进元素的 transform / 宽高
-//   - 缩放 = scaleFactor：几何与字号都乘以它（与 TileLayout 的 scale() 一致）
-//   - 尺寸表 = 逐列宽 / 逐行高 + 默认值；瓦片按类型回收复用
+// 自绘版：没有 DOM 瓦片，视窗内的所有瓦片都画在一张 <canvas> 上。
+//   - 状态变化时一次性清屏重绘：背景色 + 边框 + 文本
+//   - 引擎的 in/out 只用来维护一份「绘制信息缓存」（颜色/文本），不再增删 DOM
+//   - 缩放 = scaleFactor：几何与字号都乘以它
+//   - 尺寸表 = 逐列宽 / 逐行高 + 默认值
+//
+// 相比 DOM 版：没有几十上百个元素与合成层，帧率稳定、缩放不抖；
+// 代价是文本绘制与命中测试都得自己实现（命中测试见 findColumn / findRow）。
 
-class TileDomCore {
+class TileCanvasCore {
 
-    constructor(adapter, container) {
+    constructor(adapter, canvas) {
         this.adapter = adapter;
-        this.container = container;   // 承载瓦片的容器（position: relative; overflow: hidden）
+        this.canvas = canvas;
+        this.ctx = canvas ? canvas.getContext('2d') : null;
+        this.dpr = (typeof window !== 'undefined' && window.devicePixelRatio) || 1;
 
         this.paddingLeft = 0;
         this.paddingTop = 0;
@@ -585,7 +594,9 @@ class TileDomCore {
         this.containerHeight = 0;
         this.viewportWidth = 0;
         this.viewportHeight = 0;
-        this.scaleFactor = 1;         // 缩放（几何与字号都乘它）
+        this.scaleFactor = 1;
+
+        this.background = '#0e1117';   // 空白/稀疏区底色（对应 DOM 版的容器背景）
 
         // 尺寸表：单独设置 > 默认值
         this.widths = new Map();
@@ -593,10 +604,8 @@ class TileDomCore {
         this.defaultTileWidth = 80;
         this.defaultTileHeight = 45;
 
-        // 瓦片：活跃表 + 按类型回收栈
-        this.active = new Map();
-        this.recycled = new Map();
-        this.recycledCount = 0;
+        // 绘制信息缓存：'列,行' -> { color, textColor, text } 或 null（稀疏，不画）
+        this.paints = new Map();
 
         const self = this;
         this.engine = new LayoutEngine({
@@ -613,7 +622,7 @@ class TileDomCore {
         });
     }
 
-    // ---- 视窗尺寸与内边距（对应 TileLayout 的 updateBounds / setPadding） ----
+    // ---- 视窗尺寸与内边距 ----
 
     setPadding(left, top) {
         this.paddingLeft = left;
@@ -624,28 +633,53 @@ class TileDomCore {
     setContainerSize(width, height) {
         this.containerWidth = width;
         this.containerHeight = height;
+        this.resizeCanvas();
         this.updateBounds();
     }
 
+    // 画布后备缓冲按设备像素比放大，绘制坐标仍用 CSS 像素
+    resizeCanvas() {
+        if (!this.canvas) return;
+        const w = Math.max(1, Math.round(this.containerWidth * this.dpr));
+        const h = Math.max(1, Math.round(this.containerHeight * this.dpr));
+        if (this.canvas.width !== w) this.canvas.width = w;
+        if (this.canvas.height !== h) this.canvas.height = h;
+    }
+
     updateBounds() {
-        // 引擎的窗口 = 容器尺寸减去内边距（与 TileLayout 一致）
-        this.viewportWidth = Math.max(1, Math.round((this.containerWidth || 0) - this.paddingLeft * 2));
-        this.viewportHeight = Math.max(1, Math.round((this.containerHeight || 0) - this.paddingTop * 2));
+        // 引擎的窗口 = (容器尺寸 - 内边距) ÷ 缩放，单位是「内容像素」
+        // （对应 TileCoreService.updateWindowSize：bounds.width() / scaleFactor）
+        const scale = this.scaleFactor || 1;
+        this.viewportWidth = Math.max(1, Math.round(((this.containerWidth || 0) - this.paddingLeft * 2) / scale));
+        this.viewportHeight = Math.max(1, Math.round(((this.containerHeight || 0) - this.paddingTop * 2) / scale));
         this.engine.setWindowWidth(this.viewportWidth);
         this.engine.setWindowHeight(this.viewportHeight);
         if (this.containerWidth && this.containerHeight) {
             this.engine.sync(0, 0);
-            this.layoutTiles();
+            this.draw();
         }
     }
 
-    // ---- 缩放（对应 TileLayout.scale() + setScaleFactor） ----
+    // ---- 缩放 ----
 
     getScaleFactor() { return this.scaleFactor; }
 
     setScaleFactor(scaleFactor) {
         this.scaleFactor = scaleFactor;
-        this.layoutTiles();
+        this.updateBounds();
+    }
+
+    // 缩放 + 焦点位移一步到位（对应 TileCoreService.applyZoom）
+    zoom(nextScale, dx, dy) {
+        this.scaleFactor = nextScale;
+        const scale = nextScale || 1;
+        this.viewportWidth = Math.max(1, Math.round(((this.containerWidth || 0) - this.paddingLeft * 2) / scale));
+        this.viewportHeight = Math.max(1, Math.round(((this.containerHeight || 0) - this.paddingTop * 2) / scale));
+        this.engine.setWindowWidth(this.viewportWidth);
+        this.engine.setWindowHeight(this.viewportHeight);
+        const handled = this.engine.sync(dx || 0, dy || 0);
+        this.draw();
+        return handled;
     }
 
     scale(num) { return num * this.scaleFactor; }
@@ -665,7 +699,7 @@ class TileDomCore {
     setDefaultSize(width, height) {
         this.defaultTileWidth = Math.max(1, Math.round(width));
         this.defaultTileHeight = Math.max(1, Math.round(height));
-        this.layoutTiles();
+        this.draw();
     }
 
     setTileWidth(column, width, gravity) {
@@ -674,7 +708,7 @@ class TileDomCore {
         if (old === width) return;
         this.widths.set(column, width);
         this.engine.updateWidth(column, old, width, gravity === undefined ? LayoutEngine.DIMEN_GRAVITY_START : gravity);
-        this.layoutTiles();
+        this.draw();
     }
 
     setTileHeight(row, height, gravity) {
@@ -683,24 +717,42 @@ class TileDomCore {
         if (old === height) return;
         this.heights.set(row, height);
         this.engine.updateHeight(row, old, height, gravity === undefined ? LayoutEngine.DIMEN_GRAVITY_START : gravity);
-        this.layoutTiles();
+        this.draw();
     }
 
     // ---- 滚动 / 跳转 ----
 
     sync(dx, dy) {
         const handled = this.engine.sync(dx, dy);
-        if (handled) this.layoutTiles();
+        if (handled) this.draw();
         return handled;
     }
 
     seek(column, row, offsetX, offsetY) {
+        // 跳转是「重置视窗」：先清掉绘制缓存，再让引擎重建
+        // （对应 TileCoreService.seek 里的 tileManager.clearActiveAndDying）
+        this.paints.clear();
         const handled = this.engine.seek(column, row, offsetX || 0, offsetY || 0);
-        if (handled) this.layoutTiles();
+        if (handled) this.draw();
         return handled;
     }
 
-    snap() { this.sync(0, 0); }
+    snap() {
+        // 将视窗吸附回内容边界内（越界时跳到最近合法锚点）
+        // 对应 Java 的 TileCoreService.snap()：不能只 sync(0,0)——越界时 sync 会直接短路，
+        // 什么都不做（伪无限关闭后锚点还在界外的情况就是这么漏掉的）。
+        if (this.isEmpty()) return;
+        const model = this.getLayoutModel();
+        const left = this.adapter.getLeftBound(), top = this.adapter.getTopBound();
+        const right = this.adapter.getRightBound(), bottom = this.adapter.getBottomBound();
+        if (model.colStart >= left && model.colEnd <= right &&
+            model.rowStart >= top && model.rowEnd <= bottom) {
+            return; // 已在界内，无需吸附
+        }
+        const column = Math.max(left, Math.min(model.colStart, right));
+        const row = Math.max(top, Math.min(model.rowStart, bottom));
+        this.seek(column, row, 0, 0);
+    }
     getLayoutModel() { return this.engine.getLayoutModel(); }
     isAtLeftBound() { return this.engine.isAtLeftBound(); }
     isAtTopBound() { return this.engine.isAtTopBound(); }
@@ -708,104 +760,85 @@ class TileDomCore {
     isAtBottomBound() { return this.engine.isAtBottomBound(); }
     isEmpty() { return this.engine.isEmpty(); }
 
-    // ---- 瓦片进出：挂上 / 摘下真实 DOM 元素 ----
+    // ---- 绘制信息缓存：进出视窗只更新缓存，不碰 DOM ----
 
     static key(column, row) { return column + ',' + row; }
 
     onTileIn(column, row) {
-        const key = TileDomCore.key(column, row);
-        if (this.active.has(key)) return;
         const type = this.adapter.getTileType(column, row);
-        const tile = this.obtain(type);
-        if (!tile) return;
-        tile.type = type;
-        tile.column = column;
-        tile.row = row;
-        this.adapter.onBindTileHolder(tile, column, row);
-        this.container.appendChild(tile.el);
-        this.active.set(key, tile);
+        // 稀疏区（type=-1）存 null，绘制时跳过，露出底色
+        this.paints.set(TileCanvasCore.key(column, row),
+            type === -1 ? null : this.adapter.getPaint(column, row));
     }
 
     onTileOut(column, row) {
-        const key = TileDomCore.key(column, row);
-        const tile = this.active.get(key);
-        if (!tile) return;
-        this.active.delete(key);
-        if (tile.el.parentNode === this.container) this.container.removeChild(tile.el);
-        this.adapter.onTileOut(tile, column, row);
-        let stack = this.recycled.get(tile.type);
-        if (!stack) {
-            stack = [];
-            this.recycled.set(tile.type, stack);
-        }
-        stack.push(tile);
-        this.recycledCount++;
+        this.paints.delete(TileCanvasCore.key(column, row));
     }
 
-    obtain(type) {
-        const stack = this.recycled.get(type);
-        if (stack && stack.length > 0) {
-            this.recycledCount--;
-            return stack.pop();
-        }
-        return this.adapter.onCreateTileHolder(type);
+    getPaint(column, row) {
+        return this.paints.get(TileCanvasCore.key(column, row));
     }
 
-    getActiveTile(column, row) { return this.active.get(TileDomCore.key(column, row)) || null; }
+    // 单格刷新（数据变了要重画时用）
+    update(column, row) {
+        const key = TileCanvasCore.key(column, row);
+        if (!this.paints.has(key)) return;
+        const type = this.adapter.getTileType(column, row);
+        this.paints.set(key, type === -1 ? null : this.adapter.getPaint(column, row));
+        this.draw();
+    }
 
-    // ---- 摆放（对应 TileLayout.layoutTiles） ----
+    // ---- 绘制（对应 TileView.onDraw） ----
 
-    layoutTiles() {
+    draw() {
+        const ctx = this.ctx;
+        if (!ctx) return;
+        const W = this.containerWidth, H = this.containerHeight;
+        if (!W || !H) return;
+
+        ctx.setTransform(this.dpr, 0, 0, this.dpr, 0, 0);
+        ctx.fillStyle = this.background;
+        ctx.fillRect(0, 0, W, H);
+
         const model = this.getLayoutModel();
         if (model.colEnd < model.colStart || model.rowEnd < model.rowStart) return;
 
-        const pad = this.paddingLeft;
-        const padY = this.paddingTop;
-        let x = pad + this.scale(model.offsetX);
+        const scale = this.scaleFactor;
+        const lineW = TileCanvasCore.BORDER_WIDTH;
+        ctx.textAlign = 'center';
+        ctx.textBaseline = 'middle';
+        ctx.font = (TileCanvasCore.TEXT_SIZE * scale).toFixed(2) + 'px ' + TileCanvasCore.FONT;
+
+        let x = this.paddingLeft + model.offsetX * scale;
         for (let column = model.colStart; ; column++) {
-            const width = this.scale(this.getTileWidth(column));
-            let y = padY + this.scale(model.offsetY);
+            const w = this.getTileWidth(column) * scale;
+            let y = this.paddingTop + model.offsetY * scale;
             for (let row = model.rowStart; ; row++) {
-                const height = this.scale(this.getTileHeight(row));
-                const tile = this.getActiveTile(column, row);
-                if (tile) {
-                    const el = tile.el;
-                    // 位置用 transform（只改合成层，不触发重排）
-                    el.style.transform = 'translate3d(' + Math.round(x) + 'px,' + Math.round(y) + 'px,0)';
-                    el.style.width = Math.round(width) + 'px';
-                    el.style.height = Math.round(height) + 'px';
-                    // 字号随缩放走（对应 TileLayout 的 14dp * scaleFactor）
-                    el.style.fontSize = this.scale(TileDomCore.TEXT_SIZE).toFixed(2) + 'px';
+                const h = this.getTileHeight(row) * scale;
+                const paint = this.getPaint(column, row);
+                if (paint) {
+                    ctx.fillStyle = paint.color;
+                    ctx.fillRect(x, y, w, h);
+                    if (w > 16 && h > 12) {
+                        ctx.strokeStyle = TileCanvasCore.BORDER;
+                        ctx.lineWidth = lineW;
+                        ctx.strokeRect(x + lineW / 2, y + lineW / 2, w - lineW, h - lineW);
+                        // 文本裁剪在瓦片内（对应 DOM 的 overflow: hidden）
+                        ctx.save();
+                        ctx.beginPath();
+                        ctx.rect(x, y, w, h);
+                        ctx.clip();
+                        ctx.fillStyle = paint.textColor;
+                        ctx.fillText(paint.text, x + w / 2, y + h / 2);
+                        ctx.restore();
+                    }
                 }
-                y += height;
+                y += h;
                 if (row === model.rowEnd) break;
             }
-            x += width;
+            x += w;
             if (column === model.colEnd) break;
         }
-    }
-
-    // ---- 单格刷新 / 全量重绑 ----
-
-    update(column, row) {
-        const key = TileDomCore.key(column, row);
-        const tile = this.active.get(key);
-        if (!tile) return;
-        const type = this.adapter.getTileType(column, row);
-        if (type !== tile.type) {
-            this.onTileOut(column, row);
-            this.onTileIn(column, row);
-        } else {
-            this.adapter.onBindTileHolder(tile, column, row);
-        }
-        this.layoutTiles();
-    }
-
-    updateAll() {
-        for (const tile of this.active.values()) {
-            this.adapter.onBindTileHolder(tile, tile.column, tile.row);
-        }
-        this.layoutTiles();
     }
 
     // ---- 命中测试（对应 TileLayout.findColumn / findRow） ----
@@ -836,16 +869,16 @@ class TileDomCore {
 
     // ---- 统计 ----
 
-    getActiveTileCount() { return this.active.size; }
-    getRecycledTileCount() { return this.recycledCount; }
-
+    getPaintCount() { return this.paints.size; }
 }
 
-// 瓦片字号（对应 app 端 TileLayout demo 的 14dp）
-TileDomCore.TEXT_SIZE = 14;
+// 瓦片字号（对应 app 端 TileLayout demo 的 14dp）、边框与字体
+TileCanvasCore.TEXT_SIZE = 14;
+TileCanvasCore.BORDER = '#808080';
+TileCanvasCore.BORDER_WIDTH = 0.5;
+TileCanvasCore.FONT = '-apple-system, BlinkMacSystemFont, "Segoe UI", system-ui, "PingFang SC", "Microsoft YaHei", sans-serif';
 
 // 供外部加载（浏览器里类仍是全局的；单测放在项目外的临时目录里做）
-
 if (typeof module !== 'undefined' && module.exports) {
-    module.exports = { LayoutModel, LayoutEngine, TileDomCore };
+    module.exports = { LayoutModel, LayoutEngine, TileCanvasCore };
 }

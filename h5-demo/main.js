@@ -1,18 +1,19 @@
 /*
- * 柏林噪声瓦片 Demo（DOM 渲染，对照 app 端 TileLayout）
+ * 柏林噪声瓦片 Demo（Canvas 自绘）
  *
- * 瓦片 = 真实的 DOM 元素（div）：进出视窗时挂上/摘下 #view，逐格写 transform 与宽高。
+ * 视窗内的瓦片全部画在一张 <canvas> 上：一次清屏 + 逐格画背景色 / 边框 / 文本，
+ * 没有 DOM 瓦片、没有合成层，帧率稳定。
  * 数据源与 app 模块柏林噪声 demo 逐位一致：种子 123456789、噪声缩放 0.03、
  * 稀疏判据 < 0.3、24 色渐变映射、文本方案（背景色 + 灰边 + 噪声数值），无纯色方案。
  * 引擎用 h5-demo/tile2d.js 的 LayoutEngine（与 Java 版逐行对齐），
- * 容器层 TileDomCore 对照 TileLayout：scaleFactor 缩放、findColumn/findRow 命中测试。
+ * 容器层 TileCanvasCore 对照 TileView：scaleFactor 缩放、findColumn/findRow 命中测试。
  */
 (function () {
     'use strict';
 
     const MIN_INT = -2147483648;
     const MAX_INT = 2147483647;
-    const PADDING = 20;          // 容器内边距（对应 TileLayout demo 的 setPadding）
+    const PADDING = 20;          // 容器内边距（对应 TileView demo 的 setPadding）
 
     // ==================== 数据源（与 app 同款） ====================
 
@@ -29,12 +30,10 @@
 
     let maxMode = false;
     let debugMode = false;
-    let scaleFactor = 1;         // 缩放（几何与字号都乘它，对应 TileLayout.scaleFactor）
+    let scaleFactor = 1;         // 缩放（几何与字号都乘它）
     let showHud = false;
 
-    const removed = new Set();   // 被长按删除的瓦片 "列,行"
-
-    // ==================== 适配器（对应 TileLayout.Adapter + ColorTileHolder） ====================
+    // ==================== 适配器（对应 TileView.Adapter） ====================
 
     const adapter = {
         getLeftBound: () => maxMode ? MIN_INT : -50,
@@ -43,42 +42,36 @@
         getBottomBound: () => maxMode ? MAX_INT : 100,
 
         // 低噪区稀疏：不产生瓦片（与 app 一致）
-        getTileType: (column, row) => {
-            if (removed.has(column + ',' + row)) return -1;
-            return noiseAt(column, row) < SPARSE_THRESHOLD ? -1 : 0;
-        },
+        getTileType: (column, row) => noiseAt(column, row) < SPARSE_THRESHOLD ? -1 : 0,
 
-        // 创建瓦片元素（对应 TileHolder 里 new TextView + setGravity(CENTER)）
-        onCreateTileHolder: (type) => {
-            if (type === -1) return null;
-            const el = document.createElement('div');
-            el.className = 'tile';
-            return { type, el };
-        },
-
-        // 绑定数据（对应 ColorTileHolder.bind）
-        onBindTileHolder: (holder, column, row) => {
+        // 自绘所需的数据：背景色 + 文字颜色 + 文本（与 app 端 ColorTileHolder.bind 一致）
+        getPaint: (column, row) => {
             const noise = noiseAt(column, row);
             const color = colorGen.getColor((noise - SPARSE_THRESHOLD) / (1 - SPARSE_THRESHOLD));
-            holder.el.style.background = ColorGenerator.css(color);
-            holder.el.style.color = ColorGenerator.luminance(color) > 0.40 ? '#111111' : '#ffffff';
-            holder.el.textContent = (noise / NOISE_SCALE).toFixed(2);
+            return {
+                color: ColorGenerator.css(color),
+                textColor: ColorGenerator.luminance(color) > 0.40 ? '#111111' : '#ffffff',
+                text: (noise / NOISE_SCALE).toFixed(2),
+            };
         },
-
-        onTileOut: () => {},
     };
 
     // ==================== 容器层 ====================
 
-    const view = document.getElementById('view');
-    const core = new TileDomCore(adapter, view);
+    const view = document.getElementById('view');   // <canvas>
+    const core = new TileCanvasCore(adapter, view);
     core.setPadding(PADDING, PADDING);
     core.setDefaultSize(80, 45);      // 对应 app 的 dp2px(80) / dp2px(45)
     core.seek(0, 0, 0, 0);
 
+    // 容器矩形缓存：#view 是 fixed 铺满，只在尺寸变化时才需重读（避免每个触摸事件都强制同步布局）
+    const containerRect = { left: 0, top: 0, width: 0, height: 0 };
+
     function measureContainer() {
-        const rect = view.getBoundingClientRect();
-        core.setContainerSize(Math.max(1, Math.round(rect.width)), Math.max(1, Math.round(rect.height)));
+        const r = view.getBoundingClientRect();
+        containerRect.left = r.left; containerRect.top = r.top;
+        containerRect.width = r.width; containerRect.height = r.height;
+        core.setContainerSize(Math.max(1, Math.round(r.width)), Math.max(1, Math.round(r.height)));
     }
 
     // ==================== 缩放 ====================
@@ -89,15 +82,14 @@
     function zoomTo(nextScale, fx, fy) {
         nextScale = Math.max(SCALE_MIN, Math.min(SCALE_MAX, nextScale));
         if (Math.abs(nextScale - scaleFactor) < 0.0001) return;
-        const rect = view.getBoundingClientRect();
-        const focusX = (fx === undefined ? rect.width / 2 : fx) - PADDING;
-        const focusY = (fy === undefined ? rect.height / 2 : fy) - PADDING;
+        const focusX = (fx === undefined ? containerRect.width / 2 : fx) - PADDING;
+        const focusY = (fy === undefined ? containerRect.height / 2 : fy) - PADDING;
         const oldScale = scaleFactor;
-
-        scaleFactor = nextScale;
-        core.setScaleFactor(nextScale);
         // 焦点下的内容点保持不动：dx = 焦点到内边距的距离 * (1/新缩放 - 1/旧缩放)
-        core.sync(focusX * (1 / nextScale - 1 / oldScale), focusY * (1 / nextScale - 1 / oldScale));
+        const dx = focusX * (1 / nextScale - 1 / oldScale);
+        const dy = focusY * (1 / nextScale - 1 / oldScale);
+        scaleFactor = nextScale;
+        core.zoom(nextScale, dx, dy);
     }
 
     // ==================== 惯性滚动 ====================
@@ -153,13 +145,12 @@
     const pointers = new Map();
     let dragging = false;
     let pinchStartDist = 0, pinchStartScale = 1, pinchCenterX = 0, pinchCenterY = 0;
-    let dragMoved = 0, pressTimer = 0, longPressed = false;
+    let dragMoved = 0;
     let velocitySamples = [];
     let lastTapTime = 0, lastTapX = 0, lastTapY = 0;
 
     function pointerPos(e) {
-        const rect = view.getBoundingClientRect();
-        return { x: e.clientX - rect.left, y: e.clientY - rect.top };
+        return { x: e.clientX - containerRect.left, y: e.clientY - containerRect.top };
     }
 
     function onPointerDown(e) {
@@ -171,17 +162,9 @@
             stopInertia();
             dragging = true;
             dragMoved = 0;
-            longPressed = false;
             velocitySamples = [{ t: performance.now(), x: p.x, y: p.y }];
             view.classList.add('dragging');
-            clearTimeout(pressTimer);
-            pressTimer = setTimeout(() => {
-                if (!dragging || dragMoved > 8) return;
-                longPressed = true;
-                removeTileAt(p.x, p.y);
-            }, 500);
         } else if (pointers.size === 2) {
-            clearTimeout(pressTimer);
             const pts = [...pointers.values()];
             pinchStartDist = Math.hypot(pts[0].x - pts[1].x, pts[0].y - pts[1].y) || 1;
             pinchStartScale = scaleFactor;
@@ -206,11 +189,10 @@
         }
 
         if (!dragging) return;
-        // 手指位移 → 内容位移（除以缩放，保证跟手）
+        // 手指 / 鼠标位移 → 内容位移（除以缩放，保证跟手）
         const dx = (p.x - prev.x) / scaleFactor;
         const dy = (p.y - prev.y) / scaleFactor;
         dragMoved += Math.abs(p.x - prev.x) + Math.abs(p.y - prev.y);
-        if (dragMoved > 8) clearTimeout(pressTimer);
         core.sync(dx, dy);
 
         const now = performance.now();
@@ -225,7 +207,6 @@
         if (pointers.size === 0 && dragging) {
             dragging = false;
             view.classList.remove('dragging');
-            clearTimeout(pressTimer);
 
             if (velocitySamples.length >= 2) {
                 const first = velocitySamples[0], last = velocitySamples[velocitySamples.length - 1];
@@ -238,7 +219,8 @@
             }
             velocitySamples = [];
 
-            if (!longPressed && dragMoved <= 8 && p) {
+            // 没怎么移动才算「点击」：单击弹坐标，双击放大 / 还原
+            if (dragMoved <= 8 && p) {
                 const now = performance.now();
                 if (now - lastTapTime < 300 && Math.hypot(p.x - lastTapX, p.y - lastTapY) < 40) {
                     const next = scaleFactor > 1.5 ? 1 : 2;
@@ -248,24 +230,11 @@
                 } else {
                     lastTapTime = now;
                     lastTapX = p.x; lastTapY = p.y;
-                    toast('单击了 ' + core.findColumn(p.x) + ',' + core.findRow(p.y));
+                    toast('点击了 ' + core.findColumn(p.x) + ',' + core.findRow(p.y));
                 }
             }
         }
         if (pointers.size < 2) pinchStartDist = 0;
-    }
-
-    function removeTileAt(cssX, cssY) {
-        const column = core.findColumn(cssX);
-        const row = core.findRow(cssY);
-        const key = column + ',' + row;
-        if (removed.has(key)) {
-            toast('这里已经删过了');
-            return;
-        }
-        removed.add(key);
-        core.update(column, row);
-        toast('长按删除 ' + column + ',' + row);
     }
 
     view.addEventListener('pointerdown', onPointerDown);
@@ -274,13 +243,11 @@
     view.addEventListener('pointercancel', onPointerUp);
     view.addEventListener('contextmenu', (e) => e.preventDefault());
 
+    // PC 端以鼠标拖动为主；滚轮仅在按住 Ctrl/⌘ 时用于缩放
     view.addEventListener('wheel', (e) => {
+        if (!(e.ctrlKey || e.metaKey)) return;
         e.preventDefault();
-        if (e.ctrlKey || e.metaKey) {
-            zoomTo(scaleFactor * Math.exp(-e.deltaY * 0.002), e.clientX, e.clientY);
-        } else {
-            core.sync(-e.deltaX / scaleFactor, -e.deltaY / scaleFactor);
-        }
+        zoomTo(scaleFactor * Math.exp(-e.deltaY * 0.002), e.clientX, e.clientY);
     }, { passive: false });
 
     window.addEventListener('resize', measureContainer);
@@ -299,16 +266,19 @@
     }
 
     function animateSize(kind) {
-        const rect = view.getBoundingClientRect();
+        openSheet(false);   // 关掉挡住屏幕中心的下拉菜单，好看清动效发生在中心那一列/行
         const now = performance.now();
+        // 取「引擎视窗」的中心（与画出来的瓦片窗口同源，避免用了过期的屏幕矩形而对不上）
+        const centerX = core.paddingLeft + (core.viewportWidth * core.scaleFactor) / 2;
+        const centerY = core.paddingTop + (core.viewportHeight * core.scaleFactor) / 2;
         if (kind === 'width') {
-            const column = core.findColumn(rect.width / 2);
+            const column = core.findColumn(centerX);
             const from = core.getTileWidth(column);
             const to = (Math.floor(Math.random() * 19) + 4) * 10;   // 40 ~ 220，与 app 同范围
             sizeAnim = { kind: 'width', column, from, to, start: now };
             toast('调整第 ' + column + ' 列宽度到 ' + to + 'px');
         } else {
-            const row = core.findRow(rect.height / 2);
+            const row = core.findRow(centerY);
             const from = core.getTileHeight(row);
             const to = (Math.floor(Math.random() * 7) + 3) * 10;    // 30 ~ 90，与 app 同范围
             sizeAnim = { kind: 'height', row, from, to, start: now };
@@ -353,6 +323,7 @@
         document.getElementById('hud').classList.toggle('on', showHud);
         document.getElementById('debugBox').classList.toggle('on', showHud);
         toast('Debug 模式: ' + (debugMode ? '开启' : '关闭'));
+        refreshStatus();   // 立即摆好虚线框位置
     });
 
     refs.max.addEventListener('click', () => {
@@ -391,6 +362,9 @@
     document.getElementById('m-zoom-out').addEventListener('click', () => { zoomTo(scaleFactor / 1.4); toast('缩放 ' + scaleFactor.toFixed(1) + 'x'); });
     document.getElementById('m-zoom-reset').addEventListener('click', () => { zoomTo(1); toast('缩放已重置'); });
 
+    // 菜单项点完自动收起（像原生菜单一样），避免面板挡住屏幕中心、看不到效果
+    sheet.querySelectorAll('.item').forEach((el) => el.addEventListener('click', () => openSheet(false)));
+
     document.addEventListener('keydown', (e) => {
         if (e.key === 'Escape') openSheet(false);
     });
@@ -409,6 +383,7 @@
 
     const statusEl = document.getElementById('status');
     const hudEl = document.getElementById('hud');
+    const debugBoxEl = document.getElementById('debugBox');
 
     function refreshStatus() {
         const m = core.getLayoutModel();
@@ -424,8 +399,14 @@
                 'offset ' + m.offsetX.toFixed(2) + ' , ' + m.offsetY.toFixed(2) + '\n' +
                 '内容宽 ' + m.contentWidth + ' 高 ' + m.contentHeight + '\n' +
                 '缩放   ' + scaleFactor.toFixed(2) + 'x\n' +
-                '瓦片   活跃 ' + core.getActiveTileCount() + ' / 回收 ' + core.getRecycledTileCount() + '\n' +
-                'DOM   ' + view.childElementCount + ' 个子元素';
+                '画布   ' + view.width + ' × ' + view.height + '（设备像素）\n' +
+                '缓存   ' + core.getPaintCount() + ' 格';
+
+            // 虚线框 = 引擎视窗在屏幕上的矩形（= 容器按内边距内缩；对应 Java 的 getBounds）
+            debugBoxEl.style.left = core.paddingLeft + 'px';
+            debugBoxEl.style.top = core.paddingTop + 'px';
+            debugBoxEl.style.width = Math.max(0, core.containerWidth - core.paddingLeft * 2) + 'px';
+            debugBoxEl.style.height = Math.max(0, core.containerHeight - core.paddingTop * 2) + 'px';
         }
     }
     setInterval(refreshStatus, 200);
@@ -438,7 +419,7 @@
 
     // 便于在控制台里观察
     window.tile2dDemo = {
-        core, adapter, perlin, colorGen, zoomTo, toast, removed, view,
+        core, adapter, perlin, colorGen, zoomTo, toast, view,
         get scaleFactor() { return scaleFactor; },
     };
 
