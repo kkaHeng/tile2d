@@ -1,428 +1,420 @@
 # Cross-Platform Porting Guide
 
-Tile2D's engine layer (`LayoutEngine`, `TileManager`, `DimenManager`) is pure algorithm: not a single line of Android code, and no JDK-specific features either. This document teaches you how to implement an identical engine in any language/platform, then plug it into the target platform's rendering ecosystem.
+Tile2D's engine layer (`LayoutEngine`, `TileManager`, `DimenManager`) is **pure algorithm**: not a line of Android code, and no dependency on any collection library. This document first walks the most easily-gotten-wrong part — `sync` — through block by block, then explains how to implement your own data containers and the rest of the modules.
 
-## Before Porting: Which Language to Use
+## 1. Choose the Language First: Don't Build "One C/C++ Core + FFI Everywhere"
 
-Before starting, answer one question: **which language should this engine be written in on your target platform?** The most common wrong answer is "write one copy in C/C++ and call it via FFI from every platform". That answer splits into two cases with completely different conclusions.
+- **Implement one engine in whatever the target platform's native language is.**
+- "Write one in C/C++ and FFI-call it from every platform" is not recommended — not because C/C++ is bad, but because the approach itself has problems:
+  - **High-frequency small calls**: during fling scrolling `sync` can be called dozens of times per frame, and internally it calls back into `getColWidth`/`in`/`out` (once per visible / in-out tile). Packing arguments across the language boundary and switching thread state add up and eat the algorithm's own advantage.
+  - **Callbacks are bidirectional**: the engine must call back into the host for sizes and to notify in/out; a reverse call is more expensive and more error-prone than a forward one.
+  - **Two memory models**: object lifetime / GC must be manually aligned — a long-term mental burden.
+  - Build & distribution must maintain N compile configs; a crash across a cross-language stack is hard to debug.
 
-### The Target Platform's Native Language Is C/C++
-
-On PC desktop (Win32, Qt, etc.), embedded systems, game engines and similar platforms, C/C++ *is* the native language; implementing the engine directly in C/C++ is **entirely correct** — the "target language" is C/C++, and this guide applies as usual.
-
-### The Target Platform Is Not C/C++
-
-When targeting Java/Kotlin, C#, Go, Rust, JavaScript and similar ecosystems, writing one C/C++ core called through FFI everywhere is **not recommended**. Note: this is not "C/C++ can't do it" — it's that the scheme "one C/C++ copy for all languages" is flawed in itself:
-
-- **Boundary overhead of high-frequency small calls**. `sync` may be called dozens of times per frame during fling scrolling; inside each `sync` it also calls back `getColWidth/getRowHeight` (once per visible tile) and `in/out` (once per tile entering/leaving). Every FFI call carries argument packing, thread-state switching and exception bridging overhead; these high-frequency small calls accumulate and eat the algorithm's own performance advantage.
-- **Callbacks are bidirectional**. The engine calls back into the host language for bounds, sizes and tile enter/leave notifications. Calling from C back into the host language (JNI callbacks, PInvoke delegates, FFI closures) is more expensive and more error-prone than forward calls.
-- **Split type and memory models**. Object lifecycles, allocators and GC differ completely between the C/C++ side and the host language. When tile objects cross the boundary, who frees them and how to avoid copies becomes a long-term mental burden.
-- **Build and distribution complexity**. One C source tree must maintain multi-platform build configs, ABI compatibility and artifact distribution; a one-line algorithm change rebuilds every platform's glue layer.
-- **Hard debugging**. Crashes and memory issues across a cross-language stack are an order of magnitude harder to locate than in a single-language stack.
-
-| | One C/C++ + FFI | Target-language implementation |
+| | One C/C++ + FFI | One per target language |
 |---|---|---|
-| Call overhead | Every sync/callback crosses the boundary | No boundary |
-| Callbacks | Reverse calls expensive and error-prone | Native calls |
-| Memory model | Two sets, manually aligned | One set |
-| Build & distribution | One build config per platform | Ships with the target language |
-| Debugging | Cross-language stack | Single-language stack |
-| Effort | Engine + N glue layers | Engine translated once |
+| Call overhead | every sync/callback crosses a boundary | no boundary |
+| Callback | reverse call, costly & error-prone | native call |
+| Memory model | two | one |
+| Build & distribution | one per platform | ships with the language |
 
-The engine itself is pure logic: a few numbers in, a few numbers out, zero platform features. Implementing one copy in the target language costs far less than maintaining an FFI channel.
+> **The algorithm exists in one form; implementations can be many** — translating is far cheaper than maintaining an FFI channel.
 
-> Conclusion: **there is one algorithm; there can be many implementations**. Use C/C++ on C/C++-native platforms; on other platforms write one copy in each platform's own language. The three core modules total about 1300 lines (including comments and debug code), so translation is cheap — not worth trading for FFI.
+## 2. Where the Portability Comes From
 
-## Where the Portability Comes From
+Read the source and it's obvious: it imports no platform package (not even `java.util.*`); it uses only `int/long/float/boolean` + arrays + loops — no collection API, no lambda; `LayoutEngine`'s only object creation is initializing two `LayoutModel`s; the debug code (`timeProvider`/`syncTime`) is marked "removable".
 
-Look at the source and the reason the three core classes are cross-platform is obvious:
-
-- No `android.*` imports, not even `java.util.*` — they depend only on interfaces inside their own package
-- Only primitive types (`int`/`long`/`float`/`boolean`), arrays and loops; no collection APIs, no lambdas
-- `LayoutEngine`'s only object creation is initializing two `LayoutModel` state objects
-- Debug code (`timeProvider`, `syncTime`) is explicitly marked in comments as "removable for cross-platform"
-
-Dependency surface:
-
-| Module | Dependencies |
-|---|---|
-| `LayoutEngine` | `BoundaryInterface`, `WindowInterface`, `LayoutModel` |
-| `TileManager` | `LongMap<T>`, `TileRecycledPool<T>`, `LongQueue`, `Callback<T>` |
-| `DimenManager` | `IntIntMap`, `TileDimenProvider`, `Callback` |
-
-The reasons for and implementations of the custom data structures (`LongMap`/`IntIntMap`, etc.) are covered in the "Data Structures" section; implement them in the target language first, then translate the three core modules.
-
-## Step 1: Layout Engine (LayoutEngine)
-
-The engine is the most independent, easiest-to-translate module: it depends on only two interfaces and one pure data object, and the algorithm body is loops and arithmetic. Port it first; continue with the other modules once its unit tests pass.
-
-### State and Interfaces
-
-The engine keeps only: two `LayoutModel`s (`original` records the real state, `output` is the output snapshot), the window width/height, and two scroll switches. It depends on two external interfaces:
+Externally it depends on just two interfaces:
 
 ```text
-BoundaryInterface (bounds, closed interval, supports MIN/MAX):
+Boundary interface (closed interval, supports MIN/MAX):
     getLeftBound() / getTopBound() / getRightBound() / getBottomBound()
 
-WindowInterface (window interaction):
-    in(column, row)                  tile enters the window
-    out(column, row)                 tile leaves the window
-    onWindowCalculated(cs, rs, ce, re) new window calculated
-    getColWidth(column)              column width
-    getRowHeight(row)                row height
+Window interface:
+    in(col, row) / out(col, row)        a tile enters / leaves the window
+    onWindowCalculated(colStart, rowStart, colEnd, rowEnd)   the new window is computed
+    getColWidth(col) / getRowHeight(row)          column width / row height
 ```
 
-Express them with the target language's interface/protocol/trait; the implementers are the tile manager and the dimension manager respectively.
+## 3. The Complete Logic of `sync` (English Pseudocode)
 
-### sync: the Scrolling Core
-
-`sync(dx, dy)` scrolls by a pixel displacement. dx/dy are **visual displacements**: positive dx moves the content right (the window extends leftward). Full flow:
+Convention: `dx/dy` is the **visual displacement** — a positive `dx` means the **content moves right** (i.e. the window looks left). The pseudocode uses plain names; a "plain name ↔ code field" table follows.
 
 ```text
 sync(dx, dy):
-    # 1. Validity short-circuit
-    if window out of bounds or window size <= 0:
-        return false
 
-    # 2. Horizontal sync (vertical is exactly analogous, swap columns for rows)
-    if horizontalScrollEnabled:
-        offsetX = original.offsetX + dx      # the offset accumulation lives inside this direction's branch
+    -- 0. legality short-circuit --
+    if window range is empty (colStart > colEnd or rowStart > rowEnd) or windowWidth <= 0 or windowHeight <= 0:
+        return "not computed"
 
-        # 3a. Content doesn't fill the window and the right bound is reached: try right-alignment (speculative compensation)
+    -- 1. horizontal sync (vertical is fully symmetric) --
+    if horizontal scrolling is enabled:
+
+        offsetX = original.offsetX + dx        <- accumulate the offset, only inside this branch
+
+        // A  content narrower than window and already at the right data bound -> right-align
         if contentWidth + offsetX < windowWidth and colEnd == rightBound:
-            offsetX = windowWidth - contentWidth      # right-align directly (the offsetX terms cancel)
+            offsetX = windowWidth - contentWidth
 
-        # 3b. Dragging right: anchor moves left, new columns come in
-        while offsetX > 0 and colStart > leftBound:
-            colStart--
+        // B  content moved right (offsetX > 0) -> move the start anchor left, absorb left columns
+        loop offsetX > 0 and colStart > leftBound:
+            colStart -= 1
             w = getColWidth(colStart)
             offsetX -= w
             contentWidth += w
 
-        # 3c. Dragging left: anchor moves right, old columns go out
-        startWidth = getColWidth(colStart)
-        while offsetX < -startWidth and colStart < rightBound:
-            offsetX += startWidth
-            contentWidth -= startWidth
-            colStart++
-            startWidth = getColWidth(colStart)
+        // C  content moved left (offsetX < -current first col width) -> move the start anchor right, drop left columns
+        w = getColWidth(colStart)
+        loop offsetX < -w and colStart < rightBound:
+            offsetX += w
+            contentWidth -= w
+            colStart += 1
+            w = getColWidth(colStart)
 
-        # 3c-2. The start anchor jumped past the end anchor: let the end anchor come along
-        # (otherwise 3e re-queries every column we just crossed and already subtracted — nearly double traversal on large jumps)
+        // D  the start anchor jumped past the end anchor in one step -> bring the end anchor along
         if colStart > colEnd:
             colEnd = colStart
-            contentWidth = startWidth
+            contentWidth = w
 
-        # 3d. Left bound reached: clamp
+        // E  already at the left data bound -> clamp
         if offsetX > 0 and colStart == leftBound:
             offsetX = 0
 
-        # 3e. Content doesn't fill the window: extend the right anchor rightward
-        while contentWidth + offsetX < windowWidth and colEnd < rightBound:
-            colEnd++
+        // F  content cannot fill the window -> expand right, add columns
+        loop contentWidth + offsetX < windowWidth and colEnd < rightBound:
+            colEnd += 1
             contentWidth += getColWidth(colEnd)
 
-        # 3f. Content overshoots: shrink the right anchor
-        endWidth = getColWidth(colEnd)
-        while contentWidth + offsetX - endWidth > windowWidth and colEnd > colStart:
-            contentWidth -= endWidth
-            colEnd--
-            endWidth = getColWidth(colEnd)
+        // G  content overflows the window too much -> shrink right, drop unused end columns
+        wEnd = getColWidth(colEnd)
+        loop contentWidth + offsetX - wEnd > windowWidth and colEnd > colStart:
+            contentWidth -= wEnd
+            colEnd -= 1
+            wEnd = getColWidth(colEnd)
 
-        # 3g. The two loops above may have opened a gap on the right: close it (final compensation)
+        // H  the loop above may have opened a new gap on the right -> patch once more
         if contentWidth > windowWidth and contentWidth + offsetX < windowWidth and colEnd == rightBound:
-            offsetX = windowWidth - contentWidth      # same, right-align directly
+            offsetX = windowWidth - contentWidth
 
         write back offsetX
 
-    # 3. Vertical sync (same as above, swap columns for rows and offsetX for offsetY)
+    -- 2. vertical sync --
+    replace col->row, colStart->rowStart, colEnd->rowEnd, offsetX->offsetY,
+    contentWidth->contentHeight, windowWidth->windowHeight,
+    left/right data bound -> top/bottom data bound everywhere above; the logic is unchanged.
+    Each direction's offset accumulates in its own branch, independent of the other.
 
-    # 4. Notify that the window has been calculated (the tile manager cleans the dying zone based on this)
-    onWindowCalculated(colStart, rowStart, colEnd, rowEnd)
-
-    # 5. On range change, update original and diff
-    if range changed:
-        update original
-        diff(old range, new range)
+    -- 3. wrap-up --
+    notify host: window computed(colStart, rowStart, colEnd, rowEnd)
+    if the window range (four anchors) changed:
+        update "last state"
+        diff: figure out which tiles enter and which leave (who in, who out)
+    return "computed"
 ```
 
-> A few key constraints — do not alter any boundary conditions when translating:
->
-> - **The offset accumulation lives inside each direction's branch**. `offsetX = original.offsetX + dx` must come before that direction's checks and loops, and must only apply to that direction. This way the checks and loops always read the "already accumulated" `offsetX`; and when a direction's scrolling is disabled, that direction's `dx/dy` is not written into the offset either (the old form accumulated at the top of the method, so a disabled direction still pushed dx into the offset and broke the invariant below).
-> - **Invariant**: at the end of every frame, `offsetX` stays within `[-current column width, 0]` and `offsetY` within `[-current row height, 0]`. This is the foundation of "pixel precision never degrades".
-> - **3c-2 is not optional**. `3c` only moves the start anchor; when a single jump goes past the end anchor, `3e` treats the columns just crossed and already subtracted as "new columns" and queries their widths again (nearly double traversal on large jumps). With this `if`, a crossed column is queried exactly once. Measured: `getColWidth` calls on large jumps are halved, while the resulting state is bit-for-bit identical.
-> - **Only the "second pass" can be saved**. The landing point is determined by the sum of the widths of the columns crossed, and with variable widths there is no shortcut (to skip N columns you must ask about N columns). So "skip the walk entirely" can never be O(1) — the only thing you can save is the repeated traversal.
-> - **3a and 3g are asymmetric for a reason**. `3a` is speculative compensation: the offset it pushes has a downstream safety net (`3b` pulls in new columns to consume it, and `3d` zeroes it when no column is available). `3g` is final compensation: it runs and then the snapshot is written, with nothing downstream to undo it, so it must prove up front that the push is safe (`contentWidth > windowWidth` keeps the left edge from being exposed after shifting right, `contentWidth + offsetX < windowWidth` guarantees there really is a gap).
+**Plain name ↔ code field**
 
-### seek: Defining the Origin
+| Pseudocode | Code | Pseudocode | Code |
+|---|---|---|---|
+| colStart / colEnd | `colStart` / `colEnd` | contentWidth | `contentWidth` |
+| rowStart / rowEnd | `rowStart` / `rowEnd` | contentHeight | `contentHeight` |
+| offsetX / offsetY | `offsetX` / `offsetY` | windowWidth / windowHeight | `windowWidth` / `windowHeight` |
+| previous offsetX | `original.offsetX` | getColWidth / getRowHeight | `getColWidth` / `getRowHeight` |
+| left/top/right/bottom bound | `leftBound`/`topBound`/`rightBound`/`bottomBound` | diff | `diff` |
 
-`seek(column, row, offsetX, offsetY)` jumps to the given coordinate:
+## 4. Block-by-Block: What It Does, Why, and What Breaks Without It
+
+### 0. Legality short-circuit
+
+- **What it does**: returns immediately when the window isn't initialized (empty interval) or the window size is 0 — no work done.
+- **Why**: the anchor range computed in these states is meaningless; passing it out would make the host create a pile of nonsensical tiles.
+- **Without it**: before the container is measured (first frame) or when bounds are empty, an illegal range gets computed and propagates outward.
+
+### 1. Accumulating the offset (inside the branch, before every test)
+
+- **What it does**: folds this direction's displacement into the offset.
+- **Why**: every test/loop below reads it, so it must be up to date; and it must take effect **in this direction only**.
+- **Without it (or if accumulated once at the top of the method)**: the tests would read a value that already includes the displacement — e.g. A's `contentWidth + offsetX < windowWidth` would be combined with "the displacement is already in offsetX", degenerating the condition into always-true/always-false (flipping the sign won't save it); also, when scrolling is disabled for this direction, the displacement would still be written into the offset, corrupting the invariant below.
+
+### A. Right-align (speculative compensation)
+
+- **What it does**: right-aligns the content as a whole (equivalent to "faking one drag to the right"), giving B a chance to pull in the left columns and fill the window.
+- **Why "speculative"**: the offset it pushes out has downstream cover — B consumes it by "absorbing a new column"; and if there's no left column left to absorb (colStart already at the left data bound), E force-zeros it.
+- **Without it**: near the right end of the data, when the content doesn't fill a screen, the left columns aren't pulled in and a blank shows on one side.
+
+### B. Move right: absorb left columns
+
+- **What it does**: whenever the offset exceeds one full column's width, absorb the left column (colStart − 1), subtract that width from the offset and add it to contentWidth.
+- **Why one column at a time, not one total displacement**: column widths **vary**, so the offset must always stay within "less than one column wide" — it can only be consumed one actual column at a time.
+- **Without it**: dragging right never brings in new columns on the left → blank on the left, content discontinuity.
+
+### C. Move left: drop columns scrolled past
+
+- **What it does**: when the offset exceeds the current first column's width, move colStart right by one, add its width back to the offset and subtract it from contentWidth.
+- **Why it must be done**: a column scrolled out of the window is pointless to keep.
+- **Without it**: the range grows without bound — memory, draw count and traversal count all grow; and `contentWidth` is inflated, so every later test is off.
+
+### D. End anchor follows (3c-2)
+
+- **What it does**: when one displacement makes **colStart jump past colEnd in one step** (the interval becomes empty), bring colEnd over to align with colStart and reset contentWidth to "one column".
+- **Why it must be done**: C only moves colStart; colEnd is still at its old position and contentWidth has already been shrunk a lot. If you went straight into F's fill loop, it would treat **the columns just jumped past and already subtracted** as "new columns" and ask their widths again (close to double traversal on a big displacement).
+- **Without it**: on a big displacement (fling, jump) the traversal count nearly doubles, and the intermediate state has a "contentWidth vs anchor range" inconsistency.
+
+### E. Left-bound clamp
+
+- **What it does**: when the offset is positive (content moves right, the left edge would go blank) and colStart is already at the left data bound, zero the offset.
+- **Why**: there's no content left on the left and B has no column to absorb — left-align is the only way to end.
+- **Without it**: the left edge goes blank and the offset leaves its invariant range (the next frame's tests then chain-fail).
+
+### F. Expand right: fill the window
+
+- **What it does**: while contentWidth + offset is still less than the window width (can't fill), keep adding colEnd to the right until it fills or hits the right data bound.
+- **Why it must be done**: the host renders only the "colStart..colEnd" range; without expanding, the right side is empty.
+- **Without it**: blank on the right side of the window, especially when jumping/zooming near the bound.
+
+### G. Shrink right: drop extra end columns
+
+- **What it does**: if **it still fills after removing colEnd** (so colEnd is redundant), drop it and check the new colEnd again.
+- **Why the test is "still fills after removing colEnd"**: this guarantees colEnd is "the last column still needed", leaving the content at most one column over. Extra columns are pure wasted compute and draw.
+- **Without it**: a whole rank of invisible columns hangs off the right; on a big displacement (many columns crossed), draw/traversal volume is clearly inflated.
+
+### H. Final-state compensation (3g)
+
+- **What it does**: after the G shrink a gap may have been opened on the right again; right-align once more to patch it.
+- **Why it's asymmetric with A (this is where many people think "can these be merged?")**:
+  - A is **speculative** — the offset it pushes out has downstream cover (B consumes, E zeros), so it can "push first, ask later".
+  - H is **final-state** — right after it runs the snapshot is written out and **nothing downstream can undo it**, so it must itself first prove the push is safe: `contentWidth > windowWidth` guarantees the left edge won't go blank after the right shift, and `contentWidth + offsetX < windowWidth` guarantees there really is a gap on the right.
+- **Without it**: an occasional gap is left near the right bound (typically the frame right after a G shrink).
+
+### 9. Write back offset / vertical symmetry / wrap-up
+
+- **Write back offset**: the offset is **relative to colStart**, so when B/C move colStart the offset must be adjusted in step, or the picture jumps. At the end of each frame, write the final value back to state.
+- **Vertical symmetry**: just copy the whole thing with column→row and width→height. The horizontal and vertical offsets accumulate independently — don't be tempted to factor out a shared function; that would either pass a pile of parameters or wrap a closure, making it harder to read and slower.
+- **onWindowCalculated must come before diff**: tell the host the *complete new range* first (the host uses it to clean up the dying zone and plan prefetch), then do `diff` (which only handles tile in/out). If the order is reversed, the host plans its buffers on the old range.
+- **Invariant**: at the end of each frame `offsetX ∈ [-current first col width, 0]` and `offsetY ∈ [-current first row height, 0]` must hold. The offset is a pixel-level float; once it leaves this range, the definition of "colStart" has drifted and the next frame's tests chain-fail. This is the basis of "pixel precision doesn't degrade".
+
+## 5. Other Core Methods
+
+### `seek(col, row, offsetX, offsetY)`: define the origin (distance-independent jump)
 
 ```text
-seek(column, row, offsetX, offsetY):
-    if bounds empty or target out of bounds:
-        return false
-
-    Expand right/down from (column, row):
-        accumulate row heights line by line until the window height is filled or the bottom bound is hit
-            (calling in() to preload along the way)
-        accumulate column widths column by column until the window width is filled or the right bound is hit
-
-    Write original (anchor = column,row, offsets set to 0)
-    Call sync(offsetX, offsetY) for fine-tuning
+seek(col, row, offsetX, offsetY):
+    if bounds are empty or the target is out of range: return "not computed"
+    prefill one screen to the bottom-right from (col, row) (call in() at every grid point to preload, avoiding a hollow first frame)
+    set the anchors to (col, row), zero the offsets, and force-sync into the output snapshot
+    call sync(offsetX, offsetY) to fine-tune
 ```
 
-Three points to note:
+Three key points:
 
-- Write `contentWidth` as "accumulator starts at `offsetX`, then subtract `trunc(offsetX)` at the end": the initial value and the minus sign cancel out, leaving the pure sum of widths. Do **not** start the accumulator at 0 while still subtracting `offsetX` at the end — that subtracts a whole extra `offsetX`, making `contentWidth` too small (when `offsetX>0`) or too large (when `offsetX<0`), and the loop's terminating column shifts by one as well (the H5 port hit exactly this; now fixed).
-- `seek` passes its arguments as `dx/dy` to `sync` (after zeroing the offsets) and relies on the offset accumulation inside sync's branch to fine-tune the "half-built window". So when a direction's scrolling is disabled, that direction's `offsetX/offsetY` argument has no effect — this is intentional.
-- Every cell in the expansion loops must call `in()` to preload, otherwise a hole can appear in the first frame after `seek`.
+1. **Accumulator initial value**: when prefilling, accumulate `contentWidth` starting from `trunc(offsetX)`, and subtract `trunc(offsetX)` at the end — the two cancel to yield a pure "sum of widths". **Do not** start from 0 while still subtracting `offsetX` — that subtracts one whole offset too many, making `contentWidth` too small/too large and shifting the expand loop's terminating column by one.
+2. `seek` passes its arguments to `sync` as `dx/dy` (with the offset zeroed first), letting the in-branch accumulation do the fine-tune. So **when scrolling is disabled for a direction, that direction's argument has no effect** — this is intentional.
+3. **The caller is responsible for clearing**: a jump is a "window reset"; the container implementing the render layer (`TileManager` / a self-drawing container) must first clear all currently active tiles before `seek`; otherwise tiles in the old range not covered by the new one will **remain forever** (manifesting as the pre-jump picture frozen under the new one, with the DOM / cache growing without bound).
 
-### diff: Region Difference
-
-Computes the difference between the old and new window rectangles to decide which tiles go `out` and which go `in`:
+### `diff(oldRange, newRange)`: region difference
 
 ```text
-if the new range and old range are completely disjoint:
-    out() everything in the old range
-    in() everything in the new range
+if the new range and old range don't overlap at all:
+    all of the old range out(); all of the new range in()
 else:
-    take the union, decompose it into the four regions "top, right, bottom, left"
-    for each cell: only in the old range → out(); only in the new range → in()
+    take the union, split into "top, right, bottom, left" four strips
+    for each cell decide: only in old range -> out(); only in new range -> in()
 ```
 
-The Java implementation splits the union into four region blocks and judges cell by cell, avoiding a double traversal of the whole large rectangle; other languages can copy it directly.
+Splitting into four strips is to traverse only the ring "union − intersection", avoiding double traversal of a big rectangle.
 
-### Size-Change Compensation
+### Size-change compensation `updateWidth / updateHeight / updateSize`
 
-`updateWidth/updateHeight/updateSize` adjust the offset when a tile size changes, keeping the visuals stable. The compensation direction is decided by gravity:
-
-| gravity | Column width change | Offset compensation |
+| gravity | meaning | offset compensation |
 |---|---|---|
-| `START` (-1) | Right side expands/shrinks | `offsetX` unchanged |
-| `CENTER` (0) | Both sides evenly | `offsetX += (oldWidth - newWidth) / 2` |
-| `END` (1) | Left side expands/shrinks | `offsetX += oldWidth - newWidth` |
+| `START`(-1) | expand/shrink to the right only | `offset` unchanged |
+| `CENTER`(0) | evenly on both sides | `offset += (oldSize − newSize) / 2` |
+| `END`(1) | expand/shrink to the left only | `offset += oldSize − newSize` |
 
-Disturbance only applies to columns/rows "currently inside the window"; for anything out of range just update `contentWidth/contentHeight` directly.
+Only the columns/rows currently inside the window need the offset perturbed; columns/rows outside only need `contentWidth/Height` updated.
 
-### Boundary Checks and Helpers
+### Boundary checks
 
-- `isAtLeftBound/isAtTopBound`: `anchor == bound && offset == 0`
-- `isAtRightBound/isAtBottomBound`: `colEnd == bound && contentWidth + offsetX == windowWidth` (**exact comparison**, meaning "aligned to the pixel". `offset` only takes part in additions/subtractions and stays strictly within `[-tile size, 0]`; accumulating it on its own produces almost no error (it starts at 0 and is added once per frame), the error comes mainly from `dx/dy` passed in from outside, and when you hit the end the two compensation conditions above align or reset it to 0 — so a direct comparison is enough, no tolerance needed. If you want "within half a pixel counts as at the bound", add an explicit tolerance — that is a different semantic)
-- `min/max`: the Java implementation uses int/float overloads (to avoid boxing); other languages use native `min/max` or direct comparison
+- Left/top: `anchor == bound and offset == 0` (exact).
+- Right/bottom: `colEnd == bound and contentWidth + offset == windowWidth` (**exact comparison**; the meaning is "pixel-level alignment").
 
-### Debug Code
+> The reason right/bottom dare to use `==`: the compensation writes `offset = windowWidth − contentWidth`, whose right side is **two integers subtracted** — an exactly representable result; assigned to a float, `contentWidth + offset == windowWidth` then holds by construction. If you want "within half a pixel counts as at the bound", you must add an explicit tolerance — that's different semantics; don't mix it in.
 
-`timeProvider` and `syncTime` exist only to measure `sync` duration; delete the whole section when porting — no behavior is affected.
+## 6. Implementing Your Own Data Containers
 
-## Step 2: Data Structures
+The tile manager needs a few small containers keyed by integers. **Implement them first, then translate the three core modules.**
 
-The tile manager depends on three custom data structures. Implement them in the target language first (or use an existing library); the reasons and options follow.
+### Long map (`LongMap`, keyed by tile id)
 
-### Long Map (LongMap)
+Needs: `get/put/remove/size/containsKey/clear`; the iterator must support **delete while iterating**.
 
-Active/dying tiles use a `long` key storing `T`. Requirements:
-
-- `get/put/remove/size/containsKey/clear`
-- Iterator: `next/key/value/remove`, supporting delete mode (remove while iterating)
-
-Options per language:
-
-| Language | Option |
+| Language | Approach |
 |---|---|
-| Java | In-package implementations: `LongMapOpenHashMap` (open-addressing hash, no boxing, default), `LongMapSparseArray`, `LongMapHashMap`; or `fastutil`, `trove` |
-| Kotlin/JVM | Same as above |
+| Java / Kotlin | In-package custom impl (open-addressing hash, no boxing), or `fastutil`/`trove` |
 | C# | `Dictionary<long, T>` (long is a value type, no boxing) |
 | Go | `map[int64]T` |
-| Rust | `std::collections::HashMap<i64, T>` |
-| C++ | `std::unordered_map<int64_t, T>` |
+| Rust | `HashMap<i64, T>` |
+| C++ | `unordered_map<int64_t, T>` |
 | JS/TS | `Map<number, T>` |
 | Swift | `Dictionary<Int64, T>` |
 
-> Why not `HashMap<Long,T>` in Java: keys box into `Long` objects, and tiles enter/leave the window constantly, amplifying boxing/unboxing and hashing overhead. The interface is tiny and a custom implementation is only a few hundred lines. Other languages have no boxing problem — use the standard library directly.
+> Why not just use `HashMap<Long,T>` in Java: the key gets boxed into a `Long` object, and tiles enter/leave the window very frequently, so boxing/unboxing and hashing overhead get amplified. The interface is tiny — a few hundred lines to implement yourself. Other languages have no boxing problem; use the standard library directly.
 
-### Int-Int Map (IntIntMap)
+### Int maps (`IntIntMap` / `IntMap`)
 
-Column widths/row heights use `int -> int`, one extra `get(key, defaultValue)` over LongMap. Options as above: Java can use `fastutil`'s `Int2IntOpenHashMap` or `SparseIntArray`; C# `Dictionary<int, int>`, Go `map[int]int`, Rust `HashMap<i32, i32>`, C++ `std::unordered_map<int, int>`.
+- `IntIntMap`: column width / row height use `int -> int`, with one extra `get(key, default)` over `LongMap`.
+- `IntMap`: the recycle pool groups by type using `int -> queue`, isomorphic to `LongMap` with the value swapped for a queue.
 
-### Int Map (IntMap)
+### Tile recycle pool
 
-The recycling pool groups by type and needs an `int -> queue` map; the interface is isomorphic to LongMap (key becomes int) with the target language's queue type as the value.
+Caches tiles grouped by type: `get(type)` takes one (returns null if empty), `recycle(type, tile)` puts it back, `reset()` clears, `moveTo()` migrates wholesale. Use the language's own queue (Java `ArrayDeque`, C# `Queue<T>`, Go slice, Rust `VecDeque`, JS array).
 
-### Tile Recycling Pool (TileRecycledPool)
-
-Type-grouped tile cache: `get(type)` takes the queue head (null when empty), `recycle(type, tile)` puts one back, `reset()` clears, `moveTo()` migrates in bulk. Use each language's own queue: Java `ArrayDeque`, C# `Queue<T>`, Go slices, Rust `VecDeque<T>`, JS arrays.
-
-### Tile ID Encoding
-
-Active/dying tiles use a `long` key: high 32 bits column, low 32 bits row:
+### Tile id encoding
 
 ```text
-id = (column << 32) | (row & 0xFFFFFFFF)
-column = id >> 32
+id = (col << 32) | (row & 0xFFFFFFFF)      // high 32 bits: col, low 32 bits: row
+col = id >> 32
 row = id & 0xFFFFFFFF
 ```
 
-- Languages with 64-bit integers can copy it directly
-- JavaScript's bitwise operations are only 32 bits; two alternatives: use the string `"col,row"` as key (simplest), or the 32-bit encoding `(col << 16) | row` (col/row each within a 16-bit range), or `BigInt`
-- Other languages can also use string keys at some speed cost
+- Languages with 64-bit integers copy it directly.
+- **JavaScript's bitwise ops are only 32-bit.** Two alternatives: use a `"col,row"` string as the key (simplest), or a 32-bit encoding `(col << 16) | row` (col/row each limited to 16 bits), or `BigInt`.
+- Other languages can use a string key too, at the cost of being a bit slower.
 
-### Tile Holder (BaseTileHolder)
+### Tile holder
 
-Fields `column/row/width/height/type` plus optional lifecycle hooks `onRecycled/onInWindow/onOutWindow/onSizeChanged`. Express with the target language's base class/interface/trait.
+Fields: `col/row/width/height/type`; optional lifecycle hooks: `onRecycled` (recycled), `onInWindow`/`onOutWindow` (enter/leave window), `onSizeChanged` (size change). Express with a base class / interface / trait in the target language.
 
-## Step 3: Tile Manager (TileManager)
+## 7. Tile Manager (`TileManager`)
 
-### Four-State Pools
+### Four-state pools
 
 | Pool | Storage | Meaning |
 |---|---|---|
-| Active | `LongMap<T>` | Currently visible inside the window |
-| Dying | `LongMap<T>` | Just left the window (a ring buffered outside the window) |
-| Prefetch | `LongMap<T>` | Loaded ahead along the motion direction (created & bound, not yet in the window) |
-| Recycled | `TileRecycledPool<T>` | Recycled and reusable |
-
-Flow:
+| active | `LongMap` | currently visible inside the window |
+| dying | `LongMap` | just left the window (a one-ring buffer outside it, kept briefly) |
+| prefetch | `LongMap` | loaded early in the direction of motion (created & bound, not yet in the window) |
+| recycle | recycle pool | recycled, reusable |
 
 ```text
-Enter window   → active pool (prefetch-pool tiles are promoted directly, skipping creation & binding)
-Leave window   → dying pool (recycled directly when the dying zone is disabled)
-Leave dying zone → recycled pool
-Direction reversal → prefetch pool evicted (recycled directly, not into the dying zone)
-Reuse          → active pool
+enter window -> active pool (if from prefetch, promote directly, skip create+bind)
+leave window -> dying pool (if the dying zone is disabled, recycle directly)
+leave dying zone -> recycle pool
+direction reverses -> prefetch pool evicted (recycled directly, not into the dying pool)
 ```
 
-### in / out / obtain / recycle
-
 ```text
-in(column, row):
-    Look up the id in the dying pool first
-    Hit     → move into the active pool (skip binding)
-    Miss    → obtain(type) creates or reuses → bind → into the active pool
-    Callbacks onInWindow + onTileIn
-
-out(column, row):
-    Remove from the active pool
-    Callbacks onOutWindow + onTileOut
-    Dying zone enabled → into the dying pool; otherwise recycle directly
-
-obtain(type):
-    Take from the recycling pool → reuse if present; otherwise onCreateTileHolder(type)
-
-recycle(tile):
-    Into the recycling pool + callbacks onRecycled + onTileRecycled
+in(col, row):
+    check the dying pool first: hit -> move into active pool (skip binding)
+    miss -> obtain(type) create or reuse -> bind -> into active pool
+    callback onInWindow + onTileIn
+out(col, row):
+    remove from active pool -> callback onOutWindow + onTileOut
+    dying zone enabled -> into dying pool; else recycle directly
+obtain(type):   reuse from recycle pool if any; else onCreateTileHolder(type)
+recycle(tile):  into recycle pool + callback onRecycled + onTileRecycled
 ```
 
-### Dying Zone
+### Dying zone
 
-The dying zone = the window expanded outward by `dyingExpand` rings (default 1). **Do not compute the bounds by subtraction**: `colStart - leftBound` overflows when the bound is `Integer.MIN_VALUE` (the mathematical distance exceeds int32, so the subtraction result is untrustworthy). The correct approach is to walk cell by cell, checking at each step whether the bound has been reached:
+Dying zone = window expanded outward by `dyingExpand` rings (default 1). **Don't compute the bound with subtraction:**
 
 ```text
+Wrong:   left = colStart - dyingRings          // subtraction overflows when the bound is Integer.MIN_VALUE
+Right:   walk cell by cell
 getDyingLeft():
     left = colStart
-    for i in 0 until dyingExpand:
+    repeat dyingRings times:
         if left <= leftBound: break
-        left--
+        left -= 1
     return left
 ```
 
-`diffDying(colStart, rowStart, colEnd, rowEnd)` is called after every window calculation and moves tiles that fell outside the dying zone into the recycling pool. When `setDyingEnabled(false)` turns the dying zone off, tiles leaving the window are recycled immediately and the dying pool is cleared.
+The mathematical distance exceeds int32, so a subtraction result is unreliable; walking cell by cell just checks whether the bound is reached at each step. Call `diffDying(range)` after each window computation to clear tiles beyond the dying zone into the recycle pool.
 
-### Prefetch Zone
+### Prefetch zone
 
-Prefetch is symmetric to dying: **the dying zone holds what just left behind; the prefetch zone grabs what is about to arrive ahead**. Prefetched tiles are created and bound but never enter the active zone (`in()` promotes them straight out of the prefetch pool without firing enter-window callbacks). **Enabled by default**.
+Prefetch is symmetric to the dying zone, opposite in direction: **the dying zone keeps behind, prefetch grabs ahead**. A prefetch tile is created & bound but doesn't enter the active area (on `in()` it's lifted straight out of the prefetch pool and promoted, without a window-enter callback). Enabled by default.
 
-- **Direction prediction**: `diffPrefetch` records the previous window anchor and three-way compares it with the current anchor to derive one of eight direction displacements. On the first frame / after a seek the closed interval is empty (`start > end`), meaning no previous record and unknown direction — no expansion.
-- **Asymmetric rectangle**: the prefetch zone expands by `prefetchExpand` rings (default 1) only toward the motion direction, with the other three sides hugging the window itself. When the window didn't move (`sameWindow`), already-prefetched tiles are kept, no reshuffle.
-- **Strip enqueue**: the queue is cleared and re-planned each frame, enqueueing only the coordinates of the "direction rectangle − window rectangle" forward strip (`enqueueRegion`, only when held by none of the three pools). No count cap — strip width is naturally constrained.
-- **Frame-budget consumption**: the renderer calls `drainPrefetch()` each frame, which consumes `prefetchPerFrame` tiles internally (default 8, adjustable via `setPrefetchPerFrame`; throughput for a 2D grid — RecyclerView's 1D is 4). If the queue still has leftovers it schedules the next frame callback; when empty it stops naturally.
-- **Eviction**: on direction reversal, prefetched tiles falling outside the new direction rectangle are recycled directly, not into the dying zone — they never entered the window, have no visible lifecycle and need no buffering.
-- **Peak observation**: `prefetchQueuePeak` records the queue's high-water mark and resets to zero with the prefetch zone lifecycle (cleared when prefetch is disabled / on clearAll / on seek); the debug panel shows the "prefetch peak".
+- **Direction prediction**: record the previous window anchor, compare it with the current anchor three-way to get the direction. First frame / after a jump there's no previous record → direction unknown, no expansion.
+- **Asymmetric rectangle**: expand only `prefetchExpand` rings in the direction of motion, the other three sides hug the window body. When the window hasn't moved, keep already-prefetched tiles, no re-layout.
+- **Strip enqueue**: clear and rebuild the queue each frame, enqueue only the front strip of "direction rectangle − window rectangle" (only if none of the three pools holds it). No count cap; the strip width naturally constrains it.
+- **Per-frame budget consumption**: the render side calls `drainPrefetch()` each frame, consuming `prefetchPerFrame` (default 8). Any remainder continues to the next frame; when empty it stops naturally.
+- **Eviction**: on direction reversal, prefetch tiles falling outside the new direction rectangle are **recycled directly, not into the dying pool** — they never entered the window, have no visible lifecycle, and need no buffer.
 
-The queue uses `LongQueue` (long FIFO, ring array, power-of-two capacity, auto-growing).
+The queue uses `LongQueue` (ring array, capacity a power of 2, auto-growing).
 
-### Update Operations
+### Update operations
 
-`update/updateRange/updateColumn/updateRow` refresh tiles in the given range: tiles inside the active zone are recycled and re-`in`ed (re-bound); tiles inside the dying zone just refresh their cached data. `updateAll` is equivalent to an in-place `seek`.
+`update/updateRange/updateColumn/updateRow` refresh a given range: those in the active area are **recycled then `in` again** (re-bound); those in the dying area only have their cached data refreshed. `updateAll` is equivalent to an in-place `seek`.
 
-### Storage Replacement
+## 8. Dimension Manager (`DimenManager`)
 
-All three pools — active/dying/recycled — support wholesale replacement (swap the data structure implementation). Migration flow: clear the target container → move items in one by one → clear the old container.
-
-## Step 4: Dimension Manager (DimenManager)
-
-### Three-Level Priority
+Three-level priority (`getTileWidth(col)` looks up in this order):
 
 ```text
-1. Individually set size (IntIntMap)
-2. Dynamic value from TileDimenProvider
-3. Default size from setDefault
+1. an individually set size (IntIntMap)
+2. a dynamic value from TileDimenProvider (optional; each platform implements as needed, e.g. content measurement)
+3. the default size set by setDefault
 ```
 
-`getTileWidth(column)` queries in this order. `TileDimenProvider` is a custom interface (`getTileWidth/getTileHeight/set*/delete*`); each platform implements it as needed, e.g. returning measured-from-content values dynamically.
-
-### Modification Flow
-
-`setTileWidth(column, width, gravity)`:
+Modification flow `setTileWidth(col, width, gravity)`:
 
 ```text
-1. width <= 0 → reject (setters require values greater than 0)
-2. Bounds empty or column out of range → reject
-3. Same as old value → return directly
-4. Traverse all tiles of that column inside the dying zone, calling resizeTile to sync sizes
-5. Call the engine's updateWidth for window compensation
-6. Trigger a UI refresh
+1. width <= 0 -> reject (setters require > 0)
+2. bounds empty or col out of range -> reject
+3. same as the old value -> return directly
+4. sync the size of all tiles in that column in the dying zone
+5. call the engine's updateWidth to compensate the window
+6. trigger a refresh
 ```
 
-To delete a custom size use `deleteTileWidth(column, gravity)` (`widths.remove` + the same sync flow) — **no longer express deletion by passing 0**. Same for `setTileHeight`; `setTileSize` merges the horizontal and vertical directions into one disturbance (both width and height must be > 0).
+To delete a custom size use `deleteTileWidth(col, gravity)` (= `widths.remove` + the same sync flow), **don't express deletion by passing 0**. `setTileSize` merges both directions into one perturbation.
 
-## Step 5: Composition Dispatch Layer (TileCoreService)
+## 9. Composition Dispatch Layer (`TileCoreService`)
 
-The dispatch layer composes the three modules into one entry point; it is also pure logic and can be ported. **EventHandler is Android-specific (GestureDetector, Scroller) and should NOT be ported** — each platform uses its own input system (touch, mouse wheel, gamepad, etc.) to convert movements into `sync(dx, dy)` calls, and fling scrolling is driven by the target platform's own animation mechanism.
+Combines the three modules into a unified entry point; it is itself pure logic and portable. **`EventHandler` (`GestureDetector`, `Scroller`) is Android-specific — don't port it**: each platform uses its own input system (touch, mouse, gamepad) to turn displacement into `sync(dx, dy)`, and uses the target platform's own animation mechanism for fling.
 
-The dispatch layer's responsibilities:
+Dispatch-layer responsibilities:
 
-- Forward boundary/size/tile lifecycle callbacks (wiring the engine and the tile manager together)
-- Provide a unified API: `sync/seek/snap/update/setTileWidth/...`
-- After `onWindowCalculated`, call `diffPrefetch` to plan prefetch, consumed by the renderer's per-frame `drainPrefetch()` (the frame callback is driven by "debug enabled or queue non-empty"; with neither it stops naturally)
-- Hold debug statistics (optional)
+- Forward boundary/size/tile lifecycle callbacks, wiring the engine and the tile manager together;
+- Provide a unified API: `sync/seek/snap/update/setTileWidth/...`;
+- After `onWindowCalculated`, call `diffPrefetch` to plan prefetch, consumed by the render side each frame via `drainPrefetch()`;
+- Hold debug statistics (optional).
 
-## Step 6: Plug Into the Target Platform's Rendering Layer
+## 10. Plug Into the Target Platform's Rendering Layer
 
-The engine only outputs "which tiles are visible, at which coordinate, how large"; the rendering layer is responsible for drawing them. For integration refer to the Android Platform Extension Guide:
+The engine only outputs "which tiles are visible, at what coordinate, how big"; the render layer draws them:
 
-1. Implement `BoundaryInterface`/`WindowInterface`/`Callback` (data source and tile holders)
-2. Connect "window changed" to the target platform's refresh mechanism (redraw/recomposition/submit render commands)
-3. Use the target platform's input system to drive `sync`
+1. Implement the boundary interface / window interface / callbacks (data source and tile holder);
+2. Wire "window changed" into the target platform's refresh mechanism (redraw / recompose / submit render commands);
+3. Drive `sync` with the target platform's input system.
 
-## Testing Strategy
+## 11. Testing Strategy
 
-All three modules are pure algorithms and ideal for unit testing: mock the interfaces, verify the outputs.
+All three modules are pure algorithm and very testable: mock the interfaces, verify the output. `LayoutEngine` verifies `LayoutModel` under scroll/jump/size-change; `TileManager` verifies in/out/recycle counts and prefetch; `DimenManager` verifies size lookup and modification perturbation.
 
-- **LayoutEngine**: mock the boundary and window interfaces, verify `LayoutModel` output across scrolling/seeking/size-change scenarios
-- **TileManager**: mock the callbacks, verify tile enter/leave and recycling counts; in prefetch scenarios verify direction prediction, strip enqueue, queue consumption and direction-reversal eviction
-- **DimenManager**: mock the callbacks, verify size queries and modification disturbance
+**Cross-implementation alignment (isomorphic differential test)**: put both implementations through **the same random scenario sequence** (same PRNG, same batch of column widths / row heights / windows / displacements) and compare `LayoutModel`'s full output (anchors, `contentWidth`, `offset`) scenario by scenario. This project uses it to align Java and H5: 600 scenarios (`sync`/`seek`/`updateWidth` mixed, 2-D data) with zero difference before porting is considered done.
 
-- **Cross-implementation alignment (isomorphic differential testing)**: drive both implementations with the same random scenario sequence (same PRNG, same column widths / row heights / window sizes / drags) and compare the full `LayoutModel` output (anchors, `contentWidth`, `offset`) scenario by scenario. This project used it to align Java and H5: 600 scenarios (`sync` / `seek` / `updateWidth` mixed, 2D data) had to show zero differences before the port was considered done. Keep the PRNG multiplier small: once the product exceeds 2^53, JS silently loses precision and the two sequences drift apart.
+> The PRNG's **multiplier must be small**: when the product exceeds 2^53 JS loses precision and the two sequences quietly drift apart.
 
-Boundary scenario checklist:
+Boundary scenario list:
 
 - Empty bounds (left > right)
-- Single column/row
+- Single column / single row
 - Starting near `Integer.MIN_VALUE`
-- High-frequency jitter (repeatedly scrolling back and forth over the same column boundary)
-- Repeated size changes (large → small → large)
-- All tiles returning null (sparse case)
-- Content smaller than the window (can't fill it)
-- Extreme seek (crossing the entire int32 space in one call)
-- Prefetch on the first frame (no previous record, unknown direction, no expansion)
-- Prefetch direction reversal (tiles prefetched behind are evicted and recycled)
-- Prefetch queue peak (fast repeated flailing, verifying it doesn't blow up)
+- High-frequency jitter (scrolling back and forth at the same column bound)
+- Repeated size changes (big to small to big)
+- All tiles returning null (sparse)
+- Content smaller than the window (can't fill)
+- Extreme jump (crossing the whole int32 space at once)
+- First prefetch frame (no previous record, direction unknown)
+- Prefetch direction reversal (behind prefetch evicted & recycled)
 
 ## Sub-document
 
-- [H5 Porting Guide (Canvas self-drawing)](H5_Porting_Guide.md) — a complete porting tutorial using the browser as the example, with a runnable sample (h5-demo/).
+- [H5 Porting Guide (Canvas self-drawing)](H5_Porting_Guide.md) — a complete porting tutorial with a runnable sample (h5-demo/).
 
 ---
 
-> The content of this document was generated by AI.
+> This document was generated by AI.

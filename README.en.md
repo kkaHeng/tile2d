@@ -39,7 +39,8 @@ Traditional paradigms usually fail at the **extreme values** of **int32**, or ev
 
 Two caching strategies — the **dying zone** and the **prefetch zone**: **load ahead** the tiles that are about to enter the viewport, and **keep the most recent** tiles that have left it.
 
-Tiles leaving the viewport are **staged**, so scrolling back can **skip rebinding** and revive them directly. Prefetch is **on by default**: it predicts the **direction of travel**, extends a strip only ahead of the viewport, and preloads it in batches (up to 8 per frame, tunable); tiles are promoted straight into the window, avoiding the stall of one big load.
+Tiles leaving the viewport are **staged**, so scrolling back can **skip rebinding** and revive them directly.
+Prefetch predicts the **direction of travel**, preloads in batches, and tiles are promoted straight into the window.
 
 ### Variable Sizes
 
@@ -68,6 +69,12 @@ The underlying **data containers** are replaceable in pursuit of a higher perfor
 It never tries to allocate memory for space it will not use — **sparse data** is supported across the whole chain, so `onCreateTileHolder` may **safely** return `null`.
 
 Tile containers, size tables and other structures are all sparse: positions that are unused simply **do not exist**, rather than being stored as a plain `null`.
+
+### Dimension Decoupling
+
+**Horizontal** and **vertical** scrolling are **parallel** and never depend on one another. It can collapse into a **list**, and just as freely expand back into two dimensions.
+
+Many algorithms are designed for lists; forcing them onto a 2D scene easily breeds a **paradox** where the horizontal and vertical axes **depend on each other** — unless nothing is measured, or only one side is.
 
 ---
 
@@ -162,10 +169,10 @@ public int getBottomBound() {
 
 ```java
 // call these when your adapter data changes; no setAdapter needed
-tileView.update(3, 5); // one tile
-tileView.updateRange(-10, -10, 10, 10); // a rectangle (closed interval)
-tileView.updateColumn(0); // a whole column
-tileView.updateRow(0); // a whole row
+tileView.update(column, row); // one tile
+tileView.updateRange(startColumn, startRow, endColumn, endRow); // a rectangle (closed interval)
+tileView.updateColumn(column); // a whole column
+tileView.updateRow(row); // a whole row
 tileView.updateAll(); // everything (same as re-running seek in place)
 ```
 
@@ -242,7 +249,8 @@ This project is released under the [MIT License](LICENSE).
 
 - Author: AhHeng
 - Email: kkaheng163@163.com
-- GitHub: [https://github.com/kkaHeng](https://github.com/kkaHeng)
+
+> **Unit tests**: I don't like writing unit tests, so there are none.
 
 ---
 
@@ -250,7 +258,7 @@ This project is released under the [MIT License](LICENSE).
 
 The app module ships with **11 samples**, covering both rendering paradigms (Canvas self-drawing / standard Views) and a wide range of scenarios.
 
-### Common Menu
+### Common Menu (some demos)
 
 - **Debug Mode**  
 Live display of **frame rate**, **active tiles**, **recycled tiles**, **dying tiles**, **viewport state** and other debug info.
