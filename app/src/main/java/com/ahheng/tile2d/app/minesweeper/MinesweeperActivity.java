@@ -1003,11 +1003,6 @@ public class MinesweeperActivity extends BaseActivity {
     }
 
     @Override
-    public boolean hasPlanMode() {
-        return false;
-    }
-
-    @Override
     protected ToTheEnd onInitToTheEnd() {
         return new ToTheEnd() {
             @Override public int getLeftBound() { return adapter.getLeftBound(); }

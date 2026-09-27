@@ -310,11 +310,6 @@ public class MaxMazeActivity extends BaseActivity {
         return false;
     }
 
-    @Override
-    public boolean hasPlanMode() {
-        return false;
-    }
-
     private class MaxMazeAdapter extends TileLayout.Adapter {
 
         @Override

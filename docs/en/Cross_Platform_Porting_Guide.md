@@ -84,54 +84,75 @@ sync(dx, dy):
     if window out of bounds or window size <= 0:
         return false
 
-    # 2. Offset accumulation
-    offsetX += dx
-    offsetY += dy
+    # 2. Horizontal sync (vertical is exactly analogous, swap columns for rows)
+    if horizontalScrollEnabled:
+        offsetX = original.offsetX + dx      # the offset accumulation lives inside this direction's branch
 
-    # 3. Horizontal sync (vertical is exactly analogous, swap columns for rows)
+        # 3a. Content doesn't fill the window and the right bound is reached: try right-alignment (speculative compensation)
+        if contentWidth + offsetX < windowWidth and colEnd == rightBound:
+            offsetX += windowWidth - (contentWidth + offsetX)
 
-    # 3a. Content doesn't fill the window and the right bound is reached: try right-alignment
-    if totalWidth + offsetX < windowWidth and colEnd == rightBound:
-        offsetX += windowWidth - (totalWidth + offsetX)
+        # 3b. Dragging right: anchor moves left, new columns come in
+        while offsetX > 0 and colStart > leftBound:
+            colStart--
+            w = getColWidth(colStart)
+            offsetX -= w
+            contentWidth += w
 
-    # 3b. Dragging right: anchor moves left, new columns come in
-    while offsetX > 0 and colStart > leftBound:
-        colStart--
-        offsetX -= getColWidth(colStart)
-        totalWidth += getColWidth(colStart)
+        # 3c. Dragging left: anchor moves right, old columns go out
+        startWidth = getColWidth(colStart)
+        while offsetX < -startWidth and colStart < rightBound:
+            offsetX += startWidth
+            contentWidth -= startWidth
+            colStart++
+            startWidth = getColWidth(colStart)
 
-    # 3c. Dragging left: anchor moves right, old columns go out
-    while offsetX < -getColWidth(colStart) and colStart < rightBound:
-        offsetX += getColWidth(colStart)
-        totalWidth -= getColWidth(colStart)
-        colStart++
+        # 3c-2. The start anchor jumped past the end anchor: let the end anchor come along
+        # (otherwise 3e re-queries every column we just crossed and already subtracted — nearly double traversal on large jumps)
+        if colStart > colEnd:
+            colEnd = colStart
+            contentWidth = startWidth
 
-    # 3d. Left bound reached: clamp
-    if offsetX > 0 and colStart == leftBound:
-        offsetX = 0
+        # 3d. Left bound reached: clamp
+        if offsetX > 0 and colStart == leftBound:
+            offsetX = 0
 
-    # 3e. Content doesn't fill the window: extend the right anchor rightward
-    while totalWidth + offsetX < windowWidth and colEnd < rightBound:
-        colEnd++
-        totalWidth += getColWidth(colEnd)
+        # 3e. Content doesn't fill the window: extend the right anchor rightward
+        while contentWidth + offsetX < windowWidth and colEnd < rightBound:
+            colEnd++
+            contentWidth += getColWidth(colEnd)
 
-    # 3f. Content overshoots: shrink the right anchor
-    while totalWidth + offsetX - getColWidth(colEnd) > windowWidth and colEnd > colStart:
-        totalWidth -= getColWidth(colEnd)
-        colEnd--
+        # 3f. Content overshoots: shrink the right anchor
+        endWidth = getColWidth(colEnd)
+        while contentWidth + offsetX - endWidth > windowWidth and colEnd > colStart:
+            contentWidth -= endWidth
+            colEnd--
+            endWidth = getColWidth(colEnd)
 
-    # 4. Vertical sync (same as above)
+        # 3g. The two loops above may have opened a gap on the right: close it (final compensation)
+        if contentWidth > windowWidth and contentWidth + offsetX < windowWidth and colEnd == rightBound:
+            offsetX += windowWidth - (contentWidth + offsetX)
 
-    # 5. Notify that the window has been calculated (the tile manager cleans the dying zone based on this)
+        write back offsetX
+
+    # 3. Vertical sync (same as above, swap columns for rows and offsetX for offsetY)
+
+    # 4. Notify that the window has been calculated (the tile manager cleans the dying zone based on this)
     onWindowCalculated(colStart, rowStart, colEnd, rowEnd)
 
-    # 6. On range change, update original and diff
+    # 5. On range change, update original and diff
     if range changed:
         update original
         diff(old range, new range)
 ```
 
-> Key constraint: `offsetX` always stays within `[-current column width, 0]`, `offsetY` within `[-current row height, 0]`. This is the foundation of "pixel precision never degrades" — do not alter any boundary conditions when translating.
+> A few key constraints — do not alter any boundary conditions when translating:
+>
+> - **The offset accumulation lives inside each direction's branch**. `offsetX = original.offsetX + dx` must come before that direction's checks and loops, and must only apply to that direction. This way the checks and loops always read the "already accumulated" `offsetX`; and when a direction's scrolling is disabled, that direction's `dx/dy` is not written into the offset either (the old form accumulated at the top of the method, so a disabled direction still pushed dx into the offset and broke the invariant below).
+> - **Invariant**: at the end of every frame, `offsetX` stays within `[-current column width, 0]` and `offsetY` within `[-current row height, 0]`. This is the foundation of "pixel precision never degrades".
+> - **3c-2 is not optional**. `3c` only moves the start anchor; when a single jump goes past the end anchor, `3e` treats the columns just crossed and already subtracted as "new columns" and queries their widths again (nearly double traversal on large jumps). With this `if`, a crossed column is queried exactly once. Measured: `getColWidth` calls on large jumps are halved, while the resulting state is bit-for-bit identical.
+> - **Only the "second pass" can be saved**. The landing point is determined by the sum of the widths of the columns crossed, and with variable widths there is no shortcut (to skip N columns you must ask about N columns). So "skip the walk entirely" can never be O(1) — the only thing you can save is the repeated traversal.
+> - **3a and 3g are asymmetric for a reason**. `3a` is speculative compensation: the offset it pushes has a downstream safety net (`3b` pulls in new columns to consume it, and `3d` zeroes it when no column is available). `3g` is final compensation: it runs and then the snapshot is written, with nothing downstream to undo it, so it must prove up front that the push is safe (`contentWidth > windowWidth` keeps the left edge from being exposed after shifting right, `contentWidth + offsetX < windowWidth` guarantees there really is a gap).
 
 ### seek: Defining the Origin
 
@@ -150,6 +171,12 @@ seek(column, row, offsetX, offsetY):
     Write original (anchor = column,row, offsets set to 0)
     Call sync(offsetX, offsetY) for fine-tuning
 ```
+
+Three points to note:
+
+- Write `contentWidth` as "accumulator starts at 0, subtract `trunc(offsetX)` at the end". Do **not** start the accumulator at `offsetX` — the minus sign and the initial value would cancel each other out, yielding a `contentWidth` that is too small by that amount, and the loop's terminating column shifts with it (the H5 port hit exactly this; now fixed).
+- `seek` passes its arguments as `dx/dy` to `sync` (after zeroing the offsets) and relies on the offset accumulation inside sync's branch to fine-tune the "half-built window". So when a direction's scrolling is disabled, that direction's `offsetX/offsetY` argument has no effect — this is intentional.
+- Every cell in the expansion loops must call `in()` to preload, otherwise a hole can appear in the first frame after `seek`.
 
 ### diff: Region Difference
 
@@ -176,12 +203,12 @@ The Java implementation splits the union into four region blocks and judges cell
 | `CENTER` (0) | Both sides evenly | `offsetX += (oldWidth - newWidth) / 2` |
 | `END` (1) | Left side expands/shrinks | `offsetX += oldWidth - newWidth` |
 
-Disturbance only applies to columns/rows "currently inside the window"; for anything out of range just update `totalWidth/totalHeight` directly.
+Disturbance only applies to columns/rows "currently inside the window"; for anything out of range just update `contentWidth/contentHeight` directly.
 
 ### Boundary Checks and Helpers
 
 - `isAtLeftBound/isAtTopBound`: `anchor == bound && offset == 0`
-- `isAtRightBound/isAtBottomBound`: `colEnd == bound && totalWidth + offsetX == windowWidth`
+- `isAtRightBound/isAtBottomBound`: `colEnd == bound && contentWidth + offsetX == windowWidth` (**exact comparison**, meaning "aligned to the pixel". `offset` only takes part in additions/subtractions and stays strictly within `[-tile size, 0]`; accumulating it on its own produces almost no error (it starts at 0 and is added once per frame), the error comes mainly from `dx/dy` passed in from outside, and when you hit the end the two compensation conditions above align or reset it to 0 — so a direct comparison is enough, no tolerance needed. If you want "within half a pixel counts as at the bound", add an explicit tolerance — that is a different semantic)
 - `min/max`: the Java implementation uses int/float overloads (to avoid boxing); other languages use native `min/max` or direct comparison
 
 ### Debug Code
@@ -375,6 +402,8 @@ All three modules are pure algorithms and ideal for unit testing: mock the inter
 - **LayoutEngine**: mock the boundary and window interfaces, verify `LayoutModel` output across scrolling/seeking/size-change scenarios
 - **TileManager**: mock the callbacks, verify tile enter/leave and recycling counts; in prefetch scenarios verify direction prediction, strip enqueue, queue consumption and direction-reversal eviction
 - **DimenManager**: mock the callbacks, verify size queries and modification disturbance
+
+- **Cross-implementation alignment (isomorphic differential testing)**: drive both implementations with the same random scenario sequence (same PRNG, same column widths / row heights / window sizes / drags) and compare the full `LayoutModel` output (anchors, `contentWidth`, `offset`) scenario by scenario. This project used it to align Java and H5: 600 scenarios (`sync` / `seek` / `updateWidth` mixed, 2D data) had to show zero differences before the port was considered done. Keep the PRNG multiplier small: once the product exceeds 2^53, JS silently loses precision and the two sequences drift apart.
 
 Boundary scenario checklist:
 

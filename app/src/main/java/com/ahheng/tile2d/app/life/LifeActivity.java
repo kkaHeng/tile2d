@@ -371,12 +371,7 @@ public class LifeActivity extends BaseActivity {
 
     // ========== 菜单 ==========
 
-    // 本 demo 只有一种渲染方案，也没有有限/无限切换（永远是无限平面）
-    @Override
-    public boolean hasPlanMode() {
-        return false;
-    }
-
+    // 本 demo 没有有限/无限切换（永远是无限平面）
     @Override
     public boolean hasMaxMode() {
         return false;

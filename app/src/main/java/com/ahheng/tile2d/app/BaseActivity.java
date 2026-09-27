@@ -23,13 +23,12 @@ public abstract class BaseActivity extends AppCompatActivity implements MenuItem
 
     private static final int MENU_ID_DEBUG = nextId();
     private static final int MENU_ID_MAX = nextId();
-    private static final int MENU_ID_PLAN = nextId();
-    private static final int MENU_ID_TO_END = nextId();
     private static final int MENU_ID_RANDOM_SIZE = nextId();
     private static final int MENU_ID_RANDOM_WIDTH = nextId();
     private static final int MENU_ID_RANDOM_HEIGHT = nextId();
 
     // 八方向去边界，按九宫格顺序排布（跳过中心），子菜单里逐个可选，不再随机
+    private static final int MENU_ID_TO_END = nextId();
     private static final int MENU_ID_END_TOP_LEFT = nextId();
     private static final int MENU_ID_END_TOP = nextId();
     private static final int MENU_ID_END_TOP_RIGHT = nextId();
@@ -39,16 +38,12 @@ public abstract class BaseActivity extends AppCompatActivity implements MenuItem
     private static final int MENU_ID_END_BOTTOM = nextId();
     private static final int MENU_ID_END_BOTTOM_RIGHT = nextId();
 
-    public final static int PLAN_COLOR = 0;
-    public final static int PLAN_TEXT = 1;
-
     // 尺寸动画时长
     private static final long SIZE_ANIM_DURATION = 2000L;
 
     private Toast toast;
     private boolean debugMode = true;
     private boolean maxMode = false;
-    private int plan = PLAN_TEXT;
     private ToTheEnd toTheEnd;
     private RandomSize randomSize;
 
@@ -56,10 +51,6 @@ public abstract class BaseActivity extends AppCompatActivity implements MenuItem
     private ValueAnimator heightAnimator;
 
     public boolean hasMaxMode() {
-        return true;
-    }
-
-    public boolean hasPlanMode() {
         return true;
     }
 
@@ -109,11 +100,6 @@ public abstract class BaseActivity extends AppCompatActivity implements MenuItem
                     .setOnMenuItemClickListener(this)
                     .setShowAsAction(MenuItem.SHOW_AS_ACTION_NEVER);
         }
-        if (hasPlanMode()) {
-            menu.add(Menu.NONE, MENU_ID_PLAN, Menu.NONE, "切换方案")
-                    .setOnMenuItemClickListener(this)
-                    .setShowAsAction(MenuItem.SHOW_AS_ACTION_NEVER);
-        }
         if (randomSize != null) {
             SubMenu sizeMenu = menu.addSubMenu(Menu.NONE, MENU_ID_RANDOM_SIZE, Menu.NONE, "随机调整尺寸");
             sizeMenu.getItem().setShowAsAction(MenuItem.SHOW_AS_ACTION_NEVER);
@@ -152,15 +138,6 @@ public abstract class BaseActivity extends AppCompatActivity implements MenuItem
         if (id == MENU_ID_MAX) {
             setMaxMode(!maxMode);
             showToast("伪无限模式: " + (maxMode ? "开启" : "关闭"));
-            return true;
-        }
-        if (id == MENU_ID_PLAN) {
-            switch (plan) {
-                case PLAN_COLOR -> plan = PLAN_TEXT;
-                case PLAN_TEXT -> plan = PLAN_COLOR;
-            }
-            showToast("切换方案：" + plan);
-            onPlanChanged(plan);
             return true;
         }
         if (id == MENU_ID_RANDOM_WIDTH) {
@@ -264,9 +241,6 @@ public abstract class BaseActivity extends AppCompatActivity implements MenuItem
     }
 
     protected void onMaxModeChanged(boolean maxMode) {
-    }
-
-    protected void onPlanChanged(int plan) {
     }
 
     protected ToTheEnd onInitToTheEnd() {

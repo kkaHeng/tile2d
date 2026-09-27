@@ -340,7 +340,7 @@ A tile was prefetched (created and bound, not yet in the window); do pre-entry p
 - `int colStart` / `int rowStart` — first visible column/row (closed interval)
 - `int colEnd` / `int rowEnd` — last visible column/row (closed interval)
 - `float offsetX` / `float offsetY` — overall content offset of the window
-- `int totalWidth` / `int totalHeight` — total content size in the window
+- `int contentWidth` / `int contentHeight` — the content size covered by the viewport
 - `long syncTime` — duration of the most recent sync (for debugging)
 
 - `LayoutModel newInstance()`

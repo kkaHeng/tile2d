@@ -411,7 +411,7 @@ public class LayoutEngineBenchActivity extends AppCompatActivity {
                         "引擎位置: col[" + m.colStart + ".." + m.colEnd +
                         "] row[" + m.rowStart + ".." + m.rowEnd + "]\n" +
                         "offset(" + formatFloat(m.offsetX) + ", " + formatFloat(m.offsetY) +
-                        ") total(" + m.totalWidth + ", " + m.totalHeight + ")\n" +
+                        ") content(" + m.contentWidth + ", " + m.contentHeight + ")\n" +
                         "in() 调用: " + inCallCount + "\n" +
                         "可见瓦片: " + visible + " (约 " + cols + "x" + rows + " 列行)";
 
@@ -427,8 +427,8 @@ public class LayoutEngineBenchActivity extends AppCompatActivity {
 
                 sb.append("\n");
                 appendLine(sb, "引擎位置", "col[" + m.colStart + ".." + m.colEnd + "] row[" + m.rowStart + ".." + m.rowEnd + "]", C_GREEN);
-                appendLine(sb, "偏移/总量", "offset(" + formatFloat(m.offsetX) + ", " + formatFloat(m.offsetY)
-                        + ")  total(" + m.totalWidth + ", " + m.totalHeight + ")", textColor);
+                appendLine(sb, "偏移/内容尺寸", "offset(" + formatFloat(m.offsetX) + ", " + formatFloat(m.offsetY)
+                        + ")  content(" + m.contentWidth + ", " + m.contentHeight + ")", textColor);
                 appendLine(sb, "in() 调用", String.valueOf(inCallCount), C_BLUE);
                 appendLine(sb, "可见瓦片", visible + " (约 " + cols + "x" + rows + " 列行)", C_GREEN);
 
@@ -480,7 +480,7 @@ public class LayoutEngineBenchActivity extends AppCompatActivity {
         plainSb.append("引擎位置: col[").append(m.colStart).append("..").append(m.colEnd)
                 .append("] row[").append(m.rowStart).append("..").append(m.rowEnd).append("]\n");
         plainSb.append("offset(").append(formatFloat(m.offsetX)).append(", ").append(formatFloat(m.offsetY))
-                .append(") total(").append(m.totalWidth).append(", ").append(m.totalHeight).append(")");
+                .append(") content(").append(m.contentWidth).append(", ").append(m.contentHeight).append(")");
         lastResultPlain = plainSb.toString();
 
         // Styled text
@@ -517,8 +517,8 @@ public class LayoutEngineBenchActivity extends AppCompatActivity {
         sb.append("\n");
 
         appendLine(sb, "引擎位置", "col[" + m.colStart + ".." + m.colEnd + "] row[" + m.rowStart + ".." + m.rowEnd + "]", textColor);
-        appendLine(sb, "偏移/总量", "offset(" + formatFloat(m.offsetX) + ", " + formatFloat(m.offsetY)
-                + ")  total(" + m.totalWidth + ", " + m.totalHeight + ")", textColor);
+        appendLine(sb, "偏移/内容尺寸", "offset(" + formatFloat(m.offsetX) + ", " + formatFloat(m.offsetY)
+                + ")  content(" + m.contentWidth + ", " + m.contentHeight + ")", textColor);
 
         resultText.setText(sb);
     }

@@ -14,9 +14,9 @@ public class LayoutModel {
     public float offsetX;
     public float offsetY;
 
-    // 视窗内容总尺寸
-    public int totalWidth;
-    public int totalHeight;
+    // 内容宽度/高度（视窗覆盖范围）
+    public int contentWidth;
+    public int contentHeight;
     
     // 调试变量(可移除)
     public long syncTime;
@@ -38,8 +38,8 @@ public class LayoutModel {
         model.offsetX = this.offsetX;
         model.offsetY = this.offsetY;
 
-        model.totalWidth = this.totalWidth;
-        model.totalHeight = this.totalHeight;
+        model.contentWidth = this.contentWidth;
+        model.contentHeight = this.contentHeight;
         
         model.syncTime = this.syncTime;
     }
@@ -54,8 +54,8 @@ public class LayoutModel {
         offsetX = 0f;
         offsetY = 0f;
 
-        totalWidth = 0;
-        totalHeight = 0;
+        contentWidth = 0;
+        contentHeight = 0;
         
         syncTime = 0L;
     }

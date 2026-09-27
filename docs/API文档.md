@@ -340,7 +340,7 @@
 - `int colStart` / `int rowStart` — 可见区域起始列/行（闭区间）
 - `int colEnd` / `int rowEnd` — 可见区域结束列/行（闭区间）
 - `float offsetX` / `float offsetY` — 视窗内容整体偏移
-- `int totalWidth` / `int totalHeight` — 视窗内容总尺寸
+- `int contentWidth` / `int contentHeight` — 视窗覆盖的内容尺寸
 - `long syncTime` — 最近一次同步耗时（调试用）
 
 - `LayoutModel newInstance()`  

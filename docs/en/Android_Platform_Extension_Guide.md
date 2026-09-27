@@ -288,9 +288,9 @@ public boolean dispatchTouchEvent(MotionEvent event) {
 
 ### Compose
 
-There are two ways. One is to **reuse** the core service and low-level components, since Kotlin can call Java. The other is a full Kotlin rewrite, which is much harder; this guide teaches the first.
+Compose is declarative and doesn't hold View nodes, but that **does not** mean it can't do component-style tiles — you just describe "which tiles should exist" and let Compose handle adding/removing and placement. Kotlin can call Java directly, so the core service and low-level components can be reused as-is; only the way you express "add/remove" and "placement" changes.
 
-Start with the simplest: wrap a `TileView` in `AndroidView` — one-shot integration:
+The easiest route: wrap the existing `TileView` into the Compose tree with `AndroidView`.
 
 ```kotlin
 @Composable
@@ -302,48 +302,58 @@ fun Tile2DEmbedded(adapter: TileView.Adapter, modifier: Modifier = Modifier) {
 }
 ```
 
-The cost is a traditional View embedded in the Compose tree, so measuring and drawing go through the View system; interaction is identical to using `TileView` directly.
+The cost is a traditional View embedded in the tree: measuring, drawing and gestures all go through the View system, so interaction is no different from using `TileView` directly.
 
-The more thorough approach is to **bypass Views entirely** and let `TileCoreService` drive rendering inside a Composable. The idea matches the custom View path exactly, just swapping the View lifecycle for the Composable lifecycle:
+For a pure-Compose approach, let `TileCoreService` drive a set of real Composable tiles. Compared with the custom View path, the only difference is how "add/remove" and "placement" are expressed:
+
+- **Add/remove**: `onTileIn` / `onTileOut` no longer call `addView` / `removeView`; instead add/remove into a `mutableStateListOf`. Compose attaches/detaches the matching tile automatically by `key`.
+- **Placement**: instead of `onLayout`, use `Modifier.offset { … }` or a custom `Layout` with an exact `place(x, y)`; measure with `Constraints.fixed(w, h)` in place of `MeasureSpec.EXACTLY`.
+- **Refresh**: `updateUI()` can't call `postInvalidate`; increment a recomposition state instead.
+- **Gestures / hit-testing**: scrolling via `pointerInput` + `detectDragGestures`; click / long-press on a tile is handled by Compose itself — no need to compute `findColumn` / `findRow`.
+
+Rough skeleton (illustrative, not guaranteed to compile):
 
 ```kotlin
 @Composable
-fun Tile2DComposable(modifier: Modifier = Modifier, adapter: TileAdapter<*>) {
+fun Tile2DComposable(adapter: TileAdapter, modifier: Modifier = Modifier) {
     val context = LocalContext.current
-    val coreService = remember {
-        TileCoreService<ComposeTileHolder>(context, object : TileCoreService.CoreInterface<ComposeTileHolder> {
-            override fun updateUI() {
-                // TODO trigger Compose recomposition: increment a mutableStateOf counter
-            }
-            // TODO the remaining CoreInterface methods are identical to the custom View path, delegate to the adapter
+    val version = remember { mutableStateOf(0) }            // recomposition signal
+    val tiles = remember { mutableStateListOf<TileRef>() }  // visible tile set
+
+    val core = remember {
+        TileCoreService<ComposeHolder>(context, object : TileCoreService.CoreInterface<ComposeHolder> {
+            override fun updateUI() { version.value++ }      // engine finished → recompose
+            override fun onTileIn(h: ComposeHolder, c: Int, r: Int)  { tiles.add(TileRef(c, r, h)) }
+            override fun onTileOut(h: ComposeHolder, c: Int, r: Int) { tiles.removeAll { it.key == h.key } }
+            // remaining methods (onBindTileHolder etc.) match the custom View path, delegate to the adapter
         })
     }
 
-    DisposableEffect(Unit) {
-        onDispose { coreService.resetAnimator() } // equivalent of onDetachedFromWindow
-    }
+    DisposableEffect(Unit) { onDispose { core.resetAnimator() } }  // equivalent of onDetachedFromWindow
 
-    // TODO Modifier.onSizeChanged: setBounds(...) + sync(0f, 0f)
-    // TODO Canvas: iterate the LayoutModel and draw tiles, same logic as the custom View's onDraw
-}
-```
-
-A few key differences:
-
-- `remember` guarantees the core service is created exactly once; cleanup goes into `DisposableEffect`'s `onDispose`
-- `updateUI()` cannot call `postInvalidate`; instead trigger a manually managed recomposition state
-- Scrolling can use `pointerInput` + `detectDragGestures`, converting drag deltas into content movement:
-
-```kotlin
-.pointerInput(Unit) {
-    detectDragGestures { change, dragAmount ->
-        change.consume()
-        coreService.sync(-dragAmount.x, -dragAmount.y) // same sign convention as View gestures
+    Box(modifier
+        .onSizeChanged { core.setBounds(/* viewport size */); core.sync(0f, 0f) }
+        .pointerInput(Unit) { detectDragGestures { _, d -> core.sync(-d.x, -d.y) } }
+    ) {
+        version.value   // read once; once the engine writes state, recomposition can run
+        tiles.forEach { t ->
+            key(t.key) {
+                TileContent(t)   // real Composable tile: Text / Image / clickable…
+                    // then position it with Modifier.offset{…} + Modifier.size(w.dp, h.dp)
+            }
+        }
     }
 }
 ```
 
-> If tiles must receive full touch events (click, long press), you need to assemble `PointerInputChange` into a `MotionEvent` and forward it — significantly more work.
+A few key points:
+
+- `remember` guarantees the core service is created once; cleanup goes into `DisposableEffect`'s `onDispose`.
+- `updateUI()` is the engine's "done drawing" notification; increment the state there to trigger recomposition — don't touch View's `invalidate`.
+- Prefer the lambda form `Modifier.offset { IntOffset(x, y) }` for placement — it reads state only at the layout phase, avoiding needless recomposition; to match `TileLayout`'s placement exactly, use a custom `Layout` and `place` yourself.
+- The tiles are real Composables, so text, images and click / long-press come for free.
+
+> This is only an outline: there is no companion implementation on the Compose side; polish the placement details and recycling strategy as needed.
 
 ### OpenGL ES
 

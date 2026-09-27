@@ -104,8 +104,8 @@ public class DebugLayer {
     private int cachedRowEnd;
     private float cachedOffsetX;
     private float cachedOffsetY;
-    private int cachedTotalWidth;
-    private int cachedTotalHeight;
+    private int cachedContentWidth;
+    private int cachedContentHeight;
 
     // 便捷构造:使用默认画笔样式
     public DebugLayer(Context context, Callback callback) {
@@ -251,10 +251,10 @@ public class DebugLayer {
             offsetText = String.format(Locale.getDefault(), "当前位置：%.2f,%.2f", cachedOffsetX, cachedOffsetY);
         }
 
-        if (model.totalWidth != cachedTotalWidth || model.totalHeight != cachedTotalHeight) {
-            cachedTotalWidth = model.totalWidth;
-            cachedTotalHeight = model.totalHeight;
-            dimensionText = "内容尺寸：" + cachedTotalWidth + "/" + cachedTotalHeight;
+        if (model.contentWidth != cachedContentWidth || model.contentHeight != cachedContentHeight) {
+            cachedContentWidth = model.contentWidth;
+            cachedContentHeight = model.contentHeight;
+            dimensionText = "内容尺寸：" + cachedContentWidth + "/" + cachedContentHeight;
         }
     }
 

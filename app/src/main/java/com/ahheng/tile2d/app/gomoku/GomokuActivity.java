@@ -429,12 +429,6 @@ public class GomokuActivity extends BaseActivity {
 
     // ========== 菜单 ==========
 
-    // 本 demo 只有一种渲染方案，关闭「切换方案」菜单
-    @Override
-    public boolean hasPlanMode() {
-        return false;
-    }
-
     @Override
     public boolean onCreateOptionsMenu(Menu menu) {
         boolean result = super.onCreateOptionsMenu(menu);

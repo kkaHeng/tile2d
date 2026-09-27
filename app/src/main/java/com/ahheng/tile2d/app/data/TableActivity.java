@@ -521,11 +521,6 @@ public class TableActivity extends BaseActivity {
     }
 
     @Override
-    public boolean hasPlanMode() {
-        return false;
-    }
-
-    @Override
     public boolean onCreateOptionsMenu(Menu menu) {
         super.onCreateOptionsMenu(menu); // 保留 Debug 模式
         menu.add(Menu.NONE, MENU_RESET, Menu.NONE, "重置表格")

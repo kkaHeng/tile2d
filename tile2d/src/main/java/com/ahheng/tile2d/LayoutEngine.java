@@ -3,18 +3,36 @@ package com.ahheng.tile2d;
 import com.ahheng.tile2d.util.time.TimeProvider;
 
 // 核心布局引擎
+// 一步一脚印，一步一世界
 // 支持跨平台移植(可删除调试代码)
+// offset 的取值范围是 [-瓦片尺寸, 0]
+// [-瓦片尺寸, 0] 中的瓦片尺寸是当前起始锚点的列宽或行高
+// offset 为正时，内容向右/下方向移动，反之向左/上方移动
 public class LayoutEngine {
+
+    // 更新尺寸时可用的补偿方式
 
     public static final int DIMEN_GRAVITY_CENTER = 0; // 居中对齐
     public static final int DIMEN_GRAVITY_START = -1; // 左对齐
     public static final int DIMEN_GRAVITY_END = 1; // 右对齐
 
+    // 数据边界接口
+    // 只要你的整数类型支持，设置什么值都行，呃……NaN除外
+    // 就算你有数学真无限的整数类型，布局引擎的流程控制也完全不需要改动
     private final BoundaryInterface boundaryInterface;
+
+    // 视窗交互接口
+    // 我没说「视窗」一定得是能看得见的
+    // 总之，通过实现这个接口，你可以以任何你想要的方式渲染
     private final WindowInterface windowInterface;
 
-    private final LayoutModel original = new LayoutModel(); // 原始布局模型
-    private final LayoutModel output = new LayoutModel(); // 输出布局模型
+    // 原始布局模型，不准在外部修改哈！
+    private final LayoutModel original = new LayoutModel();
+
+    // 输出布局模型，使用这个就行了，爱怎么改就怎么改，反正不会影响视窗内部的状态
+    private final LayoutModel output = new LayoutModel();
+
+    // 一些简单的状态变量
 
     private boolean horizontalScrollEnabled = true;
     private boolean verticalScrollEnabled = true;
@@ -22,6 +40,7 @@ public class LayoutEngine {
     private int windowHeight;
     
     // 调试变量，跨平台可删除
+
     private TimeProvider timeProvider;
     private long startTime;
 
@@ -30,7 +49,7 @@ public class LayoutEngine {
         windowInterface = windowI;
     }
 
-    // 同步视窗
+    // 同步视窗(帧间高频滚动)
     public boolean sync(float dx, float dy) {
         // 调试代码，可丢弃
         if (timeProvider != null) startTime = timeProvider.cpuNanoTime();
@@ -52,91 +71,115 @@ public class LayoutEngine {
             // 窗口状态不合法，避免向外传递不合法的坐标，直接短路
             return false;
         }
-        // offset / d 为正，内容向右移动，反之向左移动
-        float offsetX = original.offsetX + dx;
-        float offsetY = original.offsetY + dy;
+        // dx/dy 为正时，内容向右/下移动，反之向左/上移动
+        int contentWidth = original.contentWidth;
+        int contentHeight = original.contentHeight;
 
-        int totalWidth = original.totalWidth;
-        int totalHeight = original.totalHeight;
-
-        // 水平同步到 [-tileWidth, 0]
+        // 横向同步到 [-瓦片宽度, 0]
         if (horizontalScrollEnabled) {
+            float offsetX = original.offsetX + dx;
+
             // 起始锚点
-            if (totalWidth + offsetX < windowWidth && colEnd == rightBound) {
+            if (contentWidth + offsetX < windowWidth && colEnd == rightBound) {
                 // 右侧有空白，尝试右对齐，伪造用户向右拖事件
-                float end = windowWidth - (totalWidth + offsetX);
-                offsetX += end;
+                // 在日常滚动中，通过这种方式避免右边出现空白，继续往左边拖动不会发生变化
+                // 在 seek 调整场景中，如果距离数据右边界太近，会触发下面的循环补充左边
+                offsetX += windowWidth - (contentWidth + offsetX);
             }
             while (offsetX > 0 && colStart > leftBound) {
                 // 用户向右拖，内容向右边滚动，锚点左移
+                // 左侧瓦片进入
                 colStart--;
                 int width = windowInterface.getColWidth(colStart);
                 offsetX -= width;
-                totalWidth += width;
+                contentWidth += width;
             }
             int startWidth = windowInterface.getColWidth(colStart);
             while (offsetX < -startWidth && colStart < rightBound) {
                 // 用户向左拖，内容向左边滚动，锚点右移
+                // 左侧瓦片离开
                 offsetX += startWidth;
-                totalWidth -= startWidth;
+                contentWidth -= startWidth;
                 colStart++;
                 startWidth = windowInterface.getColWidth(colStart);
             }
+            if (colStart > colEnd) {
+                // 起点锚点越过结尾锚点了
+                // 让结尾锚点跳过前面的循环直接跟上，然后扩展直至填满视窗或抵达数据边界
+                colEnd = colStart;
+                contentWidth = startWidth;
+            }
             if (offsetX > 0 && colStart == leftBound) {
                 // 左边存在空白，内容无法填满窗口，强制对齐左边缘
+                // 继续往右边拖动不会发生变化
                 offsetX = 0;
             }
 
             // 结尾锚点
-            while (totalWidth + offsetX < windowWidth && colEnd < rightBound) {
+            while (contentWidth + offsetX < windowWidth && colEnd < rightBound) {
                 // 内容填不满窗口，扩展锚点
+                // 右侧瓦片进入
                 colEnd++;
-                totalWidth += windowInterface.getColWidth(colEnd);
+                contentWidth += windowInterface.getColWidth(colEnd);
             }
             int endWidth = windowInterface.getColWidth(colEnd);
-            while (totalWidth + offsetX - endWidth > windowWidth && colEnd > colStart) {
+            while (contentWidth + offsetX - endWidth > windowWidth && colEnd > colStart) {
                 // 内容过度超出窗口，收缩锚点
-                totalWidth -= endWidth;
+                // 右侧瓦片离开
+                contentWidth -= endWidth;
                 colEnd--;
                 endWidth = windowInterface.getColWidth(colEnd);
             }
+            if (contentWidth > windowWidth && contentWidth + offsetX < windowWidth && colEnd == rightBound) {
+                // 复核发现前面2个循环导致右边出现空白，处理掉
+                offsetX += windowWidth - (contentWidth + offsetX);
+            }
+            output.offsetX = original.offsetX = offsetX;
         }
 
-        // 垂直同步 (同上)
+        // 纵向同步 (同上)
         if (verticalScrollEnabled) {
-            if (totalHeight + offsetY < windowHeight && rowEnd == bottomBound) {
-                float end = windowHeight - (totalHeight + offsetY);
-                offsetY += end;
+            float offsetY = original.offsetY + dy;
+
+            if (contentHeight + offsetY < windowHeight && rowEnd == bottomBound) {
+                offsetY += windowHeight - (contentHeight + offsetY);
             }
             while (offsetY > 0 && rowStart > topBound) {
                 rowStart--;
                 int height = windowInterface.getRowHeight(rowStart);
                 offsetY -= height;
-                totalHeight += height;
+                contentHeight += height;
             }
             int startHeight = windowInterface.getRowHeight(rowStart);
             while (offsetY < -startHeight && rowStart < bottomBound) {
                 offsetY += startHeight;
-                totalHeight -= startHeight;
+                contentHeight -= startHeight;
                 rowStart++;
                 startHeight = windowInterface.getRowHeight(rowStart);
+            }
+            if (rowStart > rowEnd) {
+                // 起点一跳越过结尾锚点：让结尾锚点跟着走（行方向同理）
+                rowEnd = rowStart;
+                contentHeight = startHeight;
             }
             if (offsetY > 0 && rowStart == topBound) {
                 offsetY = 0;
             }
-            while (totalHeight + offsetY < windowHeight && rowEnd < bottomBound) {
+            while (contentHeight + offsetY < windowHeight && rowEnd < bottomBound) {
                 rowEnd++;
-                totalHeight += windowInterface.getRowHeight(rowEnd);
+                contentHeight += windowInterface.getRowHeight(rowEnd);
             }
             int endHeight = windowInterface.getRowHeight(rowEnd);
-            while (totalHeight + offsetY - endHeight > windowHeight && rowEnd > rowStart) {
-                totalHeight -= endHeight;
+            while (contentHeight + offsetY - endHeight > windowHeight && rowEnd > rowStart) {
+                contentHeight -= endHeight;
                 rowEnd--;
                 endHeight = windowInterface.getRowHeight(rowEnd);
             }
+            if (contentHeight > windowHeight && contentHeight + offsetY < windowHeight && rowEnd == bottomBound) {
+                offsetY += windowHeight - (contentHeight + offsetY);
+            }
+            output.offsetY = original.offsetY = offsetY;
         }
-        output.offsetX = original.offsetX = offsetX;
-        output.offsetY = original.offsetY = offsetY;
         // 调试代码，可丢弃
         if (timeProvider != null) output.syncTime = original.syncTime = timeProvider.cpuNanoTime() - startTime;
 
@@ -144,33 +187,37 @@ public class LayoutEngine {
         int lastRowStart = original.rowStart;
         int lastColEnd = original.colEnd;
         int lastRowEnd = original.rowEnd;
+        // 通知视窗计算完毕
         windowInterface.onWindowCalculated(colStart, rowStart, colEnd, rowEnd);
         if (lastColStart != colStart || lastRowStart != rowStart
-                || lastColEnd != colEnd || lastRowEnd != rowEnd) {
+            || lastColEnd != colEnd || lastRowEnd != rowEnd) {
+            // 视窗锚点发生变化，批量处理进出
             original.colStart = colStart;
             original.rowStart = rowStart;
             original.colEnd = colEnd;
             original.rowEnd = rowEnd;
-            original.totalWidth = totalWidth;
-            original.totalHeight = totalHeight;
+            original.contentWidth = contentWidth;
+            original.contentHeight = contentHeight;
             original.copyTo(output);
             diff(lastColStart, lastRowStart, lastColEnd, lastRowEnd, colStart, rowStart, colEnd, rowEnd);
         }
         return true;
     }
 
-    // 定义原点
+    // 定义原点(距离无关跳转)
     public boolean seek(int column, int row, float offsetX, float offsetY) {
         if (isEmpty() || !checkLocationInBounds(column, row)) {
             return false;
         }
         int rightBound = boundaryInterface.getRightBound();
         int bottomBound = boundaryInterface.getBottomBound();
-        int totalWidth = (int) offsetX;
-        int totalHeight = (int) offsetY;
+        // 强转无关紧要，后面 sync 会精修
+        int contentWidth = (int) offsetX;
+        int contentHeight = (int) offsetY;
         int colEnd = column;
         int rowEnd = row;
 
+        // 粗略预估(复杂度小于等于一个视窗)
         int c = column;
         while (c <= rightBound) {
             int r = row;
@@ -178,8 +225,8 @@ public class LayoutEngine {
                 windowInterface.in(c, r);
 
                 if (c == column) {
-                    totalHeight += windowInterface.getRowHeight(r);
-                    if (totalHeight > windowHeight) {
+                    contentHeight += windowInterface.getRowHeight(r);
+                    if (contentHeight > windowHeight) {
                         rowEnd = r;
                         break;
                     }
@@ -193,36 +240,43 @@ public class LayoutEngine {
                 r++;
             }
 
-            totalWidth += windowInterface.getColWidth(c);
-            if (totalWidth > windowWidth) {
+            contentWidth += windowInterface.getColWidth(c);
+            if (contentWidth > windowWidth) {
                 colEnd = c;
                 break;
             }
             if (c == rightBound) {
                 // 已到达尽头
-                // 避坑：未更新 colEnd 导致在右下边界处出现 totalWidth、totalHeight 与实际不同步的问题
+                // 避坑：未更新 colEnd 导致在右下边界处出现 contentWidth、contentHeight 与实际不同步的问题
                 colEnd = c;
                 break;
             }
             c++;
         }
 
+        // 覆盖状态，避免 sync 依赖错误的旧状态
         original.colStart = column;
         original.rowStart = row;
         original.offsetX = 0;
         original.offsetY = 0;
-        original.totalWidth = totalWidth - (int) offsetX;
-        original.totalHeight = totalHeight - (int) offsetY;
+        original.contentWidth = contentWidth - (int) offsetX;
+        original.contentHeight = contentHeight - (int) offsetY;
         original.colEnd = colEnd;
         original.rowEnd = rowEnd;
+        // 强制同步，避免 sync 认为锚点没有变化导致输出模型看不到结果
         original.copyTo(output);
+        
+        // 精确调整(如果视窗没填满或 offset 会引发视窗锚点移动)
         sync(offsetX, offsetY);
         return true;
     }
 
+    // 对视窗内的尺寸变更事件进行位移补充
+
     public void updateWidth(int column, int oldWidth, int newWidth, int gravity) {
+        if (oldWidth == newWidth) return;
         if (column >= original.colStart && column <= original.colEnd) {
-            original.totalWidth += (newWidth - oldWidth);
+            original.contentWidth += (newWidth - oldWidth);
             float newOffsetX;
             if (gravity == DIMEN_GRAVITY_START) {
                 // 左对齐，右扩展或收缩
@@ -235,14 +289,15 @@ public class LayoutEngine {
                 newOffsetX = original.offsetX + (oldWidth - newWidth) / 2f;
             }
             float dx = newOffsetX - original.offsetX;
-            output.totalWidth = original.totalWidth;
+            output.contentWidth = original.contentWidth;
             sync(dx, 0);
         }
     }
 
     public void updateHeight(int row, int oldHeight, int newHeight, int gravity) {
+        if (oldHeight == newHeight) return;
         if (row >= original.rowStart && row <= original.rowEnd) {
-            original.totalHeight += (newHeight - oldHeight);
+            original.contentHeight += (newHeight - oldHeight);
             float newOffsetY;
             if (gravity == DIMEN_GRAVITY_START) {
                 // 上对齐，下扩展或收缩
@@ -255,7 +310,7 @@ public class LayoutEngine {
                 newOffsetY = original.offsetY + (oldHeight - newHeight) / 2f;
             }
             float dy = newOffsetY - original.offsetY;
-            output.totalHeight = original.totalHeight;
+            output.contentHeight = original.contentHeight;
             sync(0, dy);
         }
     }
@@ -264,8 +319,8 @@ public class LayoutEngine {
                            int row, int oldHeight, int newHeight, int vGravity) {
         float dx = 0;
         float dy = 0;
-        if (column >= original.colStart && column <= original.colEnd) {
-            original.totalWidth += (newWidth - oldWidth);
+        if (column >= original.colStart && column <= original.colEnd && oldWidth != newWidth) {
+            original.contentWidth += (newWidth - oldWidth);
             float newOffsetX;
             if (hGravity == DIMEN_GRAVITY_START) {
                 // 左对齐，右扩展或收缩
@@ -278,10 +333,10 @@ public class LayoutEngine {
                 newOffsetX = original.offsetX + (oldWidth - newWidth) / 2f;
             }
             dx = newOffsetX - original.offsetX;
-            output.totalWidth = original.totalWidth;
+            output.contentWidth = original.contentWidth;
         }
-        if (row >= original.rowStart && row <= original.rowEnd) {
-            original.totalHeight += (newHeight - oldHeight);
+        if (row >= original.rowStart && row <= original.rowEnd && oldHeight != newHeight) {
+            original.contentHeight += (newHeight - oldHeight);
             float newOffsetY;
             if (vGravity == DIMEN_GRAVITY_START) {
                 // 上对齐，下扩展或收缩
@@ -294,7 +349,7 @@ public class LayoutEngine {
                 newOffsetY = original.offsetY + (oldHeight - newHeight) / 2f;
             }
             dy = newOffsetY - original.offsetY;
-            output.totalHeight = original.totalHeight;
+            output.contentHeight = original.contentHeight;
         }
         sync(dx, dy);
     }
@@ -426,6 +481,11 @@ public class LayoutEngine {
             || boundaryInterface.getTopBound() > boundaryInterface.getBottomBound();
     }
 
+    // 检查是否触及数据边界(像素级)
+    // offset 只参与加减运算，它的值严格限定在 [-瓦片尺寸, 0] 中；
+    // 自身累加几乎不产生误差（起点是0，每帧只加一次），误差主要来自外部传入的 dx/dy；
+    // 滚到头时，2个补偿条件会把它对齐或重置为0，所以这里直接比较就够，不必留容差。
+
     public boolean isAtLeftBound() {
         return original.colStart == boundaryInterface.getLeftBound() && original.offsetX == 0;
     }
@@ -435,12 +495,14 @@ public class LayoutEngine {
     }
 
     public boolean isAtRightBound() {
-        return original.colEnd == boundaryInterface.getRightBound() && original.totalWidth + original.offsetX == windowWidth;
+        return original.colEnd == boundaryInterface.getRightBound() && original.contentWidth + original.offsetX == windowWidth;
     }
 
     public boolean isAtBottomBound() {
-        return original.rowEnd == boundaryInterface.getBottomBound() && original.totalHeight + original.offsetY == windowHeight;
+        return original.rowEnd == boundaryInterface.getBottomBound() && original.contentHeight + original.offsetY == windowHeight;
     }
+
+    // 一些简单的状态操作
 
     public void reset() {
         original.reset();
@@ -463,12 +525,6 @@ public class LayoutEngine {
         return verticalScrollEnabled;
     }
 
-    // 调试代码，跨平台可删除
-
-    public void setTimeProvider(TimeProvider timeProvider) {
-        this.timeProvider = timeProvider;
-    }
-
     public int getWindowWidth() {
         return windowWidth;
     }
@@ -485,7 +541,13 @@ public class LayoutEngine {
         windowHeight = height;
     }
 
-    // 逻辑边界接口(闭区间)
+    // 调试代码，跨平台可删除
+
+    public void setTimeProvider(TimeProvider timeProvider) {
+        this.timeProvider = timeProvider;
+    }
+
+    // 数据边界接口(闭区间)
     public interface BoundaryInterface {
 
         // 获取左边界(支持 MIN_VALUE)
@@ -511,7 +573,7 @@ public class LayoutEngine {
         // 使指定瓦片离开视窗
         void out(int column, int row);
 
-        // 新视窗计算完毕，即将进行边界处理
+        // 新视窗计算完毕，即将进行边界处理(瓦片进出事件)
         void onWindowCalculated(int colStart, int rowStart, int colEnd, int rowEnd);
 
         // 获取指定列宽

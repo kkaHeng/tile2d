@@ -262,11 +262,6 @@ public class AutoTileActivity extends BaseActivity {
     }
 
     @Override
-    public boolean hasPlanMode() {
-        return false;
-    }
-
-    @Override
     protected void onMaxModeChanged(boolean maxMode) {
         super.onMaxModeChanged(maxMode);
         tileLayout.snap();

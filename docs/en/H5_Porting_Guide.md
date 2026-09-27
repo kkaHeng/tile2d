@@ -1,316 +1,349 @@
 # H5 Porting Guide (Tile2D)
 
-> This document is the H5 sub-document of the "Cross-Platform Porting Guide". Target platform: browser (JavaScript). Rendering: **DOM** — tiles are real elements, no Canvas self-drawing. A complete runnable sample lives in the project root under `h5-demo/` (5 files). Code blocks in this document only show **key snippets**; for **complete code always refer to the files under `h5-demo/`**.
+> This document is the H5 sub-document of the "Cross-Platform Porting Guide": **using the project's real, runnable `h5-demo/` as an example, it teaches you step by step how to port Tile2D to the browser (JavaScript)**.
+> The rendering approach is **DOM** — tiles are real elements (mirroring the app-side `TileLayout`, which uses real child Views to carry tiles), not Canvas self-drawing.
+> The code blocks in this document are **real code extracted from `h5-demo/`**; when it says "see file X for the full code", the file is authoritative.
 
-## Overview
+## How to Use This Guide
 
-- Environment: vanilla JavaScript (ES6), no framework, no build tools; drop-in via `<script>`
-- Rendering: tiles are real `div`s positioned absolutely; the content layer carries the pixel offset via `transform`
-- Modules map one-to-one onto the Java version: `LayoutModel` / `LayoutEngine` / `TileManager` / `DimenManager` / `TileCoreService` / view layer
-- Demo gameplay matches the app's Tile Painter demo: **pseudo-infinite mode** (bounds extended to the full int32 space) and **Visit the Bounds** (random jumps to 8 extreme points); data is generated from fixed-seed Perlin noise
-- Key differences from the Java version:
-  - **No 64-bit integers**: JS bitwise operations are 32-bit only, so tile IDs use the string `"col,row"` as key
-  - **No boxing problem**: active/dying tiles use `Map` directly, no custom hash table needed
-  - `Math.min/max` replaces the overloads; `Number` is double-precision and exact within int32 range
+- **Prerequisite**: first read the `LayoutEngine` chapter of the "Cross-Platform Porting Guide" (`sync`'s 3a–3g, `seek`, and the responsibilities of `diff`). This document won't repeat the theory.
+- **How to read**: every step follows the pattern "what to port → what the real code looks like → self-check points".
+- **Order**: engine (pure algorithm) first, then the container layer (DOM), and finally interaction and menus — matching the order in which this demo was actually written.
+- **Running it**: just double-click `h5-demo/index.html` (local `file://` works, zero network dependencies), or serve it with `python3 -m http.server`.
 
-## Step 1: Project Structure
+## Step 0: Decide What to Replicate First
 
-The sample has 5 files:
+Porting is not "copying Java line by line into JS"; it's **first distinguishing which parts must align line by line and which parts can be replicated as needed**:
 
-- `h5-demo/index.html` — container and styles
-- `h5-demo/noise.js` — Perlin noise + 24-color gradient (demo data source)
-- `h5-demo/tile2d.js` — engine + managers + dispatch layer + DOM view
-- `h5-demo/main.js` — adapter + demo logic (pseudo-infinite / visit the bounds)
-- `h5-demo/test.js` — node unit tests (neither engine nor noise depends on DOM, verifiable outside the browser)
+| Java side | H5 side | Degree of replication |
+|---|---|---|
+| `LayoutEngine` | `h5-demo/tile2d.js` | **Line-by-line alignment** (comments included); behavior must be identical |
+| `LayoutModel` | `h5-demo/tile2d.js` | Line-by-line alignment |
+| `TileLayout` (ViewGroup + real child Views) | `TileDomCore` (container + real DOM elements) | **Replicate as needed**: enter/leave, layout, scaling, recycling, hit-testing |
+| `TileManager` (prefetch / dying zone) | —— | Not needed by the demo; drop it |
+| `DimenManager` | The size table inside `TileDomCore` | As needed: per-column width / per-row height + defaults |
+| `TileCoreService` (dispatch layer) | `main.js` + `TileDomCore` | As needed: keep only what the demo uses |
+| Perlin noise + 24-color gradient | `h5-demo/noise.js` | **Bit-for-bit alignment** (same seed must produce the same image) |
 
-The container needs three mandatory styles: `position: relative` (reference for the absolutely positioned content layer), `overflow: hidden` (window clipping), `touch-action: none` (blocks default browser gestures and keeps dragging usable).
+In one sentence: **the engine and the RNG must be "exactly the same"; the container layer and the dispatch layer are "rewritten to intent".**
 
-```js
+The sample has 4 files:
+
+- `h5-demo/index.html` — page structure and styles (mobile-first, safe-area aware)
+- `h5-demo/tile2d.js` — `LayoutModel` + `LayoutEngine` (line-by-line aligned) + `TileDomCore` (DOM container layer)
+- `h5-demo/noise.js` — `java.util.Random` replica + Perlin noise + 24-color gradient
+- `h5-demo/main.js` — adapter + DOM tile rendering + gestures (inertial scroll / pinch zoom) + menus
+
+> **Unit tests do not go into the project**: this project requires test code to live only in a **temporary directory outside the project** (which also makes it easy to run isomorphic diffing against the Java version). `h5-demo/tile2d.js` keeps `module.exports` at the bottom precisely so external test scripts can `require` it.
+
+## Step 1: Build the Page Skeleton (index.html)
+
+Three key points for the container (mirroring the fact that `TileLayout` is a `ViewGroup`):
+
+```css
 #view {
-    position: relative;
-    width: 800px;
-    height: 450px;
-    overflow: hidden;
-    touch-action: none;
-    /* remaining styles and buttons: see h5-demo/index.html */
+    position: fixed;
+    left: 0; top: 0;
+    width: 100%;
+    height: 100%;
+    overflow: hidden;      /* Window clipping, equivalent to ViewGroup's clipChildren */
+    touch-action: none;    /* Key: blocks default browser gestures (otherwise dragging is stolen by page scroll) */
+    contain: strict;       /* Tells the browser: internal layout and paint don't overflow; more stable performance */
 }
-...
-<script src="noise.js"></script>
-<script src="tile2d.js"></script>
-<script src="main.js"></script>
-```
 
-> For the full file see `h5-demo/index.html`.
-
-## Step 2: File Skeleton (tile2d.js)
-
-The top of the file is a single comment describing the file's purpose and the string-key scheme:
-
-```js
-/*
- * Tile2D H5 port sample - pure JS implementation, no framework dependencies
- * Tile keys use the string "col,row" (JS bitwise ops are 32-bit only; the long encoding can't be carried over)
- */
-```
-
-The bottom of the file is the Node export branch: in a browser `module` doesn't exist, so this branch never runs and all classes stay global; in node you can `require` it and unit-test the engine directly:
-
-```js
-if (typeof module !== 'undefined' && module.exports) {
-    module.exports = {
-        LayoutModel, LayoutEngine, TileManager, DimenManager, TileCoreService, Tile2DView,
-    };
+/* Tiles: real DOM elements (mirroring TileLayout.TileHolder.itemView) */
+#view > .tile {
+    position: absolute;
+    left: 0; top: 0;       /* Position is entirely handled by transform */
+    display: flex;
+    align-items: center;   /* Corresponds to TextView's gravity=CENTER */
+    justify-content: center;
+    box-sizing: border-box;
+    border: 0.5px solid #808080;   /* Corresponds to GradientDrawable.setStroke(0.5dp, GRAY) */
+    will-change: transform;
+    contain: layout paint style;
 }
 ```
 
-## Step 3: Layout Model (LayoutModel)
+Three things for mobile adaptation: `<meta name="viewport" … viewport-fit=cover>`, using `env(safe-area-inset-*)` to leave a safe area for the top/bottom bars, and `html,body { overflow: hidden; overscroll-behavior: none; }` to prevent full-page rubber-banding.
 
-A pure data object with the same fields as the Java version (closed-interval semantics, `start > end` means an empty window), plus the three methods `copyTo/newInstance/reset`:
+Page structure (full version in `h5-demo/index.html`): `#view` (tile container) + `#topbar` (status pill + menu button) + `#hud` (debug panel) + `#toast` + `#sheet` (bottom drawer menu).
+
+**Self-check**: the page opens on a phone, the page doesn't scroll along when dragging, and the tile container hugs all four screen edges (including the notch safe area).
+
+## Step 2: Layout Model (LayoutModel)
+
+The engine needs two models: `original` records the real state, `output` is the snapshot read from the outside. Compare with Java's `LayoutModel`:
 
 ```js
 class LayoutModel {
     constructor() {
-        this.colStart = 0;
-        this.rowStart = 0;
-        this.colEnd = -1;
-        this.rowEnd = -1;
-        this.offsetX = 0;
-        this.offsetY = 0;
-        this.totalWidth = 0;
-        this.totalHeight = 0;
+        this.colStart = 0; this.rowStart = 0;
+        this.colEnd = -1; this.rowEnd = -1;      // Empty interval: [0,-1]
+        this.offsetX = 0; this.offsetY = 0;
+        this.contentWidth = 0; this.contentHeight = 0;
     }
-    // Also copyTo / newInstance / reset, see h5-demo/tile2d.js
+    copyTo(m) { /* Copy all eight fields */ }
+    newInstance() { const m = new LayoutModel(); this.copyTo(m); return m; }
+    reset() { /* Back to the empty interval */ }
 }
 ```
 
-## Step 4: Layout Engine (LayoutEngine), Fully Ported
+**Self-check**: `colEnd = -1`, `rowEnd = -1` mean "there is no content yet"; the engine's validity short-circuit relies on this convention.
 
-The engine is the heart of the port and must be **fully implemented**: window calculation, pixel precision and boundary behavior all live here; changing any single boundary condition makes scrolling diverge from the Java version.
+## Step 3: Layout Engine (LayoutEngine) — Must Align Line by Line
 
-The engine depends on only two interfaces (bounds, window interaction); in JS duck typing suffices — no explicit interfaces needed. The alignment constants match the Java version: `DIMEN_GRAVITY_CENTER = 0`, `DIMEN_GRAVITY_START = -1`, `DIMEN_GRAVITY_END = 1`.
-
-The `sync` flow (same as the pseudocode in the Cross-Platform Porting Guide): validity short-circuit → offset accumulation → horizontal sync (right-alignment / anchor moves left / anchor moves right / clamp / right-anchor extension / right-anchor shrink) → vertical sync → write snapshot → notify window calculated → diff on range change. Key constraint: `offsetX` always stays within `[-current column width, 0]`, `offsetY` within `[-current row height, 0]`.
-
-Horizontal sync of `sync` (anchor movement + column width accumulation):
-
-```js
-// 3b. Dragging right: anchor moves left, new columns come in
-while (offsetX > 0 && colStart > leftBound) {
-    colStart--;
-    const w = this.window.getColWidth(colStart);
-    offsetX -= w;
-    totalWidth += w;
-}
-// 3c. Dragging left: anchor moves right, old columns go out
-let startWidth = this.window.getColWidth(colStart);
-while (offsetX < -startWidth && colStart < rightBound) {
-    offsetX += startWidth;
-    totalWidth -= startWidth;
-    colStart++;
-    startWidth = this.window.getColWidth(colStart);
-}
-```
-
-The "completely disjoint" branch of `diff`:
-
-```js
-if (newColStart > oldColEnd || newRowStart > oldRowEnd ||
-    newColEnd < oldColStart || newRowEnd < oldRowStart) {
-    // Completely disjoint: everything in the old range goes out, everything in the new range comes in
-    for (let x = oldColStart; x <= oldColEnd; x++) {
-        for (let y = oldRowStart; y <= oldRowEnd; y++) this.window.out(x, y);
-    }
-    for (let x = newColStart; x <= newColEnd; x++) {
-        for (let y = newRowStart; y <= newRowEnd; y++) this.window.in(x, y);
-    }
-    return;
-}
-```
-
-> For the full implementation see `h5-demo/tile2d.js` (sync / seek / diff / size compensation, etc., behavior identical to the Java version, guaranteed by 25 node unit tests).
-
-## Step 5: Tile Manager (TileManager)
-
-Three-state pools (active/dying/recycled) + lifecycle + update operations, structurally identical to the Java version. Two JS-specific implementation points:
-
-- Tile keys use the string `column + ',' + row` (see Overview)
-- Dying-zone bounds use **cell-by-cell walking** instead of subtraction, avoiding overflow near `Integer.MIN_VALUE` (JS numbers are double-precision, but the boundary semantics must stay consistent with Java)
-
-```js
-class TileManager {
-    // Tile key: string "col,row"
-    static key(column, row) { return column + ',' + row; }
-
-    in(column, row) {
-        const key = TileManager.key(column, row);
-        let tile = this.dying.get(key);
-        if (tile) {
-            // Reuse from the dying pool, skip binding
-            this.dying.delete(key);
-        } else {
-            const type = this.callback.getTileType(column, row);
-            tile = this.obtain(type);
-            if (tile) {
-                tile.column = column; tile.row = row;
-                tile.width = this.callback.getTileWidth(column);
-                tile.height = this.callback.getTileHeight(row);
-                this.callback.onBindTileHolder(tile, column, row);
-            }
-        }
-        if (tile) {
-            this.active.set(key, tile);
-            if (tile.onInWindow) tile.onInWindow();
-            this.callback.onTileIn(tile, column, row);
-        }
-    }
-    // Dying-zone bounds walk cell by cell, update operations, etc.: see h5-demo/tile2d.js
-}
-```
-
-> For the full implementation see `h5-demo/tile2d.js`.
-
-## Step 6: Dimension Manager (DimenManager)
-
-Three-level priority: individually set > size provider > default. Size changes sync tiles inside the dying zone, compensate the window, and trigger a refresh:
-
-```js
-// Three-level priority: individually set > size provider > default
-getTileWidth(column) {
-    if (this.widths.has(column)) return this.widths.get(column);
-    if (this.dimenProvider) return this.dimenProvider.getTileWidth(column);
-    return this.defaultTileWidth;
-}
-```
-
-> For the full implementation see `h5-demo/tile2d.js`.
-
-## Step 7: Core Dispatch Layer (TileCoreService)
-
-Wires the three modules together and implements the four interface groups (bounds, window, tile callbacks, size callbacks), exposing a unified API. The view layer deals only with it:
-
-```js
-class TileCoreService {
-    constructor(coreInterface) {
-        this.core = coreInterface;
-        this.layoutEngine = new LayoutEngine(this, this);
-        this.tileManager = new TileManager(this);
-        this.dimenManager = new DimenManager(this);
-        this.bounds = { left: 0, top: 0, right: 0, bottom: 0 };
-    }
-    // ---- Layout engine's boundary interface ----
-    getLeftBound() { return this.core.getLeftBound(); }
-    // ---- Layout engine's window interface ----
-    in(column, row) { this.tileManager.in(column, row); }
-    getColWidth(column) { return this.dimenManager.getTileWidth(column); }
-    // Remaining interfaces and the unified API: see h5-demo/tile2d.js
-}
-```
-
-> For the full implementation see `h5-demo/tile2d.js`.
-
-## Step 8: DOM Rendering Layer (Tile2DView)
-
-Why DOM instead of Canvas: `div`s naturally support click, hover, styles and animations; tiles are real elements, so content-type pages (text, images, forms) can be dropped straight into tiles with no hit-testing to implement.
-
-The structure has two layers:
+The engine is the only part of the whole port where you "must not improvise". The ~500 lines in `h5-demo/tile2d.js` are an isomorphic translation of the Java version: not a single comment changed, not a single condition changed, only types swapped for JS `Number`. Below is the complete flow of `sync` (**consistent with the file**):
 
 ```text
-Container #view (relative + overflow: hidden)
-└─ Content div (absolute, transform: translate(offsetX, offsetY))
-    └─ Tile divs (absolute, left/top = accumulated coordinates)
+sync(dx, dy):
+    # 1. Validity short-circuit
+    if window is out of bounds or window size <= 0:
+        return false
+
+    # 2. Horizontal sync (vertical is exactly analogous, swap columns for rows)
+    if horizontalScrollEnabled:
+        offsetX = original.offsetX + dx      # Offset accumulation lives inside this direction's branch
+
+        # 3a. Content doesn't fill and right bound is reached: try right-alignment (tentative compensation)
+        if contentWidth + offsetX < windowWidth and colEnd == rightBound:
+            offsetX += windowWidth - (contentWidth + offsetX)
+
+        # 3b. Dragging right, anchor moves left, bring in new columns
+        while offsetX > 0 and colStart > leftBound:
+            colStart--
+            w = getColWidth(colStart)
+            offsetX -= w
+            contentWidth += w
+
+        # 3c. Dragging left, anchor moves right, drop old columns
+        startWidth = getColWidth(colStart)
+        while offsetX < -startWidth and colStart < rightBound:
+            offsetX += startWidth
+            contentWidth -= startWidth
+            colStart++
+            startWidth = getColWidth(colStart)
+
+        # 3c-2. Start leaps over the end anchor: let the end anchor follow
+        if colStart > colEnd:
+            colEnd = colStart
+            contentWidth = startWidth
+
+        # 3d. Left bound reached: clamp
+        if offsetX > 0 and colStart == leftBound:
+            offsetX = 0
+
+        # 3e. Content doesn't fill: extend the right anchor
+        while contentWidth + offsetX < windowWidth and colEnd < rightBound:
+            colEnd++
+            contentWidth += getColWidth(colEnd)
+
+        # 3f. Content overflows too much: shrink the right anchor
+        endWidth = getColWidth(colEnd)
+        while contentWidth + offsetX - endWidth > windowWidth and colEnd > colStart:
+            contentWidth -= endWidth
+            colEnd--
+            endWidth = getColWidth(colEnd)
+
+        # 3g. The two loops above may leave a blank on the right: patch it (final-state compensation)
+        if contentWidth > windowWidth and contentWidth + offsetX < windowWidth and colEnd == rightBound:
+            offsetX += windowWidth - (contentWidth + offsetX)
+
+        write back offsetX
+
+    # 3. Vertical sync (same as above, swap columns for rows and offsetX for offsetY)
+
+    # 4. Notify that the window has been calculated
+    onWindowCalculated(colStart, rowStart, colEnd, rowEnd)
+
+    # 5. When the range changes, update original and diff
+    if range changed:
+        update original
+        diff(old range, new range)
 ```
 
-- **Offset via `transform`**: doesn't trigger reflow, and since `offset` is a pixel-level float, `transform` expresses it exactly
-- **Tile positioning via `left/top`**: accumulate column widths/row heights cell by cell — variable sizes work naturally
-- `onTileIn` attaches the tile element into the content layer; `onTileOut/onTileRecycled` removes it
-- Input: pointer dragging → `sync(dx, dy)` (finger moves right → content moves right → offset increases); wheel → `sync(-deltaX, -deltaY)`
+The engine's remaining methods correspond one-to-one (full code in `h5-demo/tile2d.js`):
+
+| Method | Purpose | Porting notes |
+|---|---|---|
+| `seek(column,row,offsetX,offsetY)` | Distance-independent jump | The accumulator **starts at 0**; subtract `Math.trunc(offsetX)` at the end; treat the arguments as `dx/dy` and hand them to `sync` for fine-tuning |
+| `diff` / `diffRegion` | Compute the difference between old and new windows; decide who goes `in` and who goes `out` | When completely disjoint, fall back to handling the whole block (extreme jumps rely on it) |
+| `updateWidth/Height/Size` | Positional compensation after a size change | Go through the same path via `sync(dx,0)`; don't write a second implementation |
+| `isAtLeftBound` etc. | Boundary checks | Exact comparison, **no tolerance** (reason below) |
+
+**Five key constraints (do not change them while translating)**:
+
+1. **Offset accumulation lives inside the direction branch**. `offsetX = original.offsetX + dx` must come before that direction's checks and loops, and take effect only in that direction. If you accumulate it at the top of the method, "the offsetX read in a check already contains dx", and the condition degenerates to always-true / always-false; also, when scrolling is disabled, dx gets written into the offset, breaking the invariant below.
+2. **Invariant**: at the end of every frame, `offsetX ∈ [-current column width, 0]`, `offsetY ∈ [-current row height, 0]`. This is the basis of "pixel precision never degrades".
+3. **3c-2 is not optional**. `3c` only moves the start anchor; when a single jump crosses the end anchor, `3e` will ask for the width of the just-crossed, already-subtracted columns again as "new columns" (nearly double traversal under large displacements). With this `if`, crossed columns are only ever asked once.
+4. **The only thing you can save is the "second pass"**. The landing point is hidden in the sum of the widths of the crossed columns; with variable-width data there is no bypass (to skip N columns you must ask N columns), so "skip the traversal" cannot achieve O(1).
+5. **3a and 3g are asymmetric for a reason**. `3a` is tentative compensation: the offset it produces has downstream backstops (`3b` consumes it by bringing in new columns; when there are no columns to bring in, `3d` forces it to zero); `3g` is final-state compensation: it runs and immediately writes the snapshot out, with no downstream that can undo it, so it must itself first prove the push is safe.
+
+**Language difference checklist** (how the JS side handles them):
+
+| Java | JS | Notes |
+|---|---|---|
+| `int` / `float` | `Number` | Double precision; exact within int32 range, sufficient for pixel scenarios |
+| `(int) x` | `Math.trunc(x)` | Truncating cast; don't use `~~` (error-prone for negatives) |
+| `Math.round` semantic difference | Not used | Java's `round` is "floor + 0.5", inconsistent across languages; this project has already removed its dependency on `LayoutEngine` |
+| `TimeProvider` / `syncTime` | None | Debug code; delete the whole block when porting |
+| Interfaces | Duck typing | It's enough that the object has methods like `getColWidth` / `in` / `out` |
+
+**Self-check**: run the same set of inputs through Java and JS; the eight fields of `LayoutModel` must match bit for bit (see Step 7).
+
+## Step 4: Container Layer (TileDomCore) — Tiles Are Real DOM Elements
+
+This step corresponds to Java's `TileLayout` (ViewGroup). Four things:
+
+1. **Entering/leaving the window = attaching/detaching elements**
 
 ```js
-// Content layer: absolutely positioned + transform carrying the offset; tiles absolutely positioned at accumulated coordinates
-this.content = document.createElement('div');
-this.content.style.position = 'absolute';
-this.content.style.left = this.paddingLeft + 'px';
-this.content.style.top = this.paddingTop + 'px';
-this.content.style.transformOrigin = '0 0';
-container.appendChild(this.content);
-// Tile enter/leave callbacks (onTileIn / onTileOut), see h5-demo/tile2d.js
-onTileIn: (holder) => { this.content.appendChild(holder.el); },
-onTileOut: (holder) => { holder.el.remove(); },
-```
-
-> For the full implementation see `h5-demo/tile2d.js`.
-
-## Step 9: Noise Texture (noise.js)
-
-The demo data is **deterministically generated** with no server dependency: fixed-seed Perlin noise + 24-color gradient mapping, same as the app's Tile Painter demo (seed `123456789`, scale `0.03`, sparse where noise `< 0.3`). This is exactly the premise on which "pseudo-infinite mode" stands — data can be computed from any coordinate, no pre-generation needed.
-
-`createRandom` is a 32-bit SplitMix64, guaranteeing the same seed shuffles reproducibly; `PerlinNoise2D` corresponds line-by-line to the Java version (8-direction gradients, fade interpolation); `colorFromNoise` interpolates linearly across the 24 colors, and `luminance` picks the foreground text color:
-
-```js
-// Deterministic RNG (SplitMix64, 32-bit edition): same seed, same shuffle, every time
-function createRandom(seed) {
-    let x = seed >>> 0;
-    return function () {
-        x = (x + 0x9E3779B9) >>> 0;
-        let z = x;
-        z = Math.imul(z ^ (z >>> 16), 0x21F0AAAD);
-        z = Math.imul(z ^ (z >>> 15), 0x735A2D97);
-        return (z ^ (z >>> 15)) >>> 0;
-    };
+onTileIn(column, row) {
+    const tile = this.obtain(type);           // Take from the recycling stack first; only create if none
+    this.adapter.onBindTileHolder(tile, column, row);
+    this.container.appendChild(tile.el);      // Corresponds to addViewInLayout
+    this.active.set(key, tile);
 }
-// COLOR_TABLE (24-color gradient) and colorFromNoise / luminance: see h5-demo/noise.js
+onTileOut(column, row) {
+    if (tile.el.parentNode === this.container) this.container.removeChild(tile.el);  // Corresponds to removeViewInLayout
+    /* After detaching, push into the recycling stack for reuse by the next obtain */
+}
 ```
 
-> For the full file see `h5-demo/noise.js`.
+2. **Layout = one pass over the visible range, writing only style**
 
-## Step 10: Adapter and Demo Logic (main.js)
+```js
+layoutTiles() {                       // Corresponds to TileLayout.layoutTiles
+    let x = paddingLeft + this.scale(model.offsetX);
+    for (let column = model.colStart; ; column++) {
+        const width = this.scale(this.getTileWidth(column));
+        let y = paddingTop + this.scale(model.offsetY);
+        for (let row = model.rowStart; ; row++) {
+            const height = this.scale(this.getTileHeight(row));
+            const tile = this.getActiveTile(column, row);
+            if (tile) {               // Only active tiles touch the DOM
+                tile.el.style.transform = `translate3d(${x}px,${y}px,0)`;
+                tile.el.style.width = width + 'px';
+                tile.el.style.height = height + 'px';
+                tile.el.style.fontSize = this.scale(14) + 'px';   // Font size scales too
+            }
+            y += height;
+            if (row === model.rowEnd) break;
+        }
+        x += width;
+        if (column === model.colEnd) break;
+    }
+}
+```
 
-The adapter has the same shape as the Java version: bounds, create, bind, type. Three demo highlights:
+> **Why `transform` instead of `left/top`**: `transform` only touches the compositor layer and doesn't trigger layout reflow; `left/top` makes the browser recompute layout every time.
+> **Why write `width/height` and `fontSize` explicitly**: the DOM doesn't scale by itself — when `scaleFactor` changes, they must be recomputed (exactly the same as `TileLayout`'s `scale()`).
 
-- **Perlin noise mapping**: `getTileType` marks cells sparse where noise `< 0.3`; `onBindTileHolder` maps `(noise - 0.3) / 0.7` onto the 24-color gradient
-- **Pseudo-infinite mode**: bounds toggle between a finite range and `±2147483647`; after switching, call `snap()` to pull the window back into the legal range
-- **Visit the bounds**: jumps to a randomly chosen one of the 8 extreme points (same as the app demo: topmost / top-right / rightmost / bottom-right / bottommost / bottom-left / leftmost / top-left)
+3. **Scaling = scaleFactor** (mirrors `TileLayout.scale(n) = n * getScaleFactor()`): both geometry and font size are multiplied by it. The window size the container hands to the engine is still computed from the container size; zoom only affects "how many pixels one cell occupies on screen".
+
+4. **Hit-testing = findColumn / findRow**: convert screen coordinates back to content coordinates (subtract padding first, then divide by scale), and accumulate widths along the column/row.
+
+The size table follows a simplified version of `DimenManager`'s three-level priority: **individually set > default** (the demo doesn't need `TileDimenProvider`).
+
+**Self-check**: the number of child elements in the container equals the number of active tiles; while scrolling, `transform` is rewritten and elements scrolled off-screen are detached (you can watch the DOM tree in DevTools).
+
+## Step 5: Data Source (noise.js)
+
+The demo data is **generated deterministically**: fixed-seed Perlin noise + 24-color gradient, the same as the app's tile demo (seed `123456789`, scale `0.03`, sparse where noise `< 0.3`). This is also the premise on which "pseudo-infinite mode" stands — data can be computed from any coordinate, no pre-generation needed.
+
+**Key: `java.util.Random` must be replicated bit for bit**. The Perlin noise's permutation array comes from shuffling with the seed (Fisher-Yates); the shuffle result determines the noise value at every coordinate, and being off by one bit changes the entire image. JS has no 48-bit integer, so use `BigInt`:
+
+```js
+class JavaRandom {
+    constructor(seed) { this.seed = (BigInt(seed) ^ 0x5DEECE66Dn) & 0xFFFFFFFFFFFFn; }
+    next(bits) {
+        this.seed = (this.seed * 0x5DEECE66Dn + 0xBn) & 0xFFFFFFFFFFFFn;
+        return Number(this.seed >> BigInt(48 - bits));
+    }
+    nextInt(bound) {
+        if ((bound & -bound) === bound) return Number((BigInt(bound) * BigInt(this.next(31))) >> 31n);
+        let bits, val;
+        do { bits = this.next(31); val = bits % bound; } while (bits - val + (bound - 1) < 0);
+        return val;
+    }
+}
+```
+
+`PerlinNoise2D` (fade / lerp / 8-direction gradients) and `ColorGenerator` (24-color linear interpolation + relative luminance to pick the text color) can be translated algorithm by algorithm.
+
+**Self-check**: under the same seed, `perm[0..15]`, the `noiseNormalized` at several coordinates, the colors, and the text must all match the app side exactly (see Step 7).
+
+## Step 6: Adapter and Interaction (main.js)
+
+The **adapter** only needs four things (mirroring `TileLayout.Adapter`):
 
 ```js
 const adapter = {
-    getLeftBound: () => maxMode ? MIN_INT : -50,
-    getTopBound: () => maxMode ? MIN_INT : -100,
-    getRightBound: () => maxMode ? MAX_INT : 50,
-    getBottomBound: () => maxMode ? MAX_INT : 100,
-    getTileType: (column, row) =>
-        perlin.noiseNormalized(column * 0.03, row * 0.03) < 0.3 ? -1 : 0, // sparse in low-noise areas
-    ...
+    getLeftBound / getTopBound / getRightBound / getBottomBound,   // In pseudo-infinite mode, return the int32 extremes
+    getTileType: (c, r) => removed.has(c + ',' + r) || noiseAt(c, r) < 0.3 ? -1 : 0,
+    onCreateTileHolder: (type) => type === -1 ? null : { type, el: makeTileDiv() },
+    onBindTileHolder: (holder, c, r) => { /* backgroundColor + textColor + text = noise/0.03 with %.2f */ },
 };
-// Pseudo-infinite mode: bounds toggle between the full int32 range and the finite range; snap pulls the window back
-bind('btn-max', () => {
-    maxMode = !maxMode;
-    view.snap();
-    ...
-});
-// Visit-the-bounds and other button logic: see h5-demo/main.js
 ```
 
-> For the full file see `h5-demo/main.js`.
+**Gestures** (all implemented on `#view` with Pointer Events):
 
-## Step 11: Running and Verifying
+| Gesture | Implementation notes |
+|---|---|
+| Single-finger drag | `dx = (current x - previous x) / scaleFactor` — dividing by scale is what makes it "follow the finger" |
+| Inertial scroll | Record the velocity of the last 100ms (content px/ms); after release decay with `v *= 0.94^(dt/16.7)`; stop below the threshold |
+| Two-finger pinch | Compute the new `scaleFactor` from the ratio of the two-finger distance; in `zoomTo(s, fx, fy)`, use `dx = (fx - padding) * (1/sNew - 1/sOld)` to pin the content point under the focus |
+| Double tap | Two taps within 300ms → 1x ↔ 2x (same `zoomTo`, focus = tap point) |
+| Long-press delete | 500ms timer + movement-threshold check → `removed.add(key)` + `core.update(c,r)` (the element is detached and recycled) |
+| Single tap | Convert coordinates with `findColumn/findRow` → Toast |
+| Desktop | `wheel` scroll; `Ctrl/⌘ + wheel` zoom (`{ passive: false }` is required for `preventDefault`) |
 
-- Browser: just open `h5-demo/index.html` (local `file://` works, zero network dependencies), or serve with `python3 -m http.server`
-- Node unit tests: `node h5-demo/test.js` — neither engine nor noise depends on DOM, verifiable outside the browser
+**Menus** mirror the app side's `BaseActivity` set: Debug mode, pseudo-infinite mode, random size adjustment (width/height, 2-second overshoot animation applied to the column/row at the center of the window), visit the bounds (eight directions + return to origin), view (zoom in / zoom out / reset zoom). Debug mode additionally provides a HUD: window size, window range, offset, content width/height, scale, active/recycled tile counts, DOM child count.
 
-The unit tests use fixed sizes (column width 80, row height 45) and a fixed window (800x450), so every expected value can be computed by hand — exactly the benefit of a pure-algorithm engine:
+## Step 7: Aligning with the Java Version (How to Prove the Port Is Correct)
 
-```js
-// Fixed sizes: column width 80, row height 45; window 800x450
-engine.seek(0, 0, 0, 0);
-let m = engine.getLayoutModel();
-assert(m.colStart === 0 && m.rowStart === 0, 'seek(0,0) anchors at the origin');
-engine.sync(-400, -225);
-m = engine.getLayoutModel();
-assert(m.colStart === 4 && m.rowStart === 4, '400px left, anchor becomes (4,4)');
-assert(m.offsetX === -80 && m.offsetY === -45, 'offset remainder (-80,-45)');
-```
+Three things, all done in a **temporary directory outside the project**:
 
-> For the full tests see `h5-demo/test.js` (25 assertions, including pseudo-infinite regression and noise boundaries). Test highlights: 400px left is exactly 5 columns, anchor becomes 4 with an offset remainder of -80; `seek(99,99)` leaves the content unable to fill the window, the anchor auto-refills to 90; widening column 0 automatically drops one column on the right; noise is reproducible for the same seed and samples correctly at int32 boundaries. This behavior is identical to the Java version.
+1. **Isomorphic diffing**: run **the same random scenario sequence** through both implementations (same pseudo-random generator, same batch of column widths/row heights/window/displacements), and compare the eight fields of `LayoutModel` scenario by scenario.
+  Measured in this project: mixed `sync` / `seek` / `updateWidth`, two-dimensional data, 4 seeds × 150 scenarios = **600 scenarios, zero difference**.
+  > Note the pseudo-random generator's **multiplier must be small**: when the product exceeds 2^53, JS loses precision and the two sequences quietly drift apart (this pit has been stepped on).
+2. **Bit-for-bit comparison of the data source**: the Java side prints sampled `perm` + the `noise` at several coordinates (`%.17f`), colors, and text; the JS side prints the same things; compare line by line.
+  Measured in this project: 19 sample points show a noise deviation of **0**; colors and text are all identical.
+3. **Invariant + large-displacement self-healing**: random walk for 2000 frames; check that `contentWidth/Height` always equals the sum of the tile sizes within the anchor span; `offset` is allowed to briefly exceed the range when "one frame crosses a data end", but one extra `sync(0,0)` frame must heal it.
+
+## Step 8: Common Pitfalls
+
+1. **Where the offset accumulation goes**: put it at the top of the method and the `dx` inside the checks gets cancelled out — the condition degenerates to always-true/always-false (`>=` always false, `<` always true; flipping the sign doesn't save it).
+2. **`seek`'s accumulator initial value**: writing `let contentWidth = offsetX;` and then `- offsetX` at the end makes the two `offsetX` cancel each other → `contentWidth` too small and the extension loop's terminating column off too. It must start from 0 and end with `Math.trunc`.
+3. **Integer truncation**: Java's `(int)` maps to `Math.trunc`; using `~~` for negatives is wrong.
+4. **Pseudo-random precision**: multiplications like `seed * 1103515245` lose precision in JS once they exceed 2^53, and the two sequences drift; use a smaller multiplier or `BigInt`.
+5. **The fill loop's boundary**: `while (contentWidth + offsetX < windowWidth && …)` uses **strictly less than** — exactly filling would lay one extra cell (11 columns instead of 10); this is the engine's existing behavior, don't "fix it in passing".
+6. **3c-2 must not be removed**: without it, large displacements nearly double the traversal, and the intermediate state shows `contentWidth` inconsistent with the anchor span.
+7. **No 64-bit integers**: use the string `"col,row"` for tile keys; parse it back into two integers when you need to compare by numeric value.
+8. **Touch details**: the container needs `touch-action: none`; `setPointerCapture` ensures move events still arrive when the finger slides off the element; the `wheel` listener must be `{ passive: false }` to `preventDefault`; disable `contextmenu` on `document` to avoid the long-press menu.
+9. **Don't touch `left/top/width/height` during dragging**: only write `transform`; write sizes only when the size changes.
+
+## Step 9: Running and the Self-Check List
+
+How to open: `h5-demo/index.html` (works directly via `file://`), or serve with `python3 -m http.server`. In the console there is `window.tile2dDemo`, so you can inspect `core` / `adapter` / `scaleFactor` directly.
+
+Check each item:
+
+- [ ] The first screen is filled with tiles, no holes inside the window; sparse areas (low noise) are indeed empty
+- [ ] Dragging follows the finger: moving the finger 100px moves the content 100px (same when scale ≠ 1)
+- [ ] Releasing has inertia and eventually stops; after stopping it no longer changes
+- [ ] The **focus** of two-finger pinch zoom doesn't drift (the tile under the focus stays between the fingers)
+- [ ] Double tap 1x ↔ 2x; menu zoom in/out/reset all take effect
+- [ ] After long-press deleting a tile it disappears, and the corresponding element is detached from the DOM (not `display:none`)
+- [ ] Pseudo-infinite mode: can reach the far left / far right (int32 extremes) and still work after coming back
+- [ ] Random width/height adjustment has a 2-second animation, and the anchor doesn't jump around during it
+- [ ] Tile text matches the app side at the same coordinate (e.g. `(0,0)` is `16.67`)
+
+## Related Documents
+
+- [Cross-Platform Porting Guide](Cross_Platform_Porting_Guide.md) — the engine's algorithms and invariants (the prerequisite reading for this document)
+- [Android Platform Extension Guide](Android_Platform_Extension_Guide.md) — integrating Tile2D on Android
+- [H5 sample directory](../../h5-demo/) — the real source of all the code in this document
 
 ---
 
