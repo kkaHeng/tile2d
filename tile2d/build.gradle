@@ -36,6 +36,12 @@ dependencies {
 
 group = 'com.github.kkaHeng'
 
+// 版本号必须由 gradle.properties 提供：缺失即报错中断构建，避免静默发出错误版本
+def versionName = project.findProperty('version.name')
+if (versionName == null) {
+    throw new GradleException("缺少 'version.name'（应在 gradle.properties 中定义），已阻止构建。")
+}
+
 afterEvaluate {
     publishing {
         publications {
@@ -43,7 +49,7 @@ afterEvaluate {
                 from components.release
                 groupId = 'com.github.kkaHeng'
                 artifactId = 'tile2d'
-                version = project.findProperty('version.name') ?: '26.5.1'
+                version = versionName
             }
         }
     }
